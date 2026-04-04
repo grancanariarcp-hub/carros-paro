@@ -8,6 +8,7 @@ interface MatVto {
   carro_codigo: string
   carro_nombre: string
   servicio: string
+  servicio_id: string
   ubicacion: string
   responsable: string
   material: string
@@ -67,13 +68,14 @@ export default function InformeVencimientosPage() {
     const { data: cod } = await supabase.rpc('generar_codigo_informe', { tipo_inf: 'vencimientos' })
     setCodigo(cod || '')
 
-    await buscar('', fechaHasta)
+    await buscar('', fechaHasta, '')
     setLoading(false)
   }
 
-  async function buscar(svc: string, hasta: string) {
+  async function buscar(svc: string, hasta: string, desde: string) {
     const hoy = new Date().toISOString().split('T')[0]
-    let q = supabase.from('materiales')
+
+    const { data } = await supabase.from('materiales')
       .select(`
         nombre, fecha_vencimiento,
         cajones!inner(
@@ -87,8 +89,6 @@ export default function InformeVencimientosPage() {
       .lte('fecha_vencimiento', hasta || hoy)
       .order('fecha_vencimiento', { ascending: true })
 
-    const { data } = await q
-
     let resultado: MatVto[] = (data || []).map((m: any) => {
       const carro = m.cajones?.carros
       const dias = Math.ceil((new Date(m.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
@@ -96,36 +96,26 @@ export default function InformeVencimientosPage() {
         carro_codigo: carro?.codigo || '—',
         carro_nombre: carro?.nombre || '—',
         servicio: carro?.servicios?.nombre || '—',
+        servicio_id: carro?.servicio_id || '',
         ubicacion: carro?.ubicacion || '—',
         responsable: carro?.responsable || '—',
         material: m.nombre,
         fecha_vencimiento: m.fecha_vencimiento,
         dias,
       }
-    }).filter((m: MatVto) => {
-      if (!carro_activo(data, m.carro_codigo)) return true
-      return true
     })
 
     if (svc) {
-      resultado = resultado.filter(m => {
-        const d = (data || []).find((x: any) => x.cajones?.carros?.codigo === m.carro_codigo)
-        return d?.cajones?.carros?.servicio_id === svc
-      })
+      resultado = resultado.filter(m => m.servicio_id === svc)
     }
 
-    if (fechaDesde) {
-      resultado = resultado.filter(m => m.fecha_vencimiento >= fechaDesde)
+    if (desde) {
+      resultado = resultado.filter(m => m.fecha_vencimiento >= desde)
     }
 
     setDatos(resultado)
   }
 
-  function carro_activo(data: any[], codigo: string) {
-    return (data || []).find((x: any) => x.cajones?.carros?.codigo === codigo)?.cajones?.carros?.activo
-  }
-
-  // Agrupar por carro
   const porCarro = datos.reduce((acc, m) => {
     const key = m.carro_codigo
     if (!acc[key]) acc[key] = { info: m, materiales: [] }
@@ -159,12 +149,8 @@ export default function InformeVencimientosPage() {
 </div>
 ${Object.values(porCarro).map(({ info, materiales }) => `
 <div class="carro-block">
-  <div class="carro-header">
-    <strong>${info.carro_codigo}</strong> — ${info.carro_nombre}
-  </div>
-  <div class="carro-meta">
-    Servicio: ${info.servicio} · Ubicación: ${info.ubicacion} · Responsable: ${info.responsable}
-  </div>
+  <div class="carro-header"><strong>${info.carro_codigo}</strong> — ${info.carro_nombre}</div>
+  <div class="carro-meta">Servicio: ${info.servicio} · Ubicación: ${info.ubicacion} · Responsable: ${info.responsable}</div>
   <table>
     <thead><tr><th>Material</th><th>Fecha vencimiento</th><th>Días restantes</th></tr></thead>
     <tbody>
@@ -181,7 +167,6 @@ ${Object.values(porCarro).map(({ info, materiales }) => `
   Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe
 </div>
 </body></html>`
-
     const v = window.open('', '_blank')
     if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
   }
@@ -219,18 +204,18 @@ ${Object.values(porCarro).map(({ info, materiales }) => `
               <div>
                 <label className="label">Desde</label>
                 <input className="input" type="date" value={fechaDesde}
-                  onChange={e => { setFechaDesde(e.target.value); buscar(servicio, fechaHasta) }} />
+                  onChange={e => { setFechaDesde(e.target.value); buscar(servicio, fechaHasta, e.target.value) }} />
               </div>
               <div>
                 <label className="label">Hasta</label>
                 <input className="input" type="date" value={fechaHasta}
-                  onChange={e => { setFechaHasta(e.target.value); buscar(servicio, e.target.value) }} />
+                  onChange={e => { setFechaHasta(e.target.value); buscar(servicio, e.target.value, fechaDesde) }} />
               </div>
             </div>
             <div>
               <label className="label">Servicio</label>
               <select className="input" value={servicio}
-                onChange={e => { setServicio(e.target.value); buscar(e.target.value, fechaHasta) }}>
+                onChange={e => { setServicio(e.target.value); buscar(e.target.value, fechaHasta, fechaDesde) }}>
                 <option value="">Todos los servicios</option>
                 {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
@@ -238,7 +223,6 @@ ${Object.values(porCarro).map(({ info, materiales }) => `
           </div>
         </div>
 
-        {/* Leyenda */}
         <div className="card py-2.5 px-3">
           <div className="flex flex-wrap gap-3 text-xs">
             <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-100 border border-red-300"></div><span className="text-gray-500">&lt;7 días o vencido</span></div>
@@ -248,7 +232,9 @@ ${Object.values(porCarro).map(({ info, materiales }) => `
         </div>
 
         <div className="card bg-orange-50 border-orange-200">
-          <div className="text-sm font-semibold text-orange-800">{datos.length} material{datos.length !== 1 ? 'es' : ''} en {Object.keys(porCarro).length} carro{Object.keys(porCarro).length !== 1 ? 's' : ''}</div>
+          <div className="text-sm font-semibold text-orange-800">
+            {datos.length} material{datos.length !== 1 ? 'es' : ''} en {Object.keys(porCarro).length} carro{Object.keys(porCarro).length !== 1 ? 's' : ''}
+          </div>
         </div>
 
         {Object.values(porCarro).map(({ info, materiales }) => (
