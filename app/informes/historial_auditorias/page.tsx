@@ -77,6 +77,8 @@ export default function InformeHistorialPage() {
   .badge-op { background:#dcfce7; color:#166534; padding:1px 6px; border-radius:8px; }
   .badge-cond { background:#fef9c3; color:#854d0e; padding:1px 6px; border-radius:8px; }
   .badge-nop { background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:8px; }
+  .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; margin-top: 10px; color: #64748b; }
+  .sin-datos-titulo { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
   .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   @media print { @page { margin: 1.5cm; size: landscape; } }
 </style></head><body>
@@ -84,7 +86,16 @@ export default function InformeHistorialPage() {
   <div class="hospital">Hospital Universitario de Gran Canaria Doctor Negrín</div>
   <div class="titulo">Historial de Auditorías</div>
   <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre} · Total registros: ${datos.length}</div>
+  <div class="codigo" style="margin-top:4px">
+    ${filtros.desde ? `Desde: ${filtros.desde} · ` : ''}${filtros.hasta ? `Hasta: ${filtros.hasta} · ` : ''}Resultado: ${filtros.resultado || 'Todos'}
+  </div>
 </div>
+${datos.length === 0 ? `
+<div class="sin-datos">
+  <div class="sin-datos-titulo">Sin registros</div>
+  <div style="font-size:12px;">No se encontraron auditorías para los filtros seleccionados en la fecha de generación de este informe.</div>
+</div>
+` : `
 <table>
   <thead><tr>
     <th>Fecha y hora</th><th>Carro</th><th>Servicio</th><th>Tipo</th><th>Resultado</th><th>Auditor</th>
@@ -105,6 +116,7 @@ export default function InformeHistorialPage() {
     }).join('')}
   </tbody>
 </table>
+`}
 <div class="footer">Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe</div>
 </body></html>`
     const v = window.open('', '_blank')
@@ -124,7 +136,7 @@ export default function InformeHistorialPage() {
       ins.resultado || '',
       ins.perfiles?.nombre || ''
     ])
-    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -135,7 +147,9 @@ export default function InformeHistorialPage() {
   }
 
   async function compartir() {
-    const texto = `*Historial Auditorías - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\nTotal: ${datos.length} controles\n\n${datos.slice(0, 10).map(ins => `• ${new Date(ins.fecha).toLocaleDateString('es-ES')} · ${ins.carros?.codigo} · ${ins.tipo?.replace('_', ' ')} · ${ins.resultado}`).join('\n')}${datos.length > 10 ? `\n...y ${datos.length - 10} más` : ''}`
+    const texto = datos.length === 0
+      ? `*Historial Auditorías - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\nSin registros para los filtros seleccionados a fecha ${new Date().toLocaleDateString('es-ES')}`
+      : `*Historial Auditorías - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\nTotal: ${datos.length} controles\n\n${datos.slice(0, 10).map(ins => `• ${new Date(ins.fecha).toLocaleDateString('es-ES')} · ${ins.carros?.codigo} · ${ins.tipo?.replace('_', ' ')} · ${ins.resultado}`).join('\n')}${datos.length > 10 ? `\n...y ${datos.length - 10} más` : ''}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
     } else {
