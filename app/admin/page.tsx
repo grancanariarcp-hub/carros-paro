@@ -266,41 +266,38 @@ export default function AdminPage() {
         </>}
 
         {/* TAB INFORMES */}
-        {tab === 'informes' && (
-          <div className="card">
-            <div className="section-title mb-4">Generar informe</div>
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="label">Tipo de informe</label>
-                <select className="input">
-                  <option>Carros con controles vencidos</option>
-                  <option>Carros no operativos</option>
-                  <option>Vencimientos de material</option>
-                  <option>Historial completo de auditorías</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Período</label>
-                <select className="input">
-                  <option>Último mes</option>
-                  <option>Últimos 3 meses</option>
-                  <option>Últimos 6 meses</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Servicio</label>
-                <select className="input">
-                  <option>Todos los servicios</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <button className="btn-primary" onClick={() => toast('Función disponible próximamente')}>PDF</button>
-                <button className="btn-secondary" onClick={() => toast('Función disponible próximamente')}>Excel</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+       {tab === 'informes' && (
+  <div className="flex flex-col gap-3">
+    <div className="card bg-blue-50 border-blue-100">
+      <p className="text-xs text-blue-700">Generá informes con datos en tiempo real. Cada informe tiene código automático editable según nomenclatura ISO.</p>
     </div>
-  )
-}
+    <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push('/informes/controles_vencidos')}>
+      <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/><line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/><line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/><line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/></svg>
+      </div>
+      <div className="flex-1"><div className="font-semibold text-sm">Controles vencidos</div><div className="text-xs text-gray-400">Carros sin auditar con días de retraso</div></div>
+      <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+    </button>
+    <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push('/informes/no_operativos')}>
+      <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+        <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeWidth={2}/><line x1="12" y1="9" x2="12" y2="13" strokeWidth={2}/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth={2}/></svg>
+      </div>
+      <div className="flex-1"><div className="font-semibold text-sm">Carros no operativos</div><div className="text-xs text-gray-400">Con fallos graves y fotos de evidencia</div></div>
+      <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+    </button>
+    <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push('/informes/vencimientos')}>
+      <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+        <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth={2}/><polyline points="12 6 12 12 16 14" strokeWidth={2}/></svg>
+      </div>
+      <div className="flex-1"><div className="font-semibold text-sm">Vencimientos de material</div><div className="text-xs text-gray-400">Filtrado por rango de fechas y servicio</div></div>
+      <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+    </button>
+    <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push('/informes/historial_auditorias')}>
+      <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2}/><polyline points="14 2 14 8 20 8" strokeWidth={2}/></svg>
+      </div>
+      <div className="flex-1"><div className="font-semibold text-sm">Historial de auditorías</div><div className="text-xs text-gray-400">Con filtros por carro, auditor y resultado</div></div>
+      <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+    </button>
+  </div>
+)}
