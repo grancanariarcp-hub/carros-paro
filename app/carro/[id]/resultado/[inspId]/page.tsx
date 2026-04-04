@@ -8,6 +8,7 @@ import type { Inspeccion, ItemInspeccion } from '@/lib/types'
 export default function ResultadoPage() {
   const [insp, setInsp] = useState<Inspeccion|null>(null)
   const [items, setItems] = useState<ItemInspeccion[]>([])
+  const [perfil, setPerfil] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const params = useParams()
@@ -18,6 +19,11 @@ export default function ResultadoPage() {
   useEffect(() => { cargarDatos() }, [inspId])
 
   async function cargarDatos() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
+      setPerfil(p)
+    }
     const { data: ins } = await supabase.from('inspecciones')
       .select('*, carros(codigo,nombre,proximo_control,frecuencia_control), perfiles(nombre)')
       .eq('id', inspId).single()
@@ -28,6 +34,13 @@ export default function ResultadoPage() {
       .eq('tiene_falla', true)
     setItems(its || [])
     setLoading(false)
+  }
+
+  function irAlInicio() {
+    if (!perfil) { router.push('/'); return }
+    if (perfil.rol === 'administrador') router.push('/admin')
+    else if (perfil.rol === 'supervisor') router.push('/supervisor')
+    else router.push('/auditor')
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
@@ -47,12 +60,16 @@ export default function ResultadoPage() {
     condicional: {
       bg: 'bg-amber-50', border: 'border-amber-200', icon: '⚠',
       iconBg: 'bg-amber-500', title: 'Carro operativo condicional',
-      titleColor: 'text-amber-800', sub: `${fallosMenores.length} fallo${fallosMenores.length!==1?'s':''} menor${fallosMenores.length!==1?'es':''}`, subColor: 'text-amber-600'
+      titleColor: 'text-amber-800',
+      sub: `${fallosMenores.length} fallo${fallosMenores.length!==1?'s':''} menor${fallosMenores.length!==1?'es':''}`,
+      subColor: 'text-amber-600'
     },
     no_operativo: {
       bg: 'bg-red-50', border: 'border-red-200', icon: '✕',
       iconBg: 'bg-red-600', title: 'CARRO NO OPERATIVO',
-      titleColor: 'text-red-800', sub: `${fallosGraves.length} fallo${fallosGraves.length!==1?'s':''} grave${fallosGraves.length!==1?'s':''}`, subColor: 'text-red-600'
+      titleColor: 'text-red-800',
+      sub: `${fallosGraves.length} fallo${fallosGraves.length!==1?'s':''} grave${fallosGraves.length!==1?'s':''}`,
+      subColor: 'text-red-600'
     },
   }
 
@@ -143,7 +160,29 @@ export default function ResultadoPage() {
           </div>
         </div>
 
-        <button className="btn-primary" onClick={() => router.push('/auditor')}>
+        {/* Botón informe del control */}
+        <button
+          className="btn-secondary text-left flex items-center gap-3"
+          onClick={() => router.push(`/carro/${carroId}/informe/${inspId}`)}
+        >
+          <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2}/>
+              <polyline points="14 2 14 8 20 8" strokeWidth={2}/>
+              <line x1="16" y1="13" x2="8" y2="13" strokeWidth={2}/>
+              <line x1="16" y1="17" x2="8" y2="17" strokeWidth={2}/>
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Generar informe de este control</div>
+            <div className="text-xs text-gray-400">PDF con membrete, fallos, fotos y vencimientos</div>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <polyline points="9 18 15 12 9 6" strokeWidth={2}/>
+          </svg>
+        </button>
+
+        <button className="btn-primary" onClick={irAlInicio}>
           Volver al inicio
         </button>
       </div>
