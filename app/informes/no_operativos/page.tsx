@@ -82,6 +82,8 @@ export default function InformeNoOperativosPage() {
   .fallo-item { background: #fee2e2; border-left: 3px solid #dc2626; padding: 6px 10px; margin-bottom: 6px; border-radius: 0 4px 4px 0; }
   .hist-item { font-size: 10px; color: #64748b; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
   .foto { max-width: 200px; max-height: 150px; border-radius: 6px; margin-top: 6px; }
+  .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; margin-top: 10px; color: #64748b; }
+  .sin-datos-titulo { font-size: 15px; font-weight: bold; margin-bottom: 8px; color: #16a34a; }
   .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   @media print { @page { margin: 1.5cm; } }
 </style></head><body>
@@ -89,7 +91,14 @@ export default function InformeNoOperativosPage() {
   <div class="hospital">Hospital Universitario de Gran Canaria Doctor Negrín</div>
   <div class="titulo">Informe de Carros No Operativos</div>
   <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre} · Total: ${datos.length} carro${datos.length !== 1 ? 's' : ''}</div>
+  <div class="codigo" style="margin-top:4px">Servicio: ${servicio ? servicios.find(s => s.id === servicio)?.nombre : 'Todos'}</div>
 </div>
+${datos.length === 0 ? `
+<div class="sin-datos">
+  <div class="sin-datos-titulo">✓ Sin carros no operativos</div>
+  <div style="font-size:12px;">No se encontraron carros en estado no operativo para los filtros seleccionados en la fecha de generación de este informe.</div>
+</div>
+` : `
 ${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
 <div class="carro-block">
   <div class="carro-header">
@@ -118,6 +127,7 @@ ${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
     `).join('')}
   </div>
 </div>`).join('')}
+`}
 <div class="footer">Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe</div>
 </body></html>`
     const v = window.open('', '_blank')
@@ -125,9 +135,11 @@ ${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
   }
 
   async function compartir() {
-    const texto = `*Informe Carros No Operativos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(({ carro, itemsFallos }: any) =>
-      `🚨 *${carro.codigo}* - ${carro.servicios?.nombre || '—'}\nFallos graves: ${(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => i.materiales?.nombre).join(', ')}`
-    ).join('\n\n')}`
+    const texto = datos.length === 0
+      ? `*Informe Carros No Operativos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n✓ Sin carros no operativos a fecha ${new Date().toLocaleDateString('es-ES')}`
+      : `*Informe Carros No Operativos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(({ carro, itemsFallos }: any) =>
+          `🚨 *${carro.codigo}* - ${carro.servicios?.nombre || '—'}\nFallos graves: ${(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => i.materiales?.nombre).join(', ')}`
+        ).join('\n\n')}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
     } else {
@@ -213,6 +225,7 @@ ${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
         {datos.length === 0 && (
           <div className="card text-center py-8">
             <div className="text-green-600 font-semibold text-sm">✓ No hay carros no operativos</div>
+            <div className="text-xs text-gray-400 mt-1">Todos los carros están operativos</div>
           </div>
         )}
 
@@ -223,4 +236,3 @@ ${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
       </div>
     </div>
   )
-}
