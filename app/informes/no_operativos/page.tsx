@@ -43,7 +43,6 @@ export default function InformeNoOperativosPage() {
     if (svc) q = q.eq('servicio_id', svc)
     const { data: carrosNop } = await q
 
-    // Para cada carro no operativo cargar su última inspección con fallos graves y fotos
     const resultado = []
     for (const c of (carrosNop || [])) {
       const { data: insp } = await supabase.from('inspecciones')
@@ -53,7 +52,6 @@ export default function InformeNoOperativosPage() {
         .order('fecha', { ascending: false })
         .limit(5)
 
-      // Cargar items con fotos del último control no operativo
       let itemsFallos: any[] = []
       if (insp && insp.length > 0) {
         const { data: items } = await supabase.from('items_inspeccion')
@@ -92,7 +90,7 @@ export default function InformeNoOperativosPage() {
   <div class="titulo">Informe de Carros No Operativos</div>
   <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre} · Total: ${datos.length} carro${datos.length !== 1 ? 's' : ''}</div>
 </div>
-${datos.map(({ carro, inspecciones, itemsFallos }) => `
+${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
 <div class="carro-block">
   <div class="carro-header">
     <strong>🚨 ${carro.codigo}</strong> — ${carro.nombre} · NO OPERATIVO
@@ -105,7 +103,7 @@ ${datos.map(({ carro, inspecciones, itemsFallos }) => `
       <div><strong>Último control:</strong> ${carro.ultimo_control ? new Date(carro.ultimo_control).toLocaleString('es-ES') : '—'}</div>
     </div>
     <div style="font-weight:bold; margin-bottom:8px; color:#dc2626;">Fallos graves detectados:</div>
-    ${itemsFallos.filter(i => i.tipo_falla === 'grave').map(i => `
+    ${(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => `
       <div class="fallo-item">
         <strong>${i.materiales?.nombre || '—'}</strong>
         ${i.descripcion_falla ? `<br>${i.descripcion_falla}` : ''}
@@ -113,7 +111,7 @@ ${datos.map(({ carro, inspecciones, itemsFallos }) => `
       </div>
     `).join('')}
     <div style="font-weight:bold; margin: 12px 0 6px; color:#64748b;">Historial de estados no operativos:</div>
-    ${inspecciones.map(ins => `
+    ${(inspecciones as any[]).map((ins: any) => `
       <div class="hist-item">
         ${new Date(ins.fecha).toLocaleString('es-ES')} · ${ins.tipo?.replace('_', ' ')} · Auditor: ${ins.perfiles?.nombre || '—'}
       </div>
@@ -127,8 +125,8 @@ ${datos.map(({ carro, inspecciones, itemsFallos }) => `
   }
 
   async function compartir() {
-    const texto = `*Informe Carros No Operativos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(({ carro, itemsFallos }) =>
-      `🚨 *${carro.codigo}* - ${carro.servicios?.nombre || '—'}\nFallos graves: ${itemsFallos.filter((i: any) => i.tipo_falla === 'grave').map((i: any) => i.materiales?.nombre).join(', ')}`
+    const texto = `*Informe Carros No Operativos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(({ carro, itemsFallos }: any) =>
+      `🚨 *${carro.codigo}* - ${carro.servicios?.nombre || '—'}\nFallos graves: ${(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => i.materiales?.nombre).join(', ')}`
     ).join('\n\n')}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
@@ -168,7 +166,7 @@ ${datos.map(({ carro, inspecciones, itemsFallos }) => `
           <div className="text-sm font-semibold text-red-800">{datos.length} carro{datos.length !== 1 ? 's' : ''} no operativo{datos.length !== 1 ? 's' : ''}</div>
         </div>
 
-        {datos.map(({ carro, inspecciones, itemsFallos }) => (
+        {datos.map(({ carro, inspecciones, itemsFallos }: any) => (
           <div key={carro.id} className="card border-red-200">
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -185,10 +183,10 @@ ${datos.map(({ carro, inspecciones, itemsFallos }) => `
               <div><span className="text-gray-400">Último control: </span>{formatFechaHora(carro.ultimo_control)}</div>
             </div>
 
-            {itemsFallos.filter((i: any) => i.tipo_falla === 'grave').length > 0 && (
+            {(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').length > 0 && (
               <div className="mb-3">
                 <div className="text-xs font-semibold text-red-700 mb-2">Fallos graves:</div>
-                {itemsFallos.filter((i: any) => i.tipo_falla === 'grave').map((i: any) => (
+                {(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => (
                   <div key={i.id} className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg">
                     <div className="text-xs font-semibold">{i.materiales?.nombre}</div>
                     {i.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{i.descripcion_falla}</div>}
@@ -203,7 +201,7 @@ ${datos.map(({ carro, inspecciones, itemsFallos }) => `
 
             <div>
               <div className="text-xs font-semibold text-gray-500 mb-2">Historial de estados no operativos:</div>
-              {inspecciones.map((ins: any) => (
+              {(inspecciones as any[]).map((ins: any) => (
                 <div key={ins.id} className="text-xs text-gray-400 py-1 border-b border-gray-50 last:border-0">
                   {formatFechaHora(ins.fecha)} · {ins.tipo?.replace('_', ' ')} · {ins.perfiles?.nombre}
                 </div>
