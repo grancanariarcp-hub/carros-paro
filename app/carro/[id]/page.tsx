@@ -10,6 +10,7 @@ export default function MenuCarroPage() {
   const [inspecciones, setInspecciones] = useState<Inspeccion[]>([])
   const [perfil, setPerfil] = useState<Perfil|null>(null)
   const [loading, setLoading] = useState(true)
+  const [vencimientosAlert, setVencimientosAlert] = useState(0)
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
@@ -34,6 +35,22 @@ export default function MenuCarroPage() {
       .order('fecha', { ascending: false })
       .limit(5)
     setInspecciones(ins || [])
+
+    // Contar vencimientos próximos o vencidos
+    const { data: cajs } = await supabase.from('cajones')
+      .select('materiales(*)')
+      .eq('carro_id', id)
+      .eq('activo', true)
+    let alertas = 0
+    for (const caj of (cajs || [])) {
+      for (const mat of ((caj as any).materiales || [])) {
+        if (mat.activo && mat.tiene_vencimiento && mat.fecha_vencimiento) {
+          const dias = Math.ceil((new Date(mat.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+          if (dias <= 30) alertas++
+        }
+      }
+    }
+    setVencimientosAlert(alertas)
     setLoading(false)
   }
 
@@ -123,6 +140,32 @@ export default function MenuCarroPage() {
           </button>
         )}
 
+        {/* Vencimientos - visible para todos */}
+        <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/vencimientos`)}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${vencimientosAlert > 0 ? 'bg-amber-100' : 'bg-green-100'}`}>
+            <svg className={`w-5 h-5 ${vencimientosAlert > 0 ? 'text-amber-700' : 'text-green-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/>
+              <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/>
+              <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/>
+              <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/>
+              <line x1="8" y1="14" x2="16" y2="14" strokeWidth={2}/>
+              <line x1="8" y1="18" x2="12" y2="18" strokeWidth={2}/>
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Actualizar vencimientos</div>
+            <div className="text-xs text-gray-400">
+              {vencimientosAlert > 0
+                ? `${vencimientosAlert} material${vencimientosAlert !== 1 ? 'es' : ''} vencido/s o próximo/s`
+                : 'Todos los vencimientos al día'}
+            </div>
+          </div>
+          {vencimientosAlert > 0 && (
+            <span className="badge bg-amber-100 text-amber-800 text-xs">{vencimientosAlert}</span>
+          )}
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+        </button>
+
         <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/historial`)}>
           <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9" strokeWidth={2}/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeWidth={2}/></svg>
@@ -133,6 +176,23 @@ export default function MenuCarroPage() {
           </div>
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
         </button>
+
+        {/* Gestión materiales solo para admin y supervisor */}
+        {(perfil?.rol === 'supervisor' || perfil?.rol === 'administrador') && (
+          <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/admin/carro/${id}/materiales`)}>
+            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M9 11l3 3L22 4" strokeWidth={2}/>
+                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" strokeWidth={2}/>
+              </svg>
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Gestionar materiales</div>
+              <div className="text-xs text-gray-400">Activar, desactivar o editar materiales</div>
+            </div>
+            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+          </button>
+        )}
       </div>
     </div>
   )
