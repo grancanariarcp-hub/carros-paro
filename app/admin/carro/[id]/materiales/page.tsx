@@ -11,6 +11,7 @@ interface Material {
   tipo_falla: 'menor' | 'grave' | 'ninguno'
   activo: boolean
   tiene_vencimiento: boolean
+  fecha_vencimiento: string | null
   orden: number
 }
 
@@ -23,11 +24,29 @@ interface Cajon {
   expandido: boolean
 }
 
+function colorVto(fecha: string | null): string {
+  if (!fecha) return ''
+  const dias = Math.ceil((new Date(fecha).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  if (dias < 0) return 'bg-red-100 border-red-300 text-red-700'
+  if (dias <= 7) return 'bg-red-100 border-red-300 text-red-700'
+  if (dias <= 30) return 'bg-amber-100 border-amber-300 text-amber-700'
+  return 'bg-green-100 border-green-300 text-green-700'
+}
+
+function labelVto(fecha: string | null): string {
+  if (!fecha) return 'Sin fecha'
+  const dias = Math.ceil((new Date(fecha).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  if (dias < 0) return `Vencido`
+  if (dias === 0) return 'Vence hoy'
+  if (dias <= 7) return `${dias}d ⚠️`
+  return new Date(fecha).toLocaleDateString('es-ES', { month: 'short', year: '2-digit' })
+}
+
 export default function GestionMaterialesPage() {
   const [carro, setCarro] = useState<any>(null)
   const [cajones, setCajones] = useState<Cajon[]>([])
   const [loading, setLoading] = useState(true)
-  const [guardando, setGuardando] = useState<string|null>(null)
+  const [guardando, setGuardando] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
   const carroId = params.id as string
@@ -50,12 +69,14 @@ export default function GestionMaterialesPage() {
       expandido: true,
       materiales: (caj.materiales || [])
         .sort((a: any, b: any) => a.orden - b.orden)
-        .map((m: any) => ({ ...m, tiene_vencimiento: m.tiene_vencimiento ?? true }))
+        .map((m: any) => ({
+          ...m,
+          tiene_vencimiento: m.tiene_vencimiento ?? true,
+          fecha_vencimiento: m.fecha_vencimiento ?? null,
+        }))
     })))
     setLoading(false)
   }
-
-  // ── CAJONES ──────────────────────────────────────────────
 
   async function agregarCajon() {
     const nombre = prompt('Nombre del nuevo cajón:')
@@ -72,16 +93,14 @@ export default function GestionMaterialesPage() {
   async function renombrarCajon(cajonId: string, nombreActual: string) {
     const nuevo = prompt('Nuevo nombre del cajón:', nombreActual)
     if (!nuevo?.trim() || nuevo === nombreActual) return
-    const { error } = await supabase.from('cajones')
-      .update({ nombre: nuevo.trim() }).eq('id', cajonId)
+    const { error } = await supabase.from('cajones').update({ nombre: nuevo.trim() }).eq('id', cajonId)
     if (error) { toast.error('Error al renombrar'); return }
     setCajones(prev => prev.map(c => c.id === cajonId ? { ...c, nombre: nuevo.trim() } : c))
     toast.success('Cajón renombrado')
   }
 
   async function toggleCajon(cajonId: string, activo: boolean) {
-    const { error } = await supabase.from('cajones')
-      .update({ activo: !activo }).eq('id', cajonId)
+    const { error } = await supabase.from('cajones').update({ activo: !activo }).eq('id', cajonId)
     if (error) { toast.error('Error'); return }
     setCajones(prev => prev.map(c => c.id === cajonId ? { ...c, activo: !activo } : c))
     toast.success(!activo ? 'Cajón activado' : 'Cajón desactivado')
@@ -91,24 +110,19 @@ export default function GestionMaterialesPage() {
     setCajones(prev => prev.map(c => c.id === cajonId ? { ...c, expandido: !c.expandido } : c))
   }
 
-  // ── MATERIALES ───────────────────────────────────────────
-
   async function agregarMaterial(cajonId: string) {
     const nombre = prompt('Nombre del material:')
     if (!nombre?.trim()) return
     const orden = cajones.find(c => c.id === cajonId)?.materiales.length || 0
     const { data, error } = await supabase.from('materiales').insert({
-      cajon_id: cajonId,
-      nombre: nombre.trim(),
-      cantidad_requerida: 1,
-      tipo_falla: 'menor',
-      activo: true,
-      tiene_vencimiento: true,
-      orden,
+      cajon_id: cajonId, nombre: nombre.trim(),
+      cantidad_requerida: 1, tipo_falla: 'menor',
+      activo: true, tiene_vencimiento: true,
+      fecha_vencimiento: null, orden,
     }).select().single()
     if (error) { toast.error('Error al agregar material'); return }
     setCajones(prev => prev.map(c =>
-      c.id === cajonId ? { ...c, materiales: [...c.materiales, { ...data, tiene_vencimiento: true }] } : c
+      c.id === cajonId ? { ...c, materiales: [...c.materiales, { ...data, tiene_vencimiento: true, fecha_vencimiento: null }] } : c
     ))
     toast.success('Material agregado')
   }
@@ -123,15 +137,6 @@ export default function GestionMaterialesPage() {
         : c
     ))
     setGuardando(null)
-  }
-
-  async function toggleMaterial(matId: string, cajonId: string, activo: boolean) {
-    await updateMaterial(matId, cajonId, 'activo', !activo)
-    toast.success(!activo ? 'Material activado' : 'Material desactivado')
-  }
-
-  async function toggleVencimiento(matId: string, cajonId: string, tiene: boolean) {
-    await updateMaterial(matId, cajonId, 'tiene_vencimiento', !tiene)
   }
 
   async function editarNombre(matId: string, cajonId: string, nombreActual: string) {
@@ -168,21 +173,13 @@ export default function GestionMaterialesPage() {
           </div>
         </div>
 
-        {/* Leyenda */}
+        {/* Leyenda semáforo */}
         <div className="card py-2.5 px-3">
+          <div className="section-title mb-2">Semáforo vencimientos</div>
           <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span>Fallo grave</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-              <span>Fallo menor</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-              <span>Sin fallo</span>
-            </div>
+            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-100 border border-green-300"></div><span>+30 días</span></div>
+            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-amber-100 border border-amber-300"></div><span>7–30 días</span></div>
+            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-100 border border-red-300"></div><span>&lt;7 días o vencido</span></div>
           </div>
         </div>
 
@@ -191,31 +188,25 @@ export default function GestionMaterialesPage() {
           <div key={cajon.id} className="card">
             {/* Header cajón */}
             <div className="flex items-center gap-2 mb-2">
-              <button
-                onClick={() => toggleExpandido(cajon.id)}
-                className="flex-1 flex items-center gap-2 text-left"
-              >
+              <button onClick={() => toggleExpandido(cajon.id)} className="flex-1 flex items-center gap-2 text-left">
                 <span className="text-sm font-semibold flex-1">{cajon.nombre}</span>
-                <span className="text-xs text-gray-400">{cajon.materiales.filter(m => m.activo).length} activos</span>
+                <span className="text-xs text-gray-400">{cajon.materiales.filter(m => m.activo).length}</span>
                 <span className="text-gray-400 text-xs">{cajon.expandido ? '▲' : '▼'}</span>
               </button>
-              <button
-                onClick={() => renombrarCajon(cajon.id, cajon.nombre)}
-                className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 bg-gray-50"
-              >✏️</button>
-              <button
-                onClick={() => toggleCajon(cajon.id, cajon.activo)}
-                className="text-xs px-2 py-1 rounded-lg border border-amber-200 text-amber-600 bg-amber-50"
-              >Desactivar</button>
+              <button onClick={() => renombrarCajon(cajon.id, cajon.nombre)}
+                className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 bg-gray-50">✏️</button>
+              <button onClick={() => toggleCajon(cajon.id, cajon.activo)}
+                className="text-xs px-2 py-1 rounded-lg border border-amber-200 text-amber-600 bg-amber-50">Desactivar</button>
             </div>
 
             {cajon.expandido && (
               <>
-                {/* Headers tabla */}
-                <div className="grid grid-cols-[1fr_44px_72px_32px_32px] gap-1 px-1 mb-1">
+                {/* Headers */}
+                <div className="grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 px-1 mb-1">
                   <div className="text-xs text-gray-400 font-semibold">Material</div>
                   <div className="text-xs text-gray-400 text-center">Cant</div>
                   <div className="text-xs text-gray-400 text-center">Fallo</div>
+                  <div className="text-xs text-gray-400 text-center">Vencimiento</div>
                   <div className="text-xs text-gray-400 text-center">Vto</div>
                   <div className="text-xs text-gray-400 text-center">Act</div>
                 </div>
@@ -223,80 +214,68 @@ export default function GestionMaterialesPage() {
                 {/* Materiales */}
                 {cajon.materiales.map(mat => (
                   <div key={mat.id}
-                    className={`grid grid-cols-[1fr_44px_72px_32px_32px] gap-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${!mat.activo ? 'opacity-40' : ''}`}
+                    className={`grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${!mat.activo ? 'opacity-40' : ''}`}
                   >
                     {/* Nombre */}
-                    <button
-                      className="text-xs text-left font-medium leading-tight truncate"
-                      onClick={() => editarNombre(mat.id, cajon.id, mat.nombre)}
-                    >
+                    <button className="text-xs text-left font-medium leading-tight"
+                      onClick={() => editarNombre(mat.id, cajon.id, mat.nombre)}>
                       <div className="flex items-center gap-1">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                           mat.tipo_falla === 'grave' ? 'bg-red-500' :
-                          mat.tipo_falla === 'menor' ? 'bg-amber-400' : 'bg-gray-300'
-                        }`}></div>
+                          mat.tipo_falla === 'menor' ? 'bg-amber-400' : 'bg-gray-300'}`}></div>
                         <span className="truncate">{mat.nombre}</span>
-                        {guardando === mat.id && <span className="text-blue-400">...</span>}
+                        {guardando === mat.id && <span className="text-blue-400 text-xs">...</span>}
                       </div>
                     </button>
 
                     {/* Cantidad */}
-                    <input
-                      type="number"
-                      min={1}
-                      value={mat.cantidad_requerida}
+                    <input type="number" min={1} value={mat.cantidad_requerida}
                       onChange={e => updateMaterial(mat.id, cajon.id, 'cantidad_requerida', parseInt(e.target.value) || 1)}
-                      className="input text-xs py-1 text-center px-1"
-                      disabled={!mat.activo}
-                    />
+                      className="input text-xs py-1 text-center px-1" disabled={!mat.activo} />
 
                     {/* Tipo falla */}
-                    <select
-                      value={mat.tipo_falla}
+                    <select value={mat.tipo_falla}
                       onChange={e => updateMaterial(mat.id, cajon.id, 'tipo_falla', e.target.value)}
-                      className="input text-xs py-1 px-1"
-                      disabled={!mat.activo}
-                    >
+                      className="input text-xs py-1 px-1" disabled={!mat.activo}>
                       <option value="grave">Grave</option>
                       <option value="menor">Menor</option>
                       <option value="ninguno">Ninguno</option>
                     </select>
 
+                    {/* Fecha vencimiento */}
+                    {mat.tiene_vencimiento ? (
+                      <input
+                        type="date"
+                        value={mat.fecha_vencimiento || ''}
+                        onChange={e => updateMaterial(mat.id, cajon.id, 'fecha_vencimiento', e.target.value || null)}
+                        className={`text-xs py-1 px-1 rounded-lg border text-center w-full ${colorVto(mat.fecha_vencimiento)} ${!mat.activo ? 'opacity-40' : ''}`}
+                        disabled={!mat.activo}
+                      />
+                    ) : (
+                      <div className="text-xs text-gray-300 text-center">—</div>
+                    )}
+
                     {/* Toggle vencimiento */}
                     <div className="flex items-center justify-center">
-                      <div
-                        onClick={() => mat.activo && toggleVencimiento(mat.id, cajon.id, mat.tiene_vencimiento)}
-                        className={`w-7 h-4 rounded-full cursor-pointer transition-colors ${
-                          mat.tiene_vencimiento ? 'bg-blue-500' : 'bg-gray-200'
-                        }`}
-                      >
-                        <div className={`w-3 h-3 bg-white rounded-full mt-0.5 transition-transform ${
-                          mat.tiene_vencimiento ? 'translate-x-3.5' : 'translate-x-0.5'
-                        }`}></div>
+                      <div onClick={() => mat.activo && updateMaterial(mat.id, cajon.id, 'tiene_vencimiento', !mat.tiene_vencimiento)}
+                        className={`w-6 h-3.5 rounded-full cursor-pointer transition-colors ${mat.tiene_vencimiento ? 'bg-blue-500' : 'bg-gray-200'}`}>
+                        <div className={`w-2.5 h-2.5 bg-white rounded-full mt-0.5 transition-transform ${mat.tiene_vencimiento ? 'translate-x-3' : 'translate-x-0.5'}`}></div>
                       </div>
                     </div>
 
                     {/* Toggle activo */}
                     <div className="flex items-center justify-center">
-                      <div
-                        onClick={() => toggleMaterial(mat.id, cajon.id, mat.activo)}
-                        className={`w-7 h-4 rounded-full cursor-pointer transition-colors ${
-                          mat.activo ? 'bg-green-500' : 'bg-gray-200'
-                        }`}
-                      >
-                        <div className={`w-3 h-3 bg-white rounded-full mt-0.5 transition-transform ${
-                          mat.activo ? 'translate-x-3.5' : 'translate-x-0.5'
-                        }`}></div>
+                      <div onClick={() => updateMaterial(mat.id, cajon.id, 'activo', !mat.activo).then(() =>
+                        toast.success(mat.activo ? 'Material desactivado' : 'Material activado'))}
+                        className={`w-6 h-3.5 rounded-full cursor-pointer transition-colors ${mat.activo ? 'bg-green-500' : 'bg-gray-200'}`}>
+                        <div className={`w-2.5 h-2.5 bg-white rounded-full mt-0.5 transition-transform ${mat.activo ? 'translate-x-3' : 'translate-x-0.5'}`}></div>
                       </div>
                     </div>
                   </div>
                 ))}
 
-                {/* Botón agregar material */}
-                <button
-                  onClick={() => agregarMaterial(cajon.id)}
-                  className="w-full mt-2 py-2 border border-dashed border-blue-300 rounded-xl text-xs text-blue-600 font-medium bg-blue-50 active:bg-blue-100"
-                >
+                <button onClick={() => agregarMaterial(cajon.id)}
+                  className="w-full mt-2 py-2 border border-dashed border-blue-300 rounded-xl text-xs text-blue-600 font-medium bg-blue-50 active:bg-blue-100">
                   + Agregar material
                 </button>
               </>
@@ -311,26 +290,21 @@ export default function GestionMaterialesPage() {
             {cajonesInactivos.map(cajon => (
               <div key={cajon.id} className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0 opacity-50">
                 <span className="text-sm flex-1 line-through text-gray-400">{cajon.nombre}</span>
-                <button
-                  onClick={() => toggleCajon(cajon.id, cajon.activo)}
-                  className="text-xs px-2 py-1 rounded-lg border border-green-200 text-green-600 bg-green-50"
-                >Activar</button>
+                <button onClick={() => toggleCajon(cajon.id, cajon.activo)}
+                  className="text-xs px-2 py-1 rounded-lg border border-green-200 text-green-600 bg-green-50">Activar</button>
               </div>
             ))}
           </div>
         )}
 
-        {/* Botón agregar cajón */}
-        <button
-          onClick={agregarCajon}
-          className="w-full py-3 border-2 border-dashed border-gray-300 rounded-2xl text-sm text-gray-500 font-medium bg-white active:bg-gray-50"
-        >
+        <button onClick={agregarCajon}
+          className="w-full py-3 border-2 border-dashed border-gray-300 rounded-2xl text-sm text-gray-500 font-medium bg-white active:bg-gray-50">
           + Agregar cajón nuevo
         </button>
 
         <div className="card bg-amber-50 border-amber-100">
           <p className="text-xs text-amber-700 leading-relaxed">
-            Los cambios se guardan automáticamente. Los materiales y cajones desactivados no aparecen en las auditorías pero se conserva su historial.
+            Los cambios se guardan automáticamente. La fecha de vencimiento se muestra en verde (+30 días), amarillo (7–30 días) o rojo (&lt;7 días o vencido). Desactivá el toggle azul para materiales sin fecha de vencimiento.
           </p>
         </div>
       </div>
