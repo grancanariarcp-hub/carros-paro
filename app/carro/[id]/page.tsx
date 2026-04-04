@@ -3,298 +3,218 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { estadoColor, formatFecha, formatFechaHora } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import type { Carro, Inspeccion, Perfil } from '@/lib/types'
 
-export default function QRPage() {
-  const [carro, setCarro] = useState<any>(null)
+export default function MenuCarroPage() {
+  const [carro, setCarro] = useState<Carro|null>(null)
+  const [inspecciones, setInspecciones] = useState<Inspeccion[]>([])
+  const [perfil, setPerfil] = useState<Perfil|null>(null)
   const [loading, setLoading] = useState(true)
-  const [qrUrl, setQrUrl] = useState('')
-  const [perfil, setPerfil] = useState<any>(null)
-  const [mostrarLogin, setMostrarLogin] = useState(false)
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-  const [loginLoading, setLoginLoading] = useState(false)
-  const [appUrl, setAppUrl] = useState('')
+  const [vencimientosAlert, setVencimientosAlert] = useState(0)
   const router = useRouter()
   const params = useParams()
-  const carroId = params.id as string
+  const id = params.id as string
   const supabase = createClient()
 
-  useEffect(() => { cargarDatos() }, [carroId])
+  useEffect(() => { cargarDatos() }, [id])
 
   async function cargarDatos() {
-    setAppUrl(window.location.origin)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/'); return }
+    const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
+    setPerfil(p)
 
-    // Cargar datos del carro (público, sin autenticación)
     const { data: c } = await supabase.from('carros')
-      .select('*, servicios(nombre)').eq('id', carroId).single()
+      .select('*, servicios(nombre)').eq('id', id).single()
+    if (!c) { router.back(); return }
     setCarro(c)
 
-    // Verificar si hay sesión activa
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-      if (p?.activo) setPerfil(p)
-    }
+    const { data: ins } = await supabase.from('inspecciones')
+      .select('*, perfiles(nombre)')
+      .eq('carro_id', id)
+      .order('fecha', { ascending: false })
+      .limit(5)
+    setInspecciones(ins || [])
 
-    // Generar QR
-    const carroUrl = `${window.location.origin}/carro/${carroId}`
-    setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(carroUrl)}&bgcolor=ffffff&color=1d4ed8&margin=10`)
+    const { data: cajs } = await supabase.from('cajones')
+      .select('materiales(*)')
+      .eq('carro_id', id)
+      .eq('activo', true)
+    let alertas = 0
+    for (const caj of (cajs || [])) {
+      for (const mat of ((caj as any).materiales || [])) {
+        if (mat.activo && mat.tiene_vencimiento && mat.fecha_vencimiento) {
+          const dias = Math.ceil((new Date(mat.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+          if (dias <= 30) alertas++
+        }
+      }
+    }
+    setVencimientosAlert(alertas)
     setLoading(false)
   }
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
-    setLoginLoading(true)
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginForm.email,
-        password: loginForm.password
-      })
-      if (error) throw error
-      const { data: p } = await supabase.from('perfiles').select('*').eq('id', data.user.id).single()
-      if (!p?.activo) throw new Error('Tu cuenta no está aprobada')
-      setPerfil(p)
-      setMostrarLogin(false)
-      toast.success(`Bienvenido/a ${p.nombre}`)
-    } catch (err: any) {
-      toast.error(err.message || 'Error al ingresar')
-    } finally {
-      setLoginLoading(false)
-    }
-  }
-
-  async function cerrarSesion() {
-    await supabase.auth.signOut()
-    setPerfil(null)
-    toast.success('Sesión cerrada')
-  }
-
-  function irAControl(tipo: string) {
-    router.push(`/carro/${carroId}/control/${tipo}`)
-  }
-
-  function generarPDF() {
-    const carroUrl = `${appUrl}/carro/${carroId}`
-    const contenido = `
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; background: white; }
-  .etiqueta {
-    width: 5cm; height: 5cm;
-    border: 2px solid #1d4ed8;
-    border-radius: 8px;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    page-break-inside: avoid;
-  }
-  .hospital { font-size: 6px; color: #1d4ed8; font-weight: bold; text-align: center; line-height: 1.3; }
-  .qr-img { width: 2.2cm; height: 2.2cm; }
-  .codigo { font-size: 10px; font-weight: bold; color: #1d4ed8; text-align: center; }
-  .info { font-size: 6px; color: #444; text-align: center; line-height: 1.4; }
-  .footer { font-size: 5px; color: #aaa; text-align: center; }
-  @media print {
-    @page { margin: 1cm; size: A4; }
-    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  }
-</style>
-</head>
-<body>
-<div class="etiqueta">
-  <div class="hospital">H.U. Gran Canaria<br>Doctor Negrín</div>
-  <img class="qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(carroUrl)}&bgcolor=ffffff&color=1d4ed8&margin=5" />
-  <div class="codigo">${carro?.codigo || ''}</div>
-  <div class="info">
-    ${carro?.nombre || ''}<br>
-    ${(carro?.servicios as any)?.nombre || ''}<br>
-    ${carro?.ubicacion || ''}<br>
-    ${carro?.responsable ? 'Resp: ' + carro.responsable : ''}
-  </div>
-  <div class="footer">GranCanariaRCP · Dr. Lübbe</div>
-</div>
-</body>
-</html>`
-
-    const ventana = window.open('', '_blank')
-    if (ventana) {
-      ventana.document.write(contenido)
-      ventana.document.close()
-      ventana.onload = () => { ventana.print() }
-    }
-  }
-
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400 text-sm">Cargando...</div>
-    </div>
-  )
-
-  if (!carro) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400 text-sm">Carro no encontrado</div>
-    </div>
-  )
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
+  if (!carro) return null
 
   const e = estadoColor(carro.estado)
 
   return (
     <div className="page">
-      {/* Topbar */}
       <div className="topbar">
-        <div className="flex-1">
-          <div style={{fontSize:'10px', color:'#94a3b8'}}>H.U. Gran Canaria Doctor Negrín</div>
-          <div style={{fontSize:'13px', fontWeight:'600', color:'#1e293b'}}>Auditor Carros de Parada</div>
-        </div>
-        {perfil ? (
-          <div className="flex items-center gap-2">
-            <div style={{fontSize:'11px', color:'#64748b', textAlign:'right'}}>
-              <div style={{fontWeight:'500'}}>{perfil.nombre}</div>
-              <div style={{fontSize:'10px'}}>{perfil.rol}</div>
-            </div>
-            <button onClick={cerrarSesion}
-              style={{fontSize:'11px', padding:'4px 8px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'white', cursor:'pointer', color:'#64748b'}}>
-              Salir
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setMostrarLogin(!mostrarLogin)}
-            style={{fontSize:'12px', padding:'6px 12px', borderRadius:'8px', background:'#1d4ed8', color:'white', border:'none', cursor:'pointer', fontWeight:'500'}}>
-            Identificarse
-          </button>
-        )}
+        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <span className="font-semibold text-sm flex-1 text-right">{carro.codigo}</span>
       </div>
 
       <div className="content">
-
-        {/* Login inline */}
-        {mostrarLogin && !perfil && (
-          <div className="card border-blue-200" style={{background:'#EFF6FF'}}>
-            <div className="section-title mb-3">Identificarse</div>
-            <form onSubmit={handleLogin} style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-              <div>
-                <label className="label">Email</label>
-                <input className="input" type="email" placeholder="usuario@hospital.com"
-                  value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} required />
-              </div>
-              <div>
-                <label className="label">Contraseña</label>
-                <input className="input" type="password" placeholder="••••••••"
-                  value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
-              </div>
-              <button type="submit" className="btn-primary" disabled={loginLoading}>
-                {loginLoading ? 'Ingresando...' : 'Ingresar'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Estado del carro — visible para todos */}
+        {/* Info del carro */}
         <div className="card">
-          <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px'}}>
+          <div className="flex items-start justify-between mb-3">
             <div>
-              <div style={{fontSize:'20px', fontWeight:'700', color:'#1d4ed8'}}>{carro.codigo}</div>
-              <div style={{fontSize:'13px', color:'#64748b', marginTop:'2px'}}>{carro.nombre}</div>
+              <div className="font-semibold text-base">{carro.codigo}</div>
+              <div className="text-sm text-gray-500">{carro.nombre}</div>
             </div>
-            <span className={`badge ${e.bg} ${e.text}`} style={{fontSize:'12px', padding:'4px 12px'}}>{e.label}</span>
+            <span className={`badge ${e.bg} ${e.text}`}>{e.label}</span>
           </div>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', fontSize:'13px'}}>
-            <div><div className="label">Servicio</div><div className="val">{(carro.servicios as any)?.nombre || '—'}</div></div>
-            <div><div className="label">Ubicación</div><div className="val">{carro.ubicacion || '—'}</div></div>
-            <div><div className="label">Responsable</div><div className="val">{carro.responsable || '—'}</div></div>
-            <div><div className="label">Último control</div><div className="val">{formatFechaHora(carro.ultimo_control) || '—'}</div></div>
-            <div><div className="label">Próximo control</div><div className="val">{formatFecha(carro.proximo_control) || '—'}</div></div>
-            <div><div className="label">Frecuencia</div><div className="val">{carro.frecuencia_control || '—'}</div></div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="label">Servicio</div>
+              <div className="font-medium">{(carro.servicios as any)?.nombre || '—'}</div>
+            </div>
+            <div>
+              <div className="label">Ubicación</div>
+              <div className="font-medium">{carro.ubicacion || '—'}</div>
+            </div>
+            <div>
+              <div className="label">Último control</div>
+              <div className="font-medium">{formatFechaHora(carro.ultimo_control) || '—'}</div>
+            </div>
+            <div>
+              <div className="label">Próximo control</div>
+              <div className="font-medium">{formatFecha(carro.proximo_control) || '—'}</div>
+            </div>
           </div>
+          {carro.ultimo_tipo_control && (
+            <div className="mt-2 pt-2 border-t border-gray-50">
+              <span className="text-xs text-gray-400">Tipo anterior: </span>
+              <span className="text-xs font-medium">{carro.ultimo_tipo_control.replace('_',' ')}</span>
+            </div>
+          )}
         </div>
 
-        {/* QR */}
-        <div className="card" style={{textAlign:'center'}}>
-          <div className="section-title mb-3">Código QR de este carro</div>
-          {qrUrl && <img src={qrUrl} alt="QR" style={{width:'180px', height:'180px', margin:'0 auto 12px', display:'block', borderRadius:'8px'}} />}
-          <div style={{fontSize:'11px', color:'#94a3b8', marginBottom:'12px'}}>Escaneá para acceder directamente a este carro</div>
-          <button onClick={generarPDF} className="btn-primary">
-            Imprimir etiqueta QR (5×5 cm)
+        <div className="section-title">Tipo de control</div>
+
+        <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/control/mensual`)}>
+          <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/><line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/><line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/><line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/></svg>
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Control mensual</div>
+            <div className="text-xs text-gray-400">Próximo: {formatFecha(carro.proximo_control)}</div>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+        </button>
+
+        <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/control/post_uso`)}>
+          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" strokeWidth={2}/><polyline points="22 4 12 14.01 9 11.01" strokeWidth={2}/></svg>
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Control post-utilización</div>
+            <div className="text-xs text-gray-400">Después de usar el carro</div>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+        </button>
+
+        {(perfil?.rol === 'supervisor' || perfil?.rol === 'administrador') && (
+          <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/control/extra`)}>
+            <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth={2}/><line x1="12" y1="8" x2="12" y2="16" strokeWidth={2}/><line x1="8" y1="12" x2="16" y2="12" strokeWidth={2}/></svg>
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Control extra</div>
+              <div className="text-xs text-gray-400">Control adicional programado</div>
+            </div>
+            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
           </button>
-        </div>
-
-        {/* Acciones si hay sesión */}
-        {perfil && (
-          <div className="card">
-            <div className="section-title mb-3">Realizar control — {carro.codigo}</div>
-            <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
-              <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
-                onClick={() => irAControl('mensual')}>
-                <div style={{width:'36px', height:'36px', borderRadius:'10px', background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                  <svg style={{width:'18px', height:'18px', color:'#1d4ed8'}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/><line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/><line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/><line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/></svg>
-                </div>
-                <div>
-                  <div style={{fontWeight:'600', fontSize:'14px'}}>Control mensual</div>
-                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Próximo: {formatFecha(carro.proximo_control)}</div>
-                </div>
-              </button>
-              <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
-                onClick={() => irAControl('post_uso')}>
-                <div style={{width:'36px', height:'36px', borderRadius:'10px', background:'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                  <svg style={{width:'18px', height:'18px', color:'#d97706'}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" strokeWidth={2}/><polyline points="22 4 12 14.01 9 11.01" strokeWidth={2}/></svg>
-                </div>
-                <div>
-                  <div style={{fontWeight:'600', fontSize:'14px'}}>Control post-utilización</div>
-                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Después de usar el carro</div>
-                </div>
-              </button>
-              {(perfil.rol === 'supervisor' || perfil.rol === 'administrador') && (
-                <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
-                  onClick={() => irAControl('extra')}>
-                  <div style={{width:'36px', height:'36px', borderRadius:'10px', background:'#F5F3FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                    <svg style={{width:'18px', height:'18px', color:'#7c3aed'}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth={2}/><line x1="12" y1="8" x2="12" y2="16" strokeWidth={2}/><line x1="8" y1="12" x2="16" y2="12" strokeWidth={2}/></svg>
-                  </div>
-                  <div>
-                    <div style={{fontWeight:'600', fontSize:'14px'}}>Control extra</div>
-                    <div style={{fontSize:'11px', color:'#94a3b8'}}>Control adicional programado</div>
-                  </div>
-                </button>
-              )}
-              <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
-                onClick={() => router.push(`/carro/${carroId}/historial`)}>
-                <div style={{width:'36px', height:'36px', borderRadius:'10px', background:'#F1F5F9', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-                  <svg style={{width:'18px', height:'18px', color:'#64748b'}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9" strokeWidth={2}/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeWidth={2}/></svg>
-                </div>
-                <div>
-                  <div style={{fontWeight:'600', fontSize:'14px'}}>Ver historial</div>
-                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Auditorías anteriores</div>
-                </div>
-              </button>
-            </div>
-          </div>
         )}
 
-        {/* Si no hay sesión, mostrar instrucción */}
-        {!perfil && !mostrarLogin && (
-          <div className="card" style={{background:'#F0FDF4', border:'1px solid #BBF7D0', textAlign:'center', padding:'20px'}}>
-            <div style={{fontSize:'13px', color:'#166534', fontWeight:'500', marginBottom:'6px'}}>
-              ¿Eres personal del hospital?
-            </div>
-            <div style={{fontSize:'12px', color:'#15803d', marginBottom:'12px'}}>
-              Identificate para realizar un control o ver el historial completo
-            </div>
-            <button onClick={() => setMostrarLogin(true)} className="btn-primary" style={{width:'auto', padding:'8px 20px', margin:'0 auto', display:'inline-block'}}>
-              Identificarse
-            </button>
+        {/* Vencimientos */}
+        <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/vencimientos`)}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${vencimientosAlert > 0 ? 'bg-amber-100' : 'bg-green-100'}`}>
+            <svg className={`w-5 h-5 ${vencimientosAlert > 0 ? 'text-amber-700' : 'text-green-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/>
+              <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/>
+              <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/>
+              <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/>
+              <line x1="8" y1="14" x2="16" y2="14" strokeWidth={2}/>
+              <line x1="8" y1="18" x2="12" y2="18" strokeWidth={2}/>
+            </svg>
           </div>
-        )}
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Actualizar vencimientos</div>
+            <div className="text-xs text-gray-400">
+              {vencimientosAlert > 0
+                ? `${vencimientosAlert} material${vencimientosAlert !== 1 ? 'es' : ''} vencido/s o próximo/s`
+                : 'Todos los vencimientos al día'}
+            </div>
+          </div>
+          {vencimientosAlert > 0 && (
+            <span className="badge bg-amber-100 text-amber-800 text-xs">{vencimientosAlert}</span>
+          )}
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+        </button>
 
-        {/* Footer */}
-        <div style={{textAlign:'center', padding:'8px 0 4px'}}>
-          <div style={{fontSize:'11px', color:'#cbd5e1'}}>GranCanariaRCP</div>
-          <div style={{fontSize:'10px', color:'#e2e8f0', fontStyle:'italic'}}>Dr. Lübbe</div>
-        </div>
+        {/* Historial */}
+        <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/historial`)}>
+          <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9" strokeWidth={2}/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeWidth={2}/></svg>
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Ver historial</div>
+            <div className="text-xs text-gray-400">{inspecciones.length} controles registrados</div>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+        </button>
+
+        {/* QR — visible para todos los roles */}
+        <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/qr`)}>
+          <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7" strokeWidth={2}/>
+              <rect x="14" y="3" width="7" height="7" strokeWidth={2}/>
+              <rect x="3" y="14" width="7" height="7" strokeWidth={2}/>
+              <rect x="14" y="14" width="3" height="3" strokeWidth={2}/>
+              <line x1="19" y1="14" x2="21" y2="14" strokeWidth={2}/>
+              <line x1="19" y1="17" x2="21" y2="17" strokeWidth={2}/>
+              <line x1="14" y1="19" x2="14" y2="21" strokeWidth={2}/>
+              <line x1="17" y1="19" x2="21" y2="21" strokeWidth={2}/>
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Ver QR / Imprimir etiqueta</div>
+            <div className="text-xs text-gray-400">Etiqueta 5×5 cm lista para imprimir</div>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+        </button>
+
+        {/* Gestión materiales — solo admin y supervisor */}
+        {(perfil?.rol === 'supervisor' || perfil?.rol === 'administrador') && (
+          <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/admin/carro/${id}/materiales`)}>
+            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M9 11l3 3L22 4" strokeWidth={2}/>
+                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" strokeWidth={2}/>
+              </svg>
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Gestionar materiales</div>
+              <div className="text-xs text-gray-400">Activar, desactivar o editar materiales</div>
+            </div>
+            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
+          </button>
+        )}
       </div>
     </div>
   )
 }
+
