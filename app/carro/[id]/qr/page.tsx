@@ -81,7 +81,6 @@ export default function QRPage() {
     }))
     setCajones(cajonesData)
 
-    // Expandir primer cajón por defecto
     const expandidos: Record<string, boolean> = {}
     cajonesData.forEach((c: any, i: number) => { expandidos[c.id] = i === 0 })
     setCajonesExpandidos(expandidos)
@@ -125,6 +124,12 @@ export default function QRPage() {
     await supabase.auth.signOut()
     setPerfil(null)
     toast.success('Sesión cerrada')
+  }
+
+  function irAPanel() {
+    if (perfil.rol === 'administrador') router.push('/admin')
+    else if (perfil.rol === 'supervisor') router.push('/supervisor')
+    else router.push('/auditor')
   }
 
   function toggleCajon(id: string) {
@@ -175,9 +180,16 @@ body { font-family:Arial,sans-serif; }
           <div className="flex items-center gap-2">
             <div style={{fontSize:'11px', color:'#64748b', textAlign:'right'}}>
               <div style={{fontWeight:'500'}}>{perfil.nombre}</div>
+              <div style={{fontSize:'10px', color:'#94a3b8'}}>{perfil.rol}</div>
             </div>
+            <button onClick={irAPanel}
+              style={{fontSize:'11px', padding:'4px 8px', borderRadius:'8px', border:'1px solid #bfdbfe', background:'#EFF6FF', cursor:'pointer', color:'#1d4ed8', fontWeight:'500'}}>
+              Mi panel
+            </button>
             <button onClick={cerrarSesion}
-              style={{fontSize:'11px', padding:'4px 8px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'white', cursor:'pointer'}}>Salir</button>
+              style={{fontSize:'11px', padding:'4px 8px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'white', cursor:'pointer', color:'#64748b'}}>
+              Salir
+            </button>
           </div>
         ) : (
           <button onClick={() => setMostrarLogin(!mostrarLogin)}
@@ -246,30 +258,56 @@ body { font-family:Arial,sans-serif; }
                 <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
                   <svg style={{width:'16px', height:'16px'}} fill="none" stroke="#1d4ed8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/><line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/><line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/><line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/></svg>
                 </div>
-                <div style={{flex:1}}><div style={{fontWeight:'600', fontSize:'13px'}}>Control mensual</div></div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:'600', fontSize:'13px'}}>Control mensual</div>
+                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Próximo: {formatFecha(carro.proximo_control)}</div>
+                </div>
               </button>
+
               <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                 onClick={() => router.push(`/carro/${carroId}/control/post_uso`)}>
                 <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
                   <svg style={{width:'16px', height:'16px'}} fill="none" stroke="#d97706" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" strokeWidth={2}/><polyline points="22 4 12 14.01 9 11.01" strokeWidth={2}/></svg>
                 </div>
-                <div style={{flex:1}}><div style={{fontWeight:'600', fontSize:'13px'}}>Control post-utilización</div></div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:'600', fontSize:'13px'}}>Control post-utilización</div>
+                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Después de usar el carro</div>
+                </div>
               </button>
+
               {(perfil.rol === 'supervisor' || perfil.rol === 'administrador') && (
                 <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                   onClick={() => router.push(`/carro/${carroId}/control/extra`)}>
                   <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#F5F3FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
                     <svg style={{width:'16px', height:'16px'}} fill="none" stroke="#7c3aed" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth={2}/><line x1="12" y1="8" x2="12" y2="16" strokeWidth={2}/><line x1="8" y1="12" x2="16" y2="12" strokeWidth={2}/></svg>
                   </div>
-                  <div style={{flex:1}}><div style={{fontWeight:'600', fontSize:'13px'}}>Control extra</div></div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:'600', fontSize:'13px'}}>Control extra</div>
+                    <div style={{fontSize:'11px', color:'#94a3b8'}}>Control adicional programado</div>
+                  </div>
                 </button>
               )}
+
               <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                 onClick={() => router.push(`/carro/${carroId}`)}>
                 <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#F1F5F9', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
                   <svg style={{width:'16px', height:'16px'}} fill="none" stroke="#64748b" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M9 21V12h6v9"/></svg>
                 </div>
-                <div style={{flex:1}}><div style={{fontWeight:'600', fontSize:'13px'}}>Menú completo del carro</div></div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:'600', fontSize:'13px'}}>Menú completo del carro</div>
+                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Vencimientos, historial y más</div>
+                </div>
+              </button>
+
+              <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
+                onClick={irAPanel}>
+                <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
+                  <svg style={{width:'16px', height:'16px'}} fill="none" stroke="#1d4ed8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" strokeWidth={2}/><rect x="14" y="3" width="7" height="7" strokeWidth={2}/><rect x="3" y="14" width="7" height="7" strokeWidth={2}/><rect x="14" y="14" width="7" height="7" strokeWidth={2}/></svg>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:'600', fontSize:'13px'}}>Ir a mi panel</div>
+                  <div style={{fontSize:'11px', color:'#94a3b8'}}>Dashboard de {perfil.rol}</div>
+                </div>
               </button>
             </div>
           </div>
@@ -284,22 +322,20 @@ body { font-family:Arial,sans-serif; }
               <div><div className="label">Modelo</div><div className="val">{desf.modelo || '—'}</div></div>
               <div><div className="label">N° censo</div><div className="val">{desf.numero_censo || '—'}</div></div>
               <div><div className="label">Último mantenimiento</div><div className="val">{formatFecha(desf.fecha_ultimo_mantenimiento) || '—'}</div></div>
-              <div className="col-span-2"><div className="label">Próximo mantenimiento</div><div className="val">{formatFecha(desf.fecha_mantenimiento) || '—'}</div></div>
+              <div style={{gridColumn:'1/-1'}}><div className="label">Próximo mantenimiento</div><div className="val">{formatFecha(desf.fecha_mantenimiento) || '—'}</div></div>
             </div>
           </div>
         )}
 
-        {/* CAJONES Y MATERIALES — siempre visible en modo lectura */}
+        {/* CAJONES Y MATERIALES — siempre visible */}
         <div style={{fontSize:'11px', fontWeight:'700', color:'#94a3b8', letterSpacing:'.06em', textTransform:'uppercase', padding:'4px 0 2px'}}>
           Contenido del carro
         </div>
 
         {cajones.map(cajon => (
           <div key={cajon.id} className="card" style={{padding:'12px 14px'}}>
-            <button
-              onClick={() => toggleCajon(cajon.id)}
-              style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'none', border:'none', cursor:'pointer', padding:0}}
-            >
+            <button onClick={() => toggleCajon(cajon.id)}
+              style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'none', border:'none', cursor:'pointer', padding:0}}>
               <div style={{fontSize:'13px', fontWeight:'600', color:'#1e293b'}}>{cajon.nombre}</div>
               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
                 <span style={{fontSize:'11px', color:'#94a3b8'}}>{cajon.materiales.length} items</span>
