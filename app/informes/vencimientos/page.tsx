@@ -105,13 +105,8 @@ export default function InformeVencimientosPage() {
       }
     })
 
-    if (svc) {
-      resultado = resultado.filter(m => m.servicio_id === svc)
-    }
-
-    if (desde) {
-      resultado = resultado.filter(m => m.fecha_vencimiento >= desde)
-    }
+    if (svc) resultado = resultado.filter(m => m.servicio_id === svc)
+    if (desde) resultado = resultado.filter(m => m.fecha_vencimiento >= desde)
 
     setDatos(resultado)
   }
@@ -125,6 +120,7 @@ export default function InformeVencimientosPage() {
 
   function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
+    const servicioNombre = servicio ? servicios.find(s => s.id === servicio)?.nombre : 'Todos'
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   body { font-family: Arial, sans-serif; margin: 2cm; color: #1e293b; font-size: 11px; }
@@ -138,6 +134,8 @@ export default function InformeVencimientosPage() {
   table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-top: none; }
   th { background: #f1f5f9; padding: 6px 8px; text-align: left; font-size: 10px; }
   td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; font-size: 10px; }
+  .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; margin-top: 10px; color: #64748b; }
+  .sin-datos-titulo { font-size: 15px; font-weight: bold; margin-bottom: 8px; color: #16a34a; }
   .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   @media print { @page { margin: 1.5cm; } }
 </style></head><body>
@@ -145,8 +143,16 @@ export default function InformeVencimientosPage() {
   <div class="hospital">Hospital Universitario de Gran Canaria Doctor Negrín</div>
   <div class="titulo">Informe de Vencimientos de Material</div>
   <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
-  <div class="codigo" style="margin-top:4px">Hasta: ${fechaHasta} · Servicio: ${servicio ? servicios.find(s => s.id === servicio)?.nombre : 'Todos'}</div>
+  <div class="codigo" style="margin-top:4px">
+    ${fechaDesde ? `Desde: ${fechaDesde} · ` : ''}Hasta: ${fechaHasta} · Servicio: ${servicioNombre} · Total: ${datos.length} material${datos.length !== 1 ? 'es' : ''}
+  </div>
 </div>
+${datos.length === 0 ? `
+<div class="sin-datos">
+  <div class="sin-datos-titulo">✓ Sin vencimientos en el período seleccionado</div>
+  <div style="font-size:12px;">No se encontraron materiales con vencimiento en el rango de fechas y filtros seleccionados.</div>
+</div>
+` : `
 ${Object.values(porCarro).map(({ info, materiales }) => `
 <div class="carro-block">
   <div class="carro-header"><strong>${info.carro_codigo}</strong> — ${info.carro_nombre}</div>
@@ -162,6 +168,7 @@ ${Object.values(porCarro).map(({ info, materiales }) => `
     </tbody>
   </table>
 </div>`).join('')}
+`}
 <div class="footer">
   🔴 &lt;7 días · 🟠 8-15 días · 🟡 16-30 días<br>
   Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe
@@ -172,9 +179,11 @@ ${Object.values(porCarro).map(({ info, materiales }) => `
   }
 
   async function compartir() {
-    const texto = `*Informe Vencimientos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${Object.values(porCarro).map(({ info, materiales }) =>
-      `*${info.carro_codigo}* - ${info.servicio}\n${materiales.map(m => `  • ${m.material}: ${labelDias(m.dias)}`).join('\n')}`
-    ).join('\n\n')}`
+    const texto = datos.length === 0
+      ? `*Informe Vencimientos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n✓ Sin vencimientos en el período seleccionado a fecha ${new Date().toLocaleDateString('es-ES')}`
+      : `*Informe Vencimientos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${Object.values(porCarro).map(({ info, materiales }) =>
+          `*${info.carro_codigo}* - ${info.servicio}\n${materiales.map(m => `  • ${m.material}: ${labelDias(m.dias)}`).join('\n')}`
+        ).join('\n\n')}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
     } else {
