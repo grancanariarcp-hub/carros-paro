@@ -47,11 +47,11 @@ export default function ControlPage() {
       .select('*, servicios(nombre)').eq('id', carroId).single()
     setCarro(c)
 
-    const { data: caj } = await supabase.from('cajones')
+    const { data: cajonesData } = await supabase.from('cajones')
       .select('*, materiales(*)')
       .eq('carro_id', carroId)
       .order('orden')
-    setCajones(caj || [])
+    setCajones(cajonesData || [])
 
     const { data: d } = await supabase.from('desfibriladores')
       .select('*').eq('carro_id', carroId).eq('activo', true).single()
@@ -66,8 +66,8 @@ export default function ControlPage() {
 
     // Inicializar items
     const initItems: Record<string, ItemState> = {}
-    for (const caj of (caj || [])) {
-      for (const mat of (caj.materiales || [])) {
+    for (const cajonData of (cajonesData || [])) {
+      for (const mat of (cajonData.materiales || [])) {
         if (mat.activo) {
           initItems[mat.id] = {
             material_id: mat.id,
@@ -246,7 +246,6 @@ export default function ControlPage() {
         className="hidden" onChange={handleFotoChange} />
 
       <div className="content">
-        {/* Encabezado */}
         <div className="card">
           <div className="grid grid-cols-2 gap-2 text-sm mb-3">
             <div><div className="label">Carro</div><div className="font-semibold">{carro?.codigo}</div></div>
@@ -256,7 +255,6 @@ export default function ControlPage() {
             <div><div className="label">Último control</div><div className="font-semibold">{formatFecha(carro?.ultimo_control) || '—'}</div></div>
             <div><div className="label">Tipo anterior</div><div className="font-semibold">{carro?.ultimo_tipo_control?.replace('_',' ') || '—'}</div></div>
           </div>
-          {/* Leyenda semáforo */}
           <div className="pt-2 border-t border-gray-50">
             <div className="section-title mb-2">Semáforo de vencimientos</div>
             <div className="flex gap-3 flex-wrap">
@@ -267,7 +265,6 @@ export default function ControlPage() {
           </div>
         </div>
 
-        {/* Cajones */}
         {cajones.map(cajon => {
           const mats = (cajon.materiales || []).filter((m: Material) => m.activo)
           if (mats.length === 0) return null
@@ -282,7 +279,6 @@ export default function ControlPage() {
                   : <span className="badge bg-green-100 text-green-700">Sin fallas</span>}
               </div>
 
-              {/* Headers */}
               <div className="grid grid-cols-[1fr_60px_26px_26px_26px] gap-1 items-center mb-2 pb-1 border-b border-gray-50">
                 <div className="text-xs text-gray-400 font-semibold">Material</div>
                 <div className="text-xs text-gray-400 text-center">Vto.</div>
@@ -304,8 +300,6 @@ export default function ControlPage() {
                         <div className="text-xs font-medium leading-tight">{mat.nombre}</div>
                         <div className="text-xs text-gray-400">×{mat.cantidad_requerida}</div>
                       </div>
-
-                      {/* Vencimiento */}
                       <button
                         className={`vto-badge ${vtoClass} text-xs`}
                         onClick={() => {
@@ -317,24 +311,18 @@ export default function ControlPage() {
                           ? new Date(item.fecha_vencimiento).toLocaleDateString('es-AR',{month:'short',year:'2-digit'})
                           : 'Ingresá'}
                       </button>
-
-                      {/* Check cantidad */}
                       <div
                         className={`chk-box mx-auto ${item.cantidad_ok ? 'checked-ok' : ''}`}
                         onClick={() => updateItem(mat.id, 'cantidad_ok', !item.cantidad_ok)}
                       >
                         {item.cantidad_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3}/></svg>}
                       </div>
-
-                      {/* Check estado */}
                       <div
                         className={`chk-box mx-auto ${item.estado_ok ? 'checked-ok' : ''}`}
                         onClick={() => updateItem(mat.id, 'estado_ok', !item.estado_ok)}
                       >
                         {item.estado_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3}/></svg>}
                       </div>
-
-                      {/* Check falla */}
                       <div
                         className={`chk-box mx-auto border-red-300 ${item.tiene_falla ? 'checked-falla' : ''}`}
                         onClick={() => toggleFalla(mat.id)}
@@ -343,22 +331,18 @@ export default function ControlPage() {
                       </div>
                     </div>
 
-                    {/* Aviso vto bloqueante */}
                     {vtoColor === 'rojo' && item.fecha_vencimiento && (
                       <div className="mb-1 px-2 py-1.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold">
                         ⛔ Vencimiento &lt;7 días — actualizá la fecha para poder guardar
                       </div>
                     )}
 
-                    {/* Drawer de falla */}
                     {item.tiene_falla && (
                       <div className="falla-drawer mb-2">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeWidth={2}/><line x1="12" y1="9" x2="12" y2="13" strokeWidth={2}/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth={2}/></svg>
                           Falla detectada — {mat.nombre}
                         </div>
-
-                        {/* Tipo de falla */}
                         <div>
                           <div className="label mb-1">Tipo de falla</div>
                           <div className="flex gap-2">
@@ -377,8 +361,6 @@ export default function ControlPage() {
                             ))}
                           </div>
                         </div>
-
-                        {/* Descripción */}
                         <div>
                           <div className="label mb-1">Descripción de la falla</div>
                           <textarea
@@ -389,8 +371,6 @@ export default function ControlPage() {
                             onChange={e => updateItem(mat.id, 'descripcion_falla', e.target.value)}
                           />
                         </div>
-
-                        {/* Foto */}
                         <div>
                           <div className="label mb-1">Fotografía de evidencia</div>
                           {item.foto_url ? (
@@ -431,7 +411,6 @@ export default function ControlPage() {
           )
         })}
 
-        {/* Desfibrilador */}
         <div className="card">
           <div className="font-semibold text-sm mb-3">Desfibrilador</div>
           <div className="flex flex-col gap-3">
@@ -453,11 +432,7 @@ export default function ControlPage() {
           </div>
         </div>
 
-        <button
-          className="btn-primary"
-          onClick={guardar}
-          disabled={guardando}
-        >
+        <button className="btn-primary" onClick={guardar} disabled={guardando}>
           {guardando ? 'Guardando...' : 'Finalizar y guardar control'}
         </button>
       </div>
