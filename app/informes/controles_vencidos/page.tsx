@@ -64,6 +64,8 @@ export default function InformeControlesVencidosPage() {
   td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; }
   tr:nth-child(even) td { background: #f8fafc; }
   .badge-red { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+  .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; margin-top: 10px; color: #64748b; }
+  .sin-datos-titulo { font-size: 15px; font-weight: bold; margin-bottom: 8px; color: #16a34a; }
   .footer { margin-top: 30px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
   @media print { @page { margin: 1.5cm; } }
 </style></head><body>
@@ -76,6 +78,12 @@ export default function InformeControlesVencidosPage() {
   <span>Total carros vencidos: <strong>${datos.length}</strong></span>
   <span>Servicio: <strong>${servicio ? servicios.find(s => s.id === servicio)?.nombre : 'Todos'}</strong></span>
 </div>
+${datos.length === 0 ? `
+<div class="sin-datos">
+  <div class="sin-datos-titulo">✓ Sin controles vencidos</div>
+  <div style="font-size:12px;">No se encontraron carros con controles vencidos para los filtros seleccionados en la fecha de generación de este informe.</div>
+</div>
+` : `
 <table>
   <thead><tr>
     <th>Código</th><th>Nombre</th><th>Servicio</th><th>Ubicación</th><th>Responsable</th><th>Fecha prevista</th><th>Días retraso</th>
@@ -92,6 +100,7 @@ export default function InformeControlesVencidosPage() {
     </tr>`).join('')}
   </tbody>
 </table>
+`}
 <div class="footer">Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe</div>
 </body></html>`
 
@@ -100,7 +109,9 @@ export default function InformeControlesVencidosPage() {
   }
 
   async function compartir() {
-    const texto = `*Informe Controles Vencidos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(c => `• ${c.codigo} - ${c.nombre}: ${diasRetraso(c.proximo_control)} días de retraso`).join('\n')}`
+    const texto = datos.length === 0
+      ? `*Informe Controles Vencidos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n✓ Sin controles vencidos a fecha ${new Date().toLocaleDateString('es-ES')}`
+      : `*Informe Controles Vencidos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(c => `• ${c.codigo} - ${c.nombre}: ${diasRetraso(c.proximo_control)} días de retraso`).join('\n')}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
     } else {
@@ -118,13 +129,11 @@ export default function InformeControlesVencidosPage() {
         <span className="font-semibold text-sm flex-1 text-right">Controles vencidos</span>
       </div>
       <div className="content">
-        {/* Código editable */}
         <div className="card">
           <label className="label">Código del informe (editable)</label>
           <input className="input" value={codigo} onChange={e => setCodigo(e.target.value)} />
         </div>
 
-        {/* Filtros */}
         <div className="card">
           <div className="section-title mb-3">Filtros</div>
           <div>
@@ -136,13 +145,11 @@ export default function InformeControlesVencidosPage() {
           </div>
         </div>
 
-        {/* Resumen */}
         <div className="card bg-red-50 border-red-200">
           <div className="text-sm font-semibold text-red-800">{datos.length} carro{datos.length !== 1 ? 's' : ''} con control vencido</div>
           <div className="text-xs text-red-600 mt-1">Ordenados por fecha más atrasada primero</div>
         </div>
 
-        {/* Lista */}
         {datos.map(c => {
           const dias = diasRetraso(c.proximo_control)
           return (
@@ -171,7 +178,6 @@ export default function InformeControlesVencidosPage() {
           </div>
         )}
 
-        {/* Acciones */}
         <div className="grid grid-cols-2 gap-2">
           <button className="btn-primary" onClick={generarPDF}>Imprimir PDF</button>
           <button className="btn-secondary" onClick={compartir}>Compartir</button>
