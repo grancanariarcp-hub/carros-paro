@@ -235,4 +235,4 @@ ${datos.map(({ carro, inspecciones, itemsFallos }: any) => `
         </div>
       </div>
     </div>
-  )
+  )}
