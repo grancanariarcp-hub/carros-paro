@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply w-full py-3 px-4 bg-blue-700 text-white font-semibold rounded-xl
+           active:bg-blue-900 transition-colors text-sm;
+  }
+  .btn-secondary {
+    @apply w-full py-3 px-4 bg-white text-gray-800 font-medium rounded-xl
+           border border-gray-200 active:bg-gray-50 transition-colors text-sm;
+  }
+  .btn-danger {
+    @apply py-2 px-3 bg-red-50 text-red-700 font-medium rounded-lg
+           border border-red-200 active:bg-red-100 transition-colors text-xs;
+  }
+  .btn-success {
+    @apply py-2 px-3 bg-green-50 text-green-700 font-medium rounded-lg
+           border border-green-200 active:bg-green-100 transition-colors text-xs;
+  }
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100 p-4;
+  }
+  .input {
+    @apply w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm
+           focus:outline-none focus:border-blue-500 bg-white;
+  }
+  .label {
+    @apply text-xs text-gray-500 mb-1 block;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .section-title {
+    @apply text-xs font-bold text-gray-400 uppercase tracking-wider;
+  }
+  .topbar {
+    @apply bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10;
+  }
+  .page {
+    @apply max-w-md mx-auto min-h-screen flex flex-col bg-gray-50;
+  }
+  .content {
+    @apply flex-1 p-4 flex flex-col gap-3;
+  }
+  .row-item {
+    @apply flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0;
+  }
+  .chk-box {
+    @apply w-6 h-6 rounded-md border-2 border-gray-200 flex items-center justify-center
+           cursor-pointer flex-shrink-0 bg-white;
+  }
+  .chk-box.checked-ok {
+    @apply bg-green-500 border-green-500;
+  }
+  .chk-box.checked-falla {
+    @apply bg-red-500 border-red-500;
+  }
+  .falla-drawer {
+    @apply mt-2 p-3 bg-red-50 border border-red-200 rounded-xl flex flex-col gap-2;
+  }
+  .tab-btn {
+    @apply flex-1 py-2.5 text-xs text-gray-500 border-b-2 border-transparent
+           font-medium transition-colors;
+  }
+  .tab-btn.active {
+    @apply text-blue-700 border-blue-700;
+  }
+  .alert-banner {
+    @apply flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200
+           rounded-xl text-xs text-amber-800;
+  }
+  .vto-badge {
+    @apply px-2 py-0.5 rounded-md text-xs font-semibold text-center whitespace-nowrap;
+  }
+}
