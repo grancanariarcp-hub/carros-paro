@@ -22,30 +22,41 @@ export default function NuevoCarroPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.codigo || !form.nombre) { toast.error('Código y nombre son obligatorios'); return }
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { data: carro, error } = await supabase.from('carros').insert({
-      codigo: form.codigo.toUpperCase(),
-      nombre: form.nombre,
-      ubicacion: form.ubicacion || null,
-      servicio_id: form.servicio_id || null,
-      responsable: form.responsable || null,
-      frecuencia_control: form.frecuencia_control,
-      proximo_control: form.primer_control || null,
-      estado: 'sin_control',
-      creado_por: user?.id
-    }).select().single()
-
-    if (error) {
-      if (error.code === '23505') toast.error('Ya existe un carro con ese código')
-      else toast.error('Error al crear el carro')
-      setLoading(false)
+    if (!form.codigo || !form.nombre) {
+      toast.error('Código y nombre son obligatorios')
       return
     }
-    toast.success('Carro creado correctamente')
-    router.push(`/admin/carro/${carro.id}/materiales`)
+    setLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const { data, error } = await supabase.rpc('copiar_plantilla', {
+        p_codigo: form.codigo.toUpperCase(),
+        p_nombre: form.nombre,
+        p_ubicacion: form.ubicacion || null,
+        p_servicio_id: form.servicio_id || null,
+        p_responsable: form.responsable || null,
+        p_frecuencia: form.frecuencia_control,
+        p_proximo_control: form.primer_control || null,
+        p_creado_por: user?.id,
+      })
+
+      if (error) {
+        if (error.message.includes('unique') || error.message.includes('duplicate')) {
+          toast.error('Ya existe un carro con ese código')
+        } else {
+          throw error
+        }
+        return
+      }
+
+      toast.success('Carro creado con plantilla completa')
+      router.push(`/admin/carro/${data}/materiales`)
+    } catch (err: any) {
+      toast.error('Error al crear el carro: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -55,6 +66,12 @@ export default function NuevoCarroPage() {
         <span className="font-semibold text-sm flex-1 text-right">Nuevo carro</span>
       </div>
       <form onSubmit={handleSubmit} className="content">
+        <div className="card bg-blue-50 border-blue-100">
+          <p className="text-xs text-blue-700 leading-relaxed">
+            Al crear el carro se copiará automáticamente la plantilla maestra con los 8 secciones y 95 materiales. Podrás personalizar el contenido después.
+          </p>
+        </div>
+
         <div className="card">
           <div className="section-title mb-4">Datos del carro</div>
           <div className="flex flex-col gap-3">
@@ -65,7 +82,7 @@ export default function NuevoCarroPage() {
             </div>
             <div>
               <label className="label">Nombre descriptivo *</label>
-              <input className="input" placeholder="Ej: Carro UTI piso 4" value={form.nombre}
+              <input className="input" placeholder="Ej: Carro parada UTI piso 4" value={form.nombre}
                 onChange={e => setForm({...form, nombre: e.target.value})} required />
             </div>
             <div>
@@ -109,15 +126,8 @@ export default function NuevoCarroPage() {
           </div>
         </div>
 
-        <div className="card bg-blue-50 border-blue-100">
-          <p className="text-xs text-blue-700">
-            Después de crear el carro, podrás agregar los cajones y materiales. 
-            También se generará el código QR automáticamente.
-          </p>
-        </div>
-
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Creando...' : 'Crear carro y continuar →'}
+          {loading ? 'Creando carro...' : 'Crear carro con plantilla completa →'}
         </button>
       </form>
     </div>
