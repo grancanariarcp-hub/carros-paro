@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { estadoColor, formatFecha, formatFechaHora } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import { createBrowserClient } from '@supabase/ssr'
 
 interface Material {
   id: string
@@ -55,6 +56,15 @@ export default function QRPage() {
   const router = useRouter()
   const params = useParams()
   const carroId = params.id as string
+
+  // Cliente público — lee datos sin necesitar sesión activa
+  const supabasePublico = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+
+  // Cliente autenticado — para login y acciones del usuario
   const supabase = createClient()
 
   useEffect(() => { cargarDatos() }, [carroId])
@@ -63,11 +73,12 @@ export default function QRPage() {
     const url = window.location.origin
     setAppUrl(url)
 
-    const { data: c } = await supabase.from('carros')
+    // Leer carro con cliente público — no requiere sesión
+    const { data: c } = await supabasePublico.from('carros')
       .select('*, servicios(nombre)').eq('id', carroId).single()
     setCarro(c)
 
-    const { data: cajs } = await supabase.from('cajones')
+    const { data: cajs } = await supabasePublico.from('cajones')
       .select('*, materiales(*)')
       .eq('carro_id', carroId)
       .eq('activo', true)
@@ -85,10 +96,11 @@ export default function QRPage() {
     cajonesData.forEach((c: any, i: number) => { expandidos[c.id] = i === 0 })
     setCajonesExpandidos(expandidos)
 
-    const { data: d } = await supabase.from('desfibriladores')
+    const { data: d } = await supabasePublico.from('desfibriladores')
       .select('*').eq('carro_id', carroId).eq('activo', true).single()
     setDesf(d)
 
+    // Verificar sesión activa con cliente autenticado
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
@@ -201,7 +213,6 @@ body { font-family:Arial,sans-serif; }
 
       <div className="content">
 
-        {/* Info carro — siempre visible */}
         <div className="card">
           <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px'}}>
             <div>
@@ -225,12 +236,10 @@ body { font-family:Arial,sans-serif; }
           )}
         </div>
 
-        {/* Botón imprimir — siempre visible */}
         <button onClick={generarPDF} className="btn-primary">
           Imprimir etiqueta QR (5×5 cm)
         </button>
 
-        {/* Login */}
         {mostrarLogin && !perfil && (
           <div className="card border-blue-200" style={{background:'#EFF6FF'}}>
             <div className="section-title mb-3">Identificarse</div>
@@ -248,7 +257,6 @@ body { font-family:Arial,sans-serif; }
           </div>
         )}
 
-        {/* Acciones si hay sesión */}
         {perfil && (
           <div className="card">
             <div className="section-title mb-3">Realizar control</div>
@@ -263,7 +271,6 @@ body { font-family:Arial,sans-serif; }
                   <div style={{fontSize:'11px', color:'#94a3b8'}}>Próximo: {formatFecha(carro.proximo_control)}</div>
                 </div>
               </button>
-
               <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                 onClick={() => router.push(`/carro/${carroId}/control/post_uso`)}>
                 <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#FFFBEB', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
@@ -274,7 +281,6 @@ body { font-family:Arial,sans-serif; }
                   <div style={{fontSize:'11px', color:'#94a3b8'}}>Después de usar el carro</div>
                 </div>
               </button>
-
               {(perfil.rol === 'supervisor' || perfil.rol === 'administrador') && (
                 <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                   onClick={() => router.push(`/carro/${carroId}/control/extra`)}>
@@ -287,7 +293,6 @@ body { font-family:Arial,sans-serif; }
                   </div>
                 </button>
               )}
-
               <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                 onClick={() => router.push(`/carro/${carroId}`)}>
                 <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#F1F5F9', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
@@ -298,7 +303,6 @@ body { font-family:Arial,sans-serif; }
                   <div style={{fontSize:'11px', color:'#94a3b8'}}>Vencimientos, historial y más</div>
                 </div>
               </button>
-
               <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                 onClick={irAPanel}>
                 <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
@@ -313,7 +317,6 @@ body { font-family:Arial,sans-serif; }
           </div>
         )}
 
-        {/* DESFIBRILADOR — siempre visible */}
         {desf && (
           <div className="card">
             <div style={{fontWeight:'600', fontSize:'13px', marginBottom:'10px', color:'#1e293b'}}>Desfibrilador</div>
@@ -327,7 +330,6 @@ body { font-family:Arial,sans-serif; }
           </div>
         )}
 
-        {/* CAJONES Y MATERIALES — siempre visible */}
         <div style={{fontSize:'11px', fontWeight:'700', color:'#94a3b8', letterSpacing:'.06em', textTransform:'uppercase', padding:'4px 0 2px'}}>
           Contenido del carro
         </div>
@@ -342,7 +344,6 @@ body { font-family:Arial,sans-serif; }
                 <span style={{fontSize:'12px', color:'#94a3b8'}}>{cajonesExpandidos[cajon.id] ? '▲' : '▼'}</span>
               </div>
             </button>
-
             {cajonesExpandidos[cajon.id] && (
               <div style={{marginTop:'10px'}}>
                 <div style={{display:'grid', gridTemplateColumns:'1fr 36px 72px', gap:'4px', marginBottom:'6px', padding:'0 2px'}}>
@@ -376,14 +377,12 @@ body { font-family:Arial,sans-serif; }
           </div>
         ))}
 
-        {/* QR */}
         <div className="card" style={{textAlign:'center'}}>
           <div className="section-title mb-3">Código QR de este carro</div>
           {qrUrl && <img src={qrUrl} alt="QR" style={{width:'160px', height:'160px', margin:'0 auto 8px', display:'block', borderRadius:'8px'}} />}
           <div style={{fontSize:'11px', color:'#94a3b8'}}>Escanear para acceder a este carro</div>
         </div>
 
-        {/* Invitación identificarse */}
         {!perfil && !mostrarLogin && (
           <div className="card" style={{background:'#F0FDF4', border:'1px solid #BBF7D0', textAlign:'center', padding:'16px'}}>
             <div style={{fontSize:'13px', color:'#166534', fontWeight:'500', marginBottom:'4px'}}>¿Eres personal del hospital?</div>
@@ -394,7 +393,6 @@ body { font-family:Arial,sans-serif; }
             </button>
           </div>
         )}
-
       </div>
     </div>
   )
