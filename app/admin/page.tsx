@@ -44,7 +44,9 @@ export default function AdminPage() {
       supabase.from('inspecciones').select('*, carros(codigo,nombre), perfiles(nombre)')
         .order('fecha', { ascending: false }).limit(10),
       supabase.from('alertas').select('*, carros(codigo,nombre,ubicacion)')
-        .eq('resuelta', false).order('creado_en', { ascending: false })
+        .eq('resuelta', false)
+        .eq('hospital_id', p.hospital_id)
+        .order('creado_en', { ascending: false })
     ])
     setCarros(c || [])
     setUsuarios(u || [])
