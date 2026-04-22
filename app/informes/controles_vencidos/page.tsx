@@ -18,29 +18,39 @@ async function descargarPDF(html: string, nombreArchivo: string) {
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
     script.onload = async () => {
-      const contenedor = document.createElement('div')
-      contenedor.innerHTML = html
-      contenedor.style.position = 'absolute'
-      contenedor.style.left = '-9999px'
-      document.body.appendChild(contenedor)
+      const iframe = document.createElement('iframe')
+      iframe.style.position = 'fixed'
+      iframe.style.top = '0'
+      iframe.style.left = '0'
+      iframe.style.width = '794px'
+      iframe.style.height = '1123px'
+      iframe.style.opacity = '0'
+      iframe.style.zIndex = '-1'
+      document.body.appendChild(iframe)
+
+      const doc = iframe.contentDocument!
+      doc.open()
+      doc.write(html)
+      doc.close()
+
+      await new Promise(r => setTimeout(r, 500))
 
       const opt = {
         margin: [1.5, 1.5, 1.5, 1.5],
         filename: nombreArchivo,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, allowTaint: true },
         jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' }
       }
 
       try {
-        await (window as any).html2pdf().set(opt).from(contenedor).save()
+        await (window as any).html2pdf().set(opt).from(doc.body).save()
       } finally {
-        document.body.removeChild(contenedor)
+        document.body.removeChild(iframe)
         resolve()
       }
     }
     script.onerror = () => {
-      // Fallback: abrir en ventana nueva si falla la librería
       const v = window.open('', '_blank')
       if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
       resolve()
