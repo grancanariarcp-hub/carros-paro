@@ -1,28 +1,51 @@
 {
-  "name": "Auditor Carros de Parada · H.U. Doctor Negrín",
-  "short_name": "Auditor Carros",
-  "description": "Sistema de gestión de carros de parada cardíaca del Hospital Universitario de Gran Canaria Doctor Negrín",
+  "name": "ÁSTOR — Gestión de Material Crítico",
+  "short_name": "ÁSTOR",
+  "description": "Plataforma de gestión y auditoría de material crítico hospitalario. Control. Trazabilidad. Seguridad clínica.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1d4ed8",
+  "background_color": "#080c14",
   "theme_color": "#1d4ed8",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "scope": "/",
   "lang": "es",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Panel de control ÁSTOR"
     }
   ],
   "categories": ["medical", "health", "utilities"],
-  "author": "GranCanariaRCP · Dr. Lübbe"
+  "prefer_related_applications": false,
+  "author": "CRITIC SL — Servicios Médicos"
 }
