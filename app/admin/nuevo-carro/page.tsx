@@ -8,6 +8,8 @@ import type { Servicio } from '@/lib/types'
 export default function NuevoCarroPage() {
   const [servicios, setServicios] = useState<Servicio[]>([])
   const [loading, setLoading] = useState(false)
+  const [estadoPlan, setEstadoPlan] = useState<any>(null)
+  const [perfil, setPerfil] = useState<any>(null)
   const [form, setForm] = useState({
     codigo: '', nombre: '', ubicacion: '', servicio_id: '',
     responsable: '', frecuencia_control: 'mensual', primer_control: ''
@@ -15,10 +17,26 @@ export default function NuevoCarroPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  useEffect(() => {
-    supabase.from('servicios').select('*').eq('activo', true).order('nombre')
-      .then(({ data }) => setServicios(data || []))
-  }, [])
+  useEffect(() => { cargarDatos() }, [])
+
+  async function cargarDatos() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/'); return }
+
+    const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
+    if (!p || !['administrador', 'superadmin'].includes(p.rol)) { router.back(); return }
+    setPerfil(p)
+
+    // Verificar límites del plan
+    if (p.hospital_id) {
+      const { data: plan } = await supabase.rpc('estado_plan', { p_hospital_id: p.hospital_id })
+      setEstadoPlan(plan)
+    }
+
+    const { data: svcs } = await supabase.from('servicios')
+      .select('*').eq('activo', true).order('nombre')
+    setServicios(svcs || [])
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -26,6 +44,13 @@ export default function NuevoCarroPage() {
       toast.error('Código y nombre son obligatorios')
       return
     }
+
+    // Verificar límite de carros
+    if (estadoPlan && !estadoPlan.puede_crear_carro) {
+      toast.error(`Has alcanzado el límite de ${estadoPlan.max_carros} carros de tu plan. Contacta con CRITIC SL para ampliar.`)
+      return
+    }
+
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -50,6 +75,24 @@ export default function NuevoCarroPage() {
         return
       }
 
+      // Asignar hospital_id al carro recién creado
+      if (perfil?.hospital_id) {
+        await supabase.from('carros')
+          .update({ hospital_id: perfil.hospital_id })
+          .eq('id', data)
+      }
+
+      // Log de auditoría
+      await supabase.from('log_auditoria').insert({
+        usuario_id: user?.id,
+        hospital_id: perfil?.hospital_id,
+        accion: 'carro_creado',
+        tabla_afectada: 'carros',
+        registro_id: data,
+        detalle: { codigo: form.codigo.toUpperCase(), nombre: form.nombre },
+        resultado: 'exito',
+      })
+
       toast.success('Carro creado con plantilla completa')
       router.push(`/admin/carro/${data}/materiales`)
     } catch (err: any) {
@@ -66,9 +109,41 @@ export default function NuevoCarroPage() {
         <span className="font-semibold text-sm flex-1 text-right">Nuevo carro</span>
       </div>
       <form onSubmit={handleSubmit} className="content">
+
+        {/* Estado del plan */}
+        {estadoPlan && (
+          <div className={`card ${estadoPlan.puede_crear_carro ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-200'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className={`text-xs font-semibold ${estadoPlan.puede_crear_carro ? 'text-blue-700' : 'text-red-700'}`}>
+                  {estadoPlan.puede_crear_carro
+                    ? `Plan ${estadoPlan.plan} — ${estadoPlan.carros_usados} de ${estadoPlan.max_carros} carros usados`
+                    : `Límite alcanzado — ${estadoPlan.max_carros} carros máximo en tu plan`}
+                </div>
+                <div className={`text-xs mt-0.5 ${estadoPlan.puede_crear_carro ? 'text-blue-600' : 'text-red-600'}`}>
+                  {estadoPlan.puede_crear_carro
+                    ? `Quedan ${estadoPlan.carros_disponibles} carros disponibles`
+                    : 'Contacta con CRITIC SL para ampliar tu plan'}
+                </div>
+              </div>
+              {estadoPlan.puede_crear_carro && (
+                <div className="text-right">
+                  <div className="text-xs text-blue-400">{Math.round((estadoPlan.carros_usados/estadoPlan.max_carros)*100)}%</div>
+                </div>
+              )}
+            </div>
+            {!estadoPlan.puede_crear_carro && (
+              <button type="button" className="mt-2 text-xs font-semibold text-red-700 underline"
+                onClick={() => window.open('mailto:info@criticsl.com?subject=Ampliar plan', '_blank')}>
+                Contactar con CRITIC SL →
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="card bg-blue-50 border-blue-100">
           <p className="text-xs text-blue-700 leading-relaxed">
-            Al crear el carro se copiará automáticamente la plantilla maestra con los 8 secciones y 95 materiales. Podrás personalizar el contenido después.
+            Al crear el carro se copiará automáticamente la plantilla maestra con las 8 secciones y los materiales configurados. Podrás personalizar el contenido después.
           </p>
         </div>
 
@@ -89,7 +164,7 @@ export default function NuevoCarroPage() {
               <label className="label">Servicio / unidad</label>
               <select className="input" value={form.servicio_id}
                 onChange={e => setForm({...form, servicio_id: e.target.value})}>
-                <option value="">Seleccioná un servicio...</option>
+                <option value="">Selecciona un servicio...</option>
                 {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
             </div>
@@ -113,9 +188,9 @@ export default function NuevoCarroPage() {
               <label className="label">Frecuencia de control</label>
               <select className="input" value={form.frecuencia_control}
                 onChange={e => setForm({...form, frecuencia_control: e.target.value})}>
-                <option value="mensual">Mensual</option>
-                <option value="quincenal">Quincenal</option>
                 <option value="semanal">Semanal</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
               </select>
             </div>
             <div>
@@ -126,7 +201,11 @@ export default function NuevoCarroPage() {
           </div>
         </div>
 
-        <button type="submit" className="btn-primary" disabled={loading}>
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={loading || (estadoPlan && !estadoPlan.puede_crear_carro)}
+        >
           {loading ? 'Creando carro...' : 'Crear carro con plantilla completa →'}
         </button>
       </form>
