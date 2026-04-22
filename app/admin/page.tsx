@@ -112,7 +112,7 @@ export default function AdminPage() {
     return c.tipo_carro === filtroTipoCarro
   })
 
-  const tiposCarro = [...new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean))]
+  const tiposCarro = Array.from(new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean)))
 
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
 
