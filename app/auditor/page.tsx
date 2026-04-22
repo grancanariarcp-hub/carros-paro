@@ -40,7 +40,7 @@ export default function AuditorPage() {
     setLoading(false)
   }
 
-  const tiposCarro = [...new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean))]
+  const tiposCarro = Array.from(new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean)))
 
   const carrosFiltrados = carros.filter(c => {
     const matchBusqueda = !busqueda ||
