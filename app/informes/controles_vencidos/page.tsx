@@ -14,49 +14,17 @@ function nombreArchivoPDF(codigo: string, tipo: string): string {
 }
 
 async function descargarPDF(html: string, nombreArchivo: string) {
-  return new Promise<void>((resolve) => {
-    const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
-    script.onload = async () => {
-      const iframe = document.createElement('iframe')
-      iframe.style.position = 'fixed'
-      iframe.style.top = '0'
-      iframe.style.left = '0'
-      iframe.style.width = '794px'
-      iframe.style.height = '1123px'
-      iframe.style.opacity = '0'
-      iframe.style.zIndex = '-1'
-      document.body.appendChild(iframe)
-
-      const doc = iframe.contentDocument!
-      doc.open()
-      doc.write(html)
-      doc.close()
-
-      await new Promise(r => setTimeout(r, 500))
-
-      const opt = {
-        margin: [1.5, 1.5, 1.5, 1.5],
-        filename: nombreArchivo,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, allowTaint: true },
-        jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' }
-      }
-
-      try {
-        await (window as any).html2pdf().set(opt).from(doc.body).save()
-      } finally {
-        document.body.removeChild(iframe)
-        resolve()
-      }
+  // Inyectar el título con el nombre del archivo para que el navegador lo use al guardar
+  const htmlConTitulo = html.replace('<head>', `<head><title>${nombreArchivo.replace('.pdf','')}</title>`)
+  const v = window.open('', '_blank')
+  if (v) {
+    v.document.write(htmlConTitulo)
+    v.document.close()
+    v.onload = () => {
+      v.focus()
+      v.print()
     }
-    script.onerror = () => {
-      const v = window.open('', '_blank')
-      if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
-      resolve()
-    }
-    document.head.appendChild(script)
-  })
+  }
 }
 
 export default function InformeControlesVencidosPage() {
@@ -64,7 +32,6 @@ export default function InformeControlesVencidosPage() {
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [descargando, setDescargando] = useState(false)
   const [codigo, setCodigo] = useState('')
   const [servicio, setServicio] = useState('')
   const [servicios, setServicios] = useState<any[]>([])
@@ -120,7 +87,7 @@ export default function InformeControlesVencidosPage() {
 <style>
   body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1e293b; }
   .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
-  .header-logo { max-height: 40px; max-width: 120px; object-fit: contain; }
+  .header-logo { max-height: 48px; object-fit: contain; }
   .header-text { flex: 1; }
   .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
   .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
@@ -174,18 +141,9 @@ ${datos.length === 0 ? `
   }
 
   async function generarPDF() {
-    setDescargando(true)
-    toast('Generando PDF...', { icon: '⏳' })
-    try {
-      const html = generarHTML()
-      const nombre = nombreArchivoPDF(codigo, 'controles_vencidos')
-      await descargarPDF(html, nombre)
-      toast.success(`PDF descargado: ${nombre}`)
-    } catch {
-      toast.error('Error al generar el PDF')
-    } finally {
-      setDescargando(false)
-    }
+    const html = generarHTML()
+    const nombre = nombreArchivoPDF(codigo, 'controles_vencidos')
+    await descargarPDF(html, nombre)
   }
 
   async function compartir() {
@@ -261,9 +219,7 @@ ${datos.length === 0 ? `
         )}
 
         <div className="grid grid-cols-2 gap-2">
-          <button className="btn-primary" onClick={generarPDF} disabled={descargando}>
-            {descargando ? 'Generando...' : '⬇ Descargar PDF'}
-          </button>
+          <button className="btn-primary" onClick={generarPDF}>⬇ Descargar PDF</button>
           <button className="btn-secondary" onClick={compartir}>Compartir</button>
         </div>
       </div>
