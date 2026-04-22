@@ -5,6 +5,20 @@ import { useRouter } from 'next/navigation'
 import { formatFechaHora } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
+
+function nombreArchivoPDF(codigo: string, tipo: string): string {
+  const ahora = new Date()
+  const fecha = ahora.toLocaleDateString('es-ES').replace(/\//g, '-')
+  const hora = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }).replace(':', '-')
+  return `${codigo}_${tipo}_${fecha}_${hora}.pdf`
+}
+
+async function descargarPDF(html: string, nombreArchivo: string) {
+  const htmlConTitulo = html.replace('<head>', `<head><title>${nombreArchivo.replace('.pdf','')}</title>`)
+  const v = window.open('', '_blank')
+  if (v) { v.document.write(htmlConTitulo); v.document.close(); v.onload = () => { v.focus(); v.print() } }
+}
+
 export default function InformeNoOperativosPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
@@ -54,7 +68,7 @@ export default function InformeNoOperativosPage() {
     setDatos(resultado)
   }
 
-  function generarPDF() {
+  async function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
     const nombreHospital = hospital?.nombre || 'Hospital'
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
@@ -103,8 +117,8 @@ datos.map(({ carro, inspecciones, itemsFallos }: any) => `
 </div>`).join('')}
 <div class="footer">${nombreHospital} · Plataforma ÁSTOR · Desarrollado por CRITIC SL — Servicios Médicos</div>
 </body></html>`
-    const v = window.open('', '_blank')
-    if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
+    const nombre = nombreArchivoPDF(codigo, 'no_operativos')
+    await descargarPDF(html, nombre)
   }
 
   async function compartir() {
@@ -173,7 +187,7 @@ datos.map(({ carro, inspecciones, itemsFallos }: any) => `
         ))}
         {datos.length === 0 && <div className="card text-center py-8"><div className="text-green-600 font-semibold text-sm">✓ No hay carros no operativos</div></div>}
         <div className="grid grid-cols-2 gap-2">
-          <button className="btn-primary" onClick={generarPDF}>Imprimir PDF</button>
+          <button className="btn-primary" onClick={generarPDF}>⬇ Descargar PDF</button>
           <button className="btn-secondary" onClick={compartir}>Compartir</button>
         </div>
       </div>
