@@ -5,6 +5,20 @@ import { useRouter } from 'next/navigation'
 import { estadoColor, formatFechaHora } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
+
+function nombreArchivoPDF(codigo: string, tipo: string): string {
+  const ahora = new Date()
+  const fecha = ahora.toLocaleDateString('es-ES').replace(/\//g, '-')
+  const hora = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }).replace(':', '-')
+  return `${codigo}_${tipo}_${fecha}_${hora}.pdf`
+}
+
+async function descargarPDF(html: string, nombreArchivo: string) {
+  const htmlConTitulo = html.replace('<head>', `<head><title>${nombreArchivo.replace('.pdf','')}</title>`)
+  const v = window.open('', '_blank')
+  if (v) { v.document.write(htmlConTitulo); v.document.close(); v.onload = () => { v.focus(); v.print() } }
+}
+
 export default function InformeHistorialPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
@@ -72,7 +86,7 @@ export default function InformeHistorialPage() {
     buscar(nf)
   }
 
-  function generarPDF() {
+  async function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
     const nombreHospital = hospital?.nombre || 'Hospital'
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -135,8 +149,8 @@ ${datos.length === 0 ? `
 `}
 <div class="footer">${nombreHospital} · Plataforma ÁSTOR · Desarrollado por CRITIC SL — Servicios Médicos</div>
 </body></html>`
-    const v = window.open('', '_blank')
-    if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
+    const nombre = nombreArchivoPDF(codigo, 'historial_auditorias')
+    await descargarPDF(html, nombre)
   }
 
   function generarExcel() {
@@ -266,7 +280,7 @@ ${datos.length === 0 ? `
         )}
 
         <div className="grid grid-cols-3 gap-2">
-          <button className="btn-primary" onClick={generarPDF}>PDF</button>
+          <button className="btn-primary" onClick={generarPDF}>⬇ Descargar PDF</button>
           <button className="btn-secondary" onClick={generarExcel}>Excel</button>
           <button className="btn-secondary" onClick={compartir}>Compartir</button>
         </div>
