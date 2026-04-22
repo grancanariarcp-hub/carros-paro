@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -10,12 +10,14 @@ export default function SuperAdminPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'hospitales'|'nuevo'>('hospitales')
   const [editando, setEditando] = useState<any>(null)
+  const [subiendoLogo, setSubiendoLogo] = useState(false)
   const [form, setForm] = useState({
     nombre: '', slug: '', email_admin: '', telefono: '',
     plan: 'basico', max_carros: 15, max_usuarios: 5,
     color_primario: '#1d4ed8', pais: 'España',
   })
   const [guardando, setGuardando] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -52,6 +54,63 @@ export default function SuperAdminPage() {
     setForm(prev => ({ ...prev, plan, ...limites }))
   }
 
+  async function subirLogo(file: File, hospitalId: string) {
+    if (!file) return
+    if (!['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'].includes(file.type)) {
+      toast.error('Solo se permiten imágenes PNG, JPG, SVG o WEBP')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('El logo no puede superar 2MB')
+      return
+    }
+    setSubiendoLogo(true)
+    try {
+      const extension = file.name.split('.').pop()
+      const nombreArchivo = `${hospitalId}.${extension}`
+
+      // Eliminar logo anterior si existe
+      await supabase.storage.from('logos').remove([nombreArchivo])
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(nombreArchivo, file, { upsert: true, contentType: file.type })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('logos').getPublicUrl(nombreArchivo)
+      const logoUrl = urlData.publicUrl + '?t=' + Date.now() // cache buster
+
+      const { error: updateError } = await supabase.from('hospitales')
+        .update({ logo_url: logoUrl }).eq('id', hospitalId)
+
+      if (updateError) throw updateError
+
+      setEditando((prev: any) => ({ ...prev, logo_url: logoUrl }))
+      toast.success('Logo subido correctamente')
+      await cargarHospitales()
+    } catch (err: any) {
+      toast.error('Error al subir el logo: ' + err.message)
+    } finally {
+      setSubiendoLogo(false)
+    }
+  }
+
+  async function eliminarLogo(hospitalId: string, logoUrl: string) {
+    try {
+      const nombreArchivo = logoUrl.split('/logos/')[1]?.split('?')[0]
+      if (nombreArchivo) {
+        await supabase.storage.from('logos').remove([nombreArchivo])
+      }
+      await supabase.from('hospitales').update({ logo_url: null }).eq('id', hospitalId)
+      setEditando((prev: any) => ({ ...prev, logo_url: null }))
+      toast.success('Logo eliminado')
+      await cargarHospitales()
+    } catch (err: any) {
+      toast.error('Error al eliminar el logo')
+    }
+  }
+
   async function crearHospital() {
     if (!form.nombre || !form.slug || !form.email_admin) {
       toast.error('Completa nombre, slug y email del administrador')
@@ -61,7 +120,7 @@ export default function SuperAdminPage() {
     try {
       const { error } = await supabase.from('hospitales').insert({
         ...form,
-        activo: false, // se activa manualmente tras configuración
+        activo: false,
       })
       if (error) throw error
       toast.success(`Hospital "${form.nombre}" creado correctamente`)
@@ -137,7 +196,7 @@ export default function SuperAdminPage() {
         position:'sticky', top:0, zIndex:50,
       }}>
         <div style={{display:'flex', alignItems:'baseline', gap:'0.75rem'}}>
-          <span style={{fontFamily:"'Inter', sans-serif", fontSize:'1.1rem', fontWeight:800, color:'white', letterSpacing:'0.08em'}}>ÁSTOR</span>
+          <span style={{fontSize:'1.1rem', fontWeight:800, color:'white', letterSpacing:'0.08em'}}>ÁSTOR</span>
           <span style={{fontSize:'0.6rem', color:'#4b5563', letterSpacing:'0.15em', textTransform:'uppercase', fontWeight:500}}>Superadmin · CRITIC SL</span>
         </div>
         <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
@@ -168,7 +227,7 @@ export default function SuperAdminPage() {
         </div>
 
         {/* Tabs */}
-        <div style={{display:'flex', gap:'0', marginBottom:'1.5rem', background:'white', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'4px', width:'fit-content'}}>
+        <div style={{display:'flex', marginBottom:'1.5rem', background:'white', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'4px', width:'fit-content'}}>
           {([['hospitales','Hospitales'],['nuevo','+ Nuevo hospital']] as const).map(([t,l]) => (
             <button key={t} onClick={() => setTab(t)} style={{
               padding:'0.45rem 1rem', borderRadius:'5px', border:'none', cursor:'pointer',
@@ -186,14 +245,19 @@ export default function SuperAdminPage() {
             {hospitales.map(h => (
               <div key={h.id}>
                 <div style={{
-                  background:'white', border:'1px solid #e5e7eb', borderRadius:'10px',
+                  background:'white', border:'1px solid #e5e7eb', borderRadius: editando?.id === h.id ? '10px 10px 0 0' : '10px',
                   padding:'1.25rem 1.5rem',
                   display:'grid', gridTemplateColumns:'1fr auto',
                   gap:'1rem', alignItems:'center',
                 }}>
                   <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
-                    {/* Indicador color */}
-                    <div style={{width:'4px', height:'40px', borderRadius:'2px', background:h.color_primario, flexShrink:0}}/>
+                    {/* Logo o indicador de color */}
+                    {h.logo_url ? (
+                      <img src={h.logo_url} alt={h.nombre}
+                        style={{height:'32px', width:'48px', objectFit:'contain', flexShrink:0}}/>
+                    ) : (
+                      <div style={{width:'4px', height:'40px', borderRadius:'2px', background:h.color_primario, flexShrink:0}}/>
+                    )}
                     <div>
                       <div style={{display:'flex', alignItems:'center', gap:'0.625rem', marginBottom:'3px'}}>
                         <span style={{fontSize:'0.9rem', fontWeight:700, color:'#111827'}}>{h.nombre}</span>
@@ -209,6 +273,11 @@ export default function SuperAdminPage() {
                           background: h.activo ? '#dcfce7' : '#fee2e2',
                           color: h.activo ? '#16a34a' : '#dc2626',
                         }}>{h.activo ? 'Activo' : 'Inactivo'}</span>
+                        {h.logo_url && (
+                          <span style={{fontSize:'0.58rem', color:'#16a34a', background:'#f0fdf4', border:'1px solid #bbf7d0', padding:'0.15rem 0.5rem', borderRadius:'3px', fontWeight:600}}>
+                            Logo ✓
+                          </span>
+                        )}
                       </div>
                       <div style={{fontSize:'0.72rem', color:'#9ca3af'}}>
                         app.astormanager.com/<strong style={{color:'#6b7280'}}>{h.slug}</strong>
@@ -218,12 +287,12 @@ export default function SuperAdminPage() {
                     </div>
                   </div>
                   <div style={{display:'flex', gap:'0.5rem', alignItems:'center'}}>
-                    <button onClick={() => setEditando({...h})} style={{
+                    <button onClick={() => setEditando(editando?.id === h.id ? null : {...h})} style={{
                       fontSize:'0.72rem', fontWeight:600, color:'#374151',
                       background:'#f9fafb', border:'1px solid #e5e7eb',
                       borderRadius:'6px', padding:'0.45rem 0.875rem',
                       cursor:'pointer', fontFamily:"'Inter', sans-serif",
-                    }}>Editar</button>
+                    }}>{editando?.id === h.id ? 'Cerrar' : 'Editar'}</button>
                     <button onClick={() => toggleActivo(h)} style={{
                       fontSize:'0.72rem', fontWeight:600,
                       color: h.activo ? '#dc2626' : '#16a34a',
@@ -242,6 +311,83 @@ export default function SuperAdminPage() {
                     borderTop:'none', borderRadius:'0 0 10px 10px',
                     padding:'1.5rem',
                   }}>
+
+                    {/* SECCIÓN LOGO */}
+                    <div style={{marginBottom:'1.5rem', paddingBottom:'1.5rem', borderBottom:'1px solid #e5e7eb'}}>
+                      <div style={{fontSize:'0.68rem', fontWeight:700, color:'#374151', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'1rem'}}>
+                        Logo del hospital
+                      </div>
+                      <div style={{display:'flex', alignItems:'center', gap:'1.25rem'}}>
+                        {/* Preview del logo */}
+                        <div style={{
+                          width:'120px', height:'80px', borderRadius:'8px',
+                          border:'1.5px dashed #e5e7eb', background:'white',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          overflow:'hidden', flexShrink:0,
+                        }}>
+                          {editando.logo_url ? (
+                            <img src={editando.logo_url} alt="Logo"
+                              style={{maxWidth:'100%', maxHeight:'100%', objectFit:'contain'}}/>
+                          ) : (
+                            <div style={{textAlign:'center'}}>
+                              <svg width="24" height="24" fill="none" stroke="#d1d5db" strokeWidth="1.5" viewBox="0 0 24 24" style={{margin:'0 auto 4px'}}>
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                              </svg>
+                              <div style={{fontSize:'0.6rem', color:'#d1d5db'}}>Sin logo</div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:'0.72rem', color:'#6b7280', marginBottom:'0.75rem', lineHeight:1.6}}>
+                            Sube el logo del hospital en formato PNG, JPG o SVG.<br/>
+                            Recomendado: fondo transparente, mínimo 200px de ancho. Máximo 2MB.
+                          </div>
+                          <div style={{display:'flex', gap:'0.5rem', flexWrap:'wrap'}}>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                              style={{display:'none'}}
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) subirLogo(file, editando.id)
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={subiendoLogo}
+                              style={{
+                                padding:'0.5rem 1rem', background:'#111827', color:'white',
+                                border:'none', borderRadius:'6px', fontSize:'0.75rem',
+                                fontWeight:600, cursor:'pointer', fontFamily:"'Inter', sans-serif",
+                                opacity: subiendoLogo ? 0.6 : 1,
+                              }}
+                            >
+                              {subiendoLogo ? 'Subiendo...' : editando.logo_url ? 'Cambiar logo' : 'Subir logo'}
+                            </button>
+                            {editando.logo_url && (
+                              <button
+                                type="button"
+                                onClick={() => eliminarLogo(editando.id, editando.logo_url)}
+                                style={{
+                                  padding:'0.5rem 1rem', background:'#fef2f2', color:'#dc2626',
+                                  border:'1px solid #fecaca', borderRadius:'6px', fontSize:'0.75rem',
+                                  fontWeight:600, cursor:'pointer', fontFamily:"'Inter', sans-serif",
+                                }}
+                              >
+                                Eliminar logo
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CAMPOS DE EDICIÓN */}
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1rem'}}>
                       {[
                         ['Nombre del hospital', 'nombre', 'text'],
