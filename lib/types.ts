@@ -1,8 +1,9 @@
-export type Rol = 'administrador' | 'supervisor' | 'auditor'
+export type Rol = 'superadmin' | 'administrador' | 'supervisor' | 'auditor' | 'tecnico' | 'readonly'
 export type EstadoCarro = 'operativo' | 'condicional' | 'no_operativo' | 'sin_control'
-export type TipoControl = 'mensual' | 'semanal' | 'post_uso' | 'extra'
+export type TipoControl = 'mensual' | 'semanal' | 'quincenal' | 'post_uso' | 'extra'
 export type ResultadoInspeccion = 'operativo' | 'condicional' | 'no_operativo'
 export type TipoFalla = 'menor' | 'grave' | 'ninguno'
+export type TipoCarro = 'parada' | 'via_aerea' | 'trauma' | 'neonatal' | 'otro'
 
 export interface Perfil {
   id: string
@@ -10,8 +11,28 @@ export interface Perfil {
   email: string
   rol: Rol
   activo: boolean
+  hospital_id?: string
+  recibir_alertas?: boolean
+  email_alertas?: string
   creado_en: string
   aprobado_por?: string
+}
+
+export interface Hospital {
+  id: string
+  slug: string
+  nombre: string
+  logo_url?: string
+  color_primario: string
+  plan: string
+  max_carros: number
+  max_usuarios: number
+  activo: boolean
+  email_admin?: string
+  telefono?: string
+  pais?: string
+  creado_en: string
+  activado_en?: string
 }
 
 export interface Servicio {
@@ -33,7 +54,18 @@ export interface Carro {
   ultimo_tipo_control?: string
   estado: EstadoCarro
   activo: boolean
+  operativo?: boolean
+  tipo_carro?: TipoCarro
+  hospital_id?: string
+  numero_censo?: string
+  codigo_barras_censo?: string
+  marca_desfibrilador?: string
+  modelo_desfibrilador?: string
+  numero_serie_desfibrilador?: string
+  fecha_ultimo_mantenimiento?: string
+  fecha_proximo_mantenimiento?: string
   creado_en: string
+  creado_por?: string
   servicios?: Servicio
 }
 
@@ -42,6 +74,7 @@ export interface Cajon {
   carro_id: string
   nombre: string
   orden: number
+  activo: boolean
   materiales?: Material[]
 }
 
@@ -50,9 +83,18 @@ export interface Material {
   cajon_id: string
   nombre: string
   cantidad_requerida: number
-  tipo_falla: TipoFalla
+  tipo_falla?: TipoFalla
   activo: boolean
   orden: number
+  tiene_vencimiento?: boolean
+  fecha_vencimiento?: string
+  es_equipo?: boolean
+  numero_serie?: string
+  marca?: string
+  modelo?: string
+  codigo_barras?: string
+  fecha_ultimo_mantenimiento?: string
+  fecha_proximo_mantenimiento?: string
 }
 
 export interface Desfibrilador {
@@ -60,7 +102,9 @@ export interface Desfibrilador {
   carro_id: string
   numero_censo?: string
   modelo?: string
+  marca?: string
   fecha_mantenimiento?: string
+  fecha_ultimo_mantenimiento?: string
   activo: boolean
 }
 
@@ -75,7 +119,11 @@ export interface Inspeccion {
   numero_censo_desf?: string
   modelo_desf?: string
   fecha_mantenimiento_desf?: string
-  alerta_enviada: boolean
+  alerta_enviada?: boolean
+  precinto_retirado?: string
+  precinto_colocado?: string
+  foto_precinto_retirado?: string
+  foto_precinto_colocado?: string
   perfiles?: Perfil
   carros?: Carro
 }
@@ -100,5 +148,18 @@ export interface Alerta {
   tipo: string
   mensaje?: string
   resuelta: boolean
-  creada_en: string
+  creado_en: string
+  carros?: Carro
+}
+
+export interface Notificacion {
+  id: string
+  hospital_id: string
+  usuario_id?: string
+  tipo: string
+  titulo: string
+  mensaje?: string
+  leida: boolean
+  accion_url?: string
+  creado_en: string
 }
