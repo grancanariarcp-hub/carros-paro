@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 export default function InformeControlesVencidosPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
+  const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [codigo, setCodigo] = useState('')
   const [servicio, setServicio] = useState('')
@@ -23,23 +24,30 @@ export default function InformeControlesVencidosPage() {
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
     setPerfil(p)
 
+    if (p?.hospital_id) {
+      const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
+      setHospital(h)
+    }
+
     const { data: svcs } = await supabase.from('servicios').select('*').eq('activo', true).order('nombre')
     setServicios(svcs || [])
 
     const { data: cod } = await supabase.rpc('generar_codigo_informe', { tipo_inf: 'controles_vencidos' })
     setCodigo(cod || '')
 
-    await buscar('')
+    await buscar('', p?.hospital_id)
     setLoading(false)
   }
 
-  async function buscar(svc: string) {
+  async function buscar(svc: string, hospitalId?: string) {
+    const hId = hospitalId || perfil?.hospital_id
     let q = supabase.from('carros')
       .select('*, servicios(nombre)')
       .eq('activo', true)
       .lt('proximo_control', new Date().toISOString().split('T')[0])
       .order('proximo_control', { ascending: true })
 
+    if (hId) q = q.eq('hospital_id', hId)
     if (svc) q = q.eq('servicio_id', svc)
     const { data } = await q
     setDatos(data || [])
@@ -51,10 +59,13 @@ export default function InformeControlesVencidosPage() {
 
   function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
+    const nombreHospital = hospital?.nombre || 'Hospital'
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   body { font-family: Arial, sans-serif; margin: 2cm; color: #1e293b; }
-  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; }
+  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
+  .header-logo { max-height: 48px; object-fit: contain; }
+  .header-text { flex: 1; }
   .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
   .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
   .codigo { font-size: 11px; color: #64748b; }
@@ -70,18 +81,21 @@ export default function InformeControlesVencidosPage() {
   @media print { @page { margin: 1.5cm; } }
 </style></head><body>
 <div class="header">
-  <div class="hospital">Hospital Universitario de Gran Canaria Doctor Negrín</div>
-  <div class="titulo">Informe de Controles Vencidos</div>
-  <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
+  ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}" />` : ''}
+  <div class="header-text">
+    <div class="hospital">${nombreHospital}</div>
+    <div class="titulo">Informe de Controles Vencidos</div>
+    <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
+  </div>
 </div>
 <div class="meta">
   <span>Total carros vencidos: <strong>${datos.length}</strong></span>
-  <span>Servicio: <strong>${servicio ? servicios.find(s => s.id === servicio)?.nombre : 'Todos'}</strong></span>
+  <span>Servicio: <strong>${servicio ? servicios.find((s: any) => s.id === servicio)?.nombre : 'Todos'}</strong></span>
 </div>
 ${datos.length === 0 ? `
 <div class="sin-datos">
   <div class="sin-datos-titulo">✓ Sin controles vencidos</div>
-  <div style="font-size:12px;">No se encontraron carros con controles vencidos para los filtros seleccionados en la fecha de generación de este informe.</div>
+  <div style="font-size:12px;">No se encontraron carros con controles vencidos para los filtros seleccionados.</div>
 </div>
 ` : `
 <table>
@@ -89,7 +103,7 @@ ${datos.length === 0 ? `
     <th>Código</th><th>Nombre</th><th>Servicio</th><th>Ubicación</th><th>Responsable</th><th>Fecha prevista</th><th>Días retraso</th>
   </tr></thead>
   <tbody>
-    ${datos.map(c => `<tr>
+    ${datos.map((c: any) => `<tr>
       <td><strong>${c.codigo}</strong></td>
       <td>${c.nombre}</td>
       <td>${c.servicios?.nombre || '—'}</td>
@@ -101,7 +115,7 @@ ${datos.length === 0 ? `
   </tbody>
 </table>
 `}
-<div class="footer">Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe</div>
+<div class="footer">${nombreHospital} · Plataforma ÁSTOR · Desarrollado por CRITIC SL — Servicios Médicos</div>
 </body></html>`
 
     const v = window.open('', '_blank')
@@ -109,9 +123,10 @@ ${datos.length === 0 ? `
   }
 
   async function compartir() {
+    const nombreHospital = hospital?.nombre || 'Hospital'
     const texto = datos.length === 0
-      ? `*Informe Controles Vencidos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n✓ Sin controles vencidos a fecha ${new Date().toLocaleDateString('es-ES')}`
-      : `*Informe Controles Vencidos - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n${datos.map(c => `• ${c.codigo} - ${c.nombre}: ${diasRetraso(c.proximo_control)} días de retraso`).join('\n')}`
+      ? `*Informe Controles Vencidos - ${codigo}*\n${nombreHospital}\n\n✓ Sin controles vencidos a fecha ${new Date().toLocaleDateString('es-ES')}`
+      : `*Informe Controles Vencidos - ${codigo}*\n${nombreHospital}\n\n${datos.map((c: any) => `• ${c.codigo} - ${c.nombre}: ${diasRetraso(c.proximo_control)} días de retraso`).join('\n')}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
     } else {
@@ -126,7 +141,8 @@ ${datos.length === 0 ? `
     <div className="page">
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
-        <span className="font-semibold text-sm flex-1 text-right">Controles vencidos</span>
+        <span className="font-semibold text-sm flex-1 text-center">{hospital?.nombre || 'Hospital'}</span>
+        <span className="font-semibold text-sm text-right">Controles vencidos</span>
       </div>
       <div className="content">
         <div className="card">
