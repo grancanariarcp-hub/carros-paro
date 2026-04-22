@@ -24,7 +24,8 @@ export default function LoginPage() {
         .single()
       if (perfilError || !perfil) throw new Error('Perfil no encontrado')
       if (!perfil.activo) throw new Error('Tu cuenta aún no fue aprobada. Contactá al administrador.')
-      if (perfil.rol === 'administrador') router.push('/admin')
+      if (perfil.rol === 'superadmin') router.push('/superadmin')
+      else if (perfil.rol === 'administrador') router.push('/admin')
       else if (perfil.rol === 'supervisor') router.push('/supervisor')
       else router.push('/auditor')
     } catch (err: any) {
@@ -40,13 +41,10 @@ export default function LoginPage() {
       {/* Panel izquierdo — solo visible en tablet/escritorio */}
       <div className="login-panel-left">
         <div className="login-panel-left-inner">
-          {/* Ícono PCR grande */}
           <div className="login-icon-big">
             <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Corazón */}
               <path d="M40 68C40 68 8 50 8 28C8 18 16 10 26 10C32 10 37.5 13 40 18C42.5 13 48 10 54 10C64 10 72 18 72 28C72 50 40 68 40 68Z"
                 fill="white" fillOpacity="0.15" stroke="white" strokeWidth="2.5"/>
-              {/* Traza ECG / onda RCP */}
               <polyline
                 points="16,40 24,40 28,30 33,52 38,24 43,48 47,40 56,40 60,35 64,40"
                 stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -74,8 +72,8 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="login-panel-footer">
-          <p>GranCanariaRCP · Dr. Lübbe</p>
-          <p>Basado en ERC 2025 / AHA 2023 / ILCOR 2024</p>
+          <p>CRITIC SL — Servicios Médicos</p>
+          <p>astormanager.com</p>
         </div>
       </div>
 
@@ -83,7 +81,7 @@ export default function LoginPage() {
       <div className="login-panel-right">
         <div className="login-form-container">
 
-          {/* Header móvil — solo visible en móvil */}
+          {/* Header móvil */}
           <div className="login-mobile-header">
             <div className="login-mobile-icon">
               <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -94,8 +92,8 @@ export default function LoginPage() {
                   stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
               </svg>
             </div>
-            <h1 className="login-mobile-title">Auditor Carros de Parada</h1>
-            <p className="login-mobile-sub">Hospital Universitario de Gran Canaria Doctor Negrín</p>
+            <h1 className="login-mobile-title">ÁSTOR</h1>
+            <p className="login-mobile-sub">Gestión y auditoría de material crítico hospitalario</p>
           </div>
 
           {/* Formulario */}
@@ -145,7 +143,7 @@ export default function LoginPage() {
 
             <div className="login-help">
               <p className="login-help-title">¿Necesitas acceso?</p>
-              <p className="login-help-text">Solicita al administrador del sistema que cree tu cuenta de usuario.</p>
+              <p className="login-help-text">Solicita al administrador de tu centro que cree tu cuenta de usuario.</p>
             </div>
 
             <div className="login-hospital">
@@ -156,14 +154,14 @@ export default function LoginPage() {
                 </svg>
               </div>
               <div>
-                <p className="login-hospital-name">Hospital Universitario de Gran Canaria</p>
-                <p className="login-hospital-sub">Doctor Negrín</p>
+                <p className="login-hospital-name">ÁSTOR by CRITIC SL</p>
+                <p className="login-hospital-sub">Gestión y auditoría de material crítico hospitalario</p>
               </div>
             </div>
           </div>
 
           <div className="login-footer">
-            Desarrollado por <strong>GranCanariaRCP</strong> · Dr. Lübbe
+            Desarrollado por <strong>CRITIC SL</strong> — Servicios Médicos
           </div>
         </div>
       </div>
