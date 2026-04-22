@@ -19,6 +19,12 @@ interface ItemState {
   foto_file?: File
 }
 
+interface PrecintoState {
+  numero: string
+  foto_file?: File
+  foto_url: string
+}
+
 export default function ControlPage() {
   const [carro, setCarro] = useState<Carro|null>(null)
   const [cajones, setCajones] = useState<Cajon[]>([])
@@ -29,6 +35,8 @@ export default function ControlPage() {
     numero_censo: '', modelo: '', marca: '',
     fecha_ultimo_mantenimiento: '', fecha_mantenimiento: ''
   })
+  const [precintoRetirado, setPrecintoRetirado] = useState<PrecintoState>({ numero: '', foto_url: '' })
+  const [precintoColocado, setPrecintoColocado] = useState<PrecintoState>({ numero: '', foto_url: '' })
   const [guardando, setGuardando] = useState(false)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -37,7 +45,9 @@ export default function ControlPage() {
   const tipo = params.tipo as string
   const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const filePrecintoRef = useRef<HTMLInputElement>(null)
   const [fotoTarget, setFotoTarget] = useState<string|null>(null)
+  const [fotoPrecintoTarget, setFotoPrecintoTarget] = useState<'retirado'|'colocado'|null>(null)
 
   useEffect(() => { cargarDatos() }, [carroId])
 
@@ -71,7 +81,6 @@ export default function ControlPage() {
       })
     }
 
-    // Inicializar items precargando fecha de vencimiento desde la BD
     const initItems: Record<string, ItemState> = {}
     for (const cajonData of (cajonesData || [])) {
       for (const mat of (cajonData.materiales || [])) {
@@ -100,7 +109,6 @@ export default function ControlPage() {
 
   async function actualizarFechaVto(matId: string, fecha: string) {
     updateItem(matId, 'fecha_vencimiento', fecha)
-    // Guardar en BD automáticamente
     await supabase.from('materiales')
       .update({ fecha_vencimiento: fecha || null })
       .eq('id', matId)
@@ -123,6 +131,33 @@ export default function ControlPage() {
     updateItem(fotoTarget, 'foto_url', URL.createObjectURL(file))
     setFotoTarget(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function abrirFotoPrecinto(tipo: 'retirado' | 'colocado') {
+    setFotoPrecintoTarget(tipo)
+    filePrecintoRef.current?.click()
+  }
+
+  function handleFotoPrecintoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !fotoPrecintoTarget) return
+    const url = URL.createObjectURL(file)
+    if (fotoPrecintoTarget === 'retirado') {
+      setPrecintoRetirado(prev => ({ ...prev, foto_file: file, foto_url: url }))
+    } else {
+      setPrecintoColocado(prev => ({ ...prev, foto_file: file, foto_url: url }))
+    }
+    setFotoPrecintoTarget(null)
+    if (filePrecintoRef.current) filePrecintoRef.current.value = ''
+  }
+
+  async function subirFotoPrecinto(tipo: 'retirado' | 'colocado', file: File): Promise<string | null> {
+    const ext = file.name.split('.').pop()
+    const path = `precintos/${carroId}/${Date.now()}_precinto_${tipo}.${ext}`
+    const { data } = await supabase.storage.from('evidencias').upload(path, file)
+    if (!data) return null
+    const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
+    return url.publicUrl
   }
 
   function calcularResultado(): 'operativo' | 'condicional' | 'no_operativo' {
@@ -153,7 +188,7 @@ export default function ControlPage() {
     const resultado = calcularResultado()
 
     try {
-      // Subir fotos
+      // Subir fotos de fallos
       for (const [matId, item] of Object.entries(items)) {
         if (item.foto_file) {
           const ext = item.foto_file.name.split('.').pop()
@@ -168,7 +203,18 @@ export default function ControlPage() {
         }
       }
 
-      // Guardar inspección
+      // Subir fotos de precintos
+      let urlFotoPrecintoRetirado: string | null = null
+      let urlFotoPrecintoColocado: string | null = null
+
+      if (precintoRetirado.foto_file) {
+        urlFotoPrecintoRetirado = await subirFotoPrecinto('retirado', precintoRetirado.foto_file)
+      }
+      if (precintoColocado.foto_file) {
+        urlFotoPrecintoColocado = await subirFotoPrecinto('colocado', precintoColocado.foto_file)
+      }
+
+      // Guardar inspección con precintos
       const { data: insp, error: inspError } = await supabase.from('inspecciones').insert({
         carro_id: carroId,
         tipo,
@@ -177,6 +223,10 @@ export default function ControlPage() {
         numero_censo_desf: desfForm.numero_censo,
         modelo_desf: desfForm.modelo,
         fecha_mantenimiento_desf: desfForm.fecha_mantenimiento,
+        precinto_retirado: precintoRetirado.numero || null,
+        precinto_colocado: precintoColocado.numero || null,
+        foto_precinto_retirado: urlFotoPrecintoRetirado,
+        foto_precinto_colocado: urlFotoPrecintoColocado,
       }).select().single()
 
       if (inspError) throw inspError
@@ -236,7 +286,11 @@ export default function ControlPage() {
         accion: 'control_realizado',
         tabla_afectada: 'inspecciones',
         registro_id: insp.id,
-        detalle: { tipo, resultado, carro_codigo: carro?.codigo }
+        detalle: {
+          tipo, resultado, carro_codigo: carro?.codigo,
+          precinto_retirado: precintoRetirado.numero || null,
+          precinto_colocado: precintoColocado.numero || null,
+        }
       })
 
       router.push(`/carro/${carroId}/resultado/${insp.id}`)
@@ -260,10 +314,16 @@ export default function ControlPage() {
         <span className="font-semibold text-sm flex-1 text-right">{tipoLabel}</span>
       </div>
 
+      {/* Input oculto para fotos de fallos */}
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
         className="hidden" onChange={handleFotoChange} />
 
+      {/* Input oculto para fotos de precintos */}
+      <input ref={filePrecintoRef} type="file" accept="image/*" capture="environment"
+        className="hidden" onChange={handleFotoPrecintoChange} />
+
       <div className="content">
+
         {/* Encabezado */}
         <div className="card">
           <div className="grid grid-cols-2 gap-2 text-sm mb-3">
@@ -280,6 +340,58 @@ export default function ControlPage() {
               <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-100 border border-green-300"></div><span className="text-xs text-gray-500">+30 días</span></div>
               <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-amber-100 border border-amber-300"></div><span className="text-xs text-gray-500">7–30 días</span></div>
               <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-100 border border-red-300"></div><span className="text-xs text-gray-500">&lt;7 días · bloqueante</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================================
+            PRECINTO RETIRADO — al inicio del control
+        ============================================================ */}
+        <div className="card border-amber-100 bg-amber-50">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div>
+              <div className="font-semibold text-sm text-amber-800">Precinto retirado</div>
+              <div className="text-xs text-amber-600">Registra el número del precinto que rompes para iniciar el control</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="label">Número de precinto retirado</label>
+              <input
+                className="input"
+                placeholder="Ej: PR-2024-00312"
+                value={precintoRetirado.numero}
+                onChange={e => setPrecintoRetirado(prev => ({ ...prev, numero: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label className="label">Foto del precinto retirado <span className="text-gray-400">(opcional)</span></label>
+              {precintoRetirado.foto_url ? (
+                <div className="relative">
+                  <img src={precintoRetirado.foto_url} alt="precinto retirado"
+                    className="w-full h-28 object-cover rounded-xl border border-amber-200" />
+                  <button
+                    onClick={() => setPrecintoRetirado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
+                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center"
+                  >✕</button>
+                  <div className="text-xs text-green-700 mt-1 font-medium">✓ Foto adjunta</div>
+                </div>
+              ) : (
+                <button
+                  className="w-full py-2.5 border border-dashed border-amber-300 rounded-xl text-xs text-amber-700 font-medium flex items-center justify-center gap-2 bg-white active:bg-amber-50"
+                  onClick={() => abrirFotoPrecinto('retirado')}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2}/><circle cx="12" cy="13" r="4" strokeWidth={2}/></svg>
+                  Fotografiar precinto retirado
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -332,7 +444,6 @@ export default function ControlPage() {
                         <div className="text-xs text-gray-400">×{mat.cantidad_requerida}</div>
                       </div>
 
-                      {/* Fecha vencimiento — input directo con semáforo */}
                       {item.tiene_vencimiento ? (
                         <input
                           type="date"
@@ -344,7 +455,6 @@ export default function ControlPage() {
                         <div className="text-xs text-gray-300 text-center">—</div>
                       )}
 
-                      {/* Check cantidad */}
                       <div
                         className={`chk-box mx-auto ${item.cantidad_ok ? 'checked-ok' : ''}`}
                         onClick={() => updateItem(mat.id, 'cantidad_ok', !item.cantidad_ok)}
@@ -352,7 +462,6 @@ export default function ControlPage() {
                         {item.cantidad_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3}/></svg>}
                       </div>
 
-                      {/* Check estado */}
                       <div
                         className={`chk-box mx-auto ${item.estado_ok ? 'checked-ok' : ''}`}
                         onClick={() => updateItem(mat.id, 'estado_ok', !item.estado_ok)}
@@ -360,7 +469,6 @@ export default function ControlPage() {
                         {item.estado_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3}/></svg>}
                       </div>
 
-                      {/* Check falla */}
                       <div
                         className={`chk-box mx-auto border-red-300 ${item.tiene_falla ? 'checked-falla' : ''}`}
                         onClick={() => toggleFalla(mat.id)}
@@ -369,14 +477,12 @@ export default function ControlPage() {
                       </div>
                     </div>
 
-                    {/* Aviso bloqueante */}
                     {vtoColor === 'rojo' && item.fecha_vencimiento && (
                       <div className="mb-1 px-2 py-1.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold">
                         ⛔ Vencimiento &lt;7 días — actualizá la fecha para poder guardar
                       </div>
                     )}
 
-                    {/* Drawer de falla */}
                     {item.tiene_falla && (
                       <div className="falla-drawer mb-2">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
@@ -483,6 +589,59 @@ export default function ControlPage() {
                 <input className="input" type="date" value={desfForm.fecha_mantenimiento}
                   onChange={e => setDesfForm({...desfForm, fecha_mantenimiento: e.target.value})} />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================================
+            PRECINTO COLOCADO — al finalizar el control
+        ============================================================ */}
+        <div className="card border-blue-100 bg-blue-50">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+            </div>
+            <div>
+              <div className="font-semibold text-sm text-blue-800">Precinto colocado</div>
+              <div className="text-xs text-blue-600">Registra el número del nuevo precinto con el que sellas el carro</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="label">Número de precinto colocado</label>
+              <input
+                className="input"
+                placeholder="Ej: PR-2024-00313"
+                value={precintoColocado.numero}
+                onChange={e => setPrecintoColocado(prev => ({ ...prev, numero: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label className="label">Foto del precinto colocado <span className="text-gray-400">(opcional)</span></label>
+              {precintoColocado.foto_url ? (
+                <div className="relative">
+                  <img src={precintoColocado.foto_url} alt="precinto colocado"
+                    className="w-full h-28 object-cover rounded-xl border border-blue-200" />
+                  <button
+                    onClick={() => setPrecintoColocado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
+                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center"
+                  >✕</button>
+                  <div className="text-xs text-green-700 mt-1 font-medium">✓ Foto adjunta</div>
+                </div>
+              ) : (
+                <button
+                  className="w-full py-2.5 border border-dashed border-blue-300 rounded-xl text-xs text-blue-700 font-medium flex items-center justify-center gap-2 bg-white active:bg-blue-50"
+                  onClick={() => abrirFotoPrecinto('colocado')}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2}/><circle cx="12" cy="13" r="4" strokeWidth={2}/></svg>
+                  Fotografiar precinto colocado
+                </button>
+              )}
             </div>
           </div>
         </div>
