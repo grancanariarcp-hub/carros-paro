@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 export default function InformeHistorialPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
+  const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [codigo, setCodigo] = useState('')
   const [auditores, setAuditores] = useState<any[]>([])
@@ -26,22 +27,28 @@ export default function InformeHistorialPage() {
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
     setPerfil(p)
 
+    if (p?.hospital_id) {
+      const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
+      setHospital(h)
+    }
+
     const [{ data: auds }, { data: cars }, { data: cod }] = await Promise.all([
-      supabase.from('perfiles').select('id,nombre').eq('activo', true).order('nombre'),
-      supabase.from('carros').select('id,codigo,nombre').eq('activo', true).order('codigo'),
+      supabase.from('perfiles').select('id,nombre').eq('activo', true).eq('hospital_id', p?.hospital_id).order('nombre'),
+      supabase.from('carros').select('id,codigo,nombre').eq('activo', true).eq('hospital_id', p?.hospital_id).order('codigo'),
       supabase.rpc('generar_codigo_informe', { tipo_inf: 'historial_auditorias' })
     ])
     setAuditores(auds || [])
     setCarros(cars || [])
     setCodigo(cod || '')
 
-    await buscar({ auditor: '', carro: '', resultado: '', desde: '', hasta: '' })
+    await buscar({ auditor: '', carro: '', resultado: '', desde: '', hasta: '' }, p?.hospital_id)
     setLoading(false)
   }
 
-  async function buscar(f: typeof filtros) {
+  async function buscar(f: typeof filtros, hospitalId?: string) {
+    const hId = hospitalId || perfil?.hospital_id
     let q = supabase.from('inspecciones')
-      .select('*, carros(codigo,nombre,ubicacion,responsable,servicios(nombre)), perfiles(nombre)')
+      .select('*, carros(codigo,nombre,ubicacion,responsable,hospital_id,servicios(nombre)), perfiles(nombre)')
       .order('fecha', { ascending: false })
       .limit(200)
 
@@ -52,7 +59,11 @@ export default function InformeHistorialPage() {
     if (f.hasta) q = q.lte('fecha', f.hasta + 'T23:59:59')
 
     const { data } = await q
-    setDatos(data || [])
+    // Filtrar por hospital via carro
+    const filtrados = hId
+      ? (data || []).filter((ins: any) => ins.carros?.hospital_id === hId)
+      : (data || [])
+    setDatos(filtrados)
   }
 
   function updateFiltro(campo: string, valor: string) {
@@ -63,10 +74,13 @@ export default function InformeHistorialPage() {
 
   function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
+    const nombreHospital = hospital?.nombre || 'Hospital'
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   body { font-family: Arial, sans-serif; margin: 2cm; color: #1e293b; font-size: 10px; }
-  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; }
+  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
+  .header-logo { max-height: 48px; object-fit: contain; }
+  .header-text { flex: 1; }
   .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
   .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
   .codigo { font-size: 10px; color: #64748b; }
@@ -78,22 +92,24 @@ export default function InformeHistorialPage() {
   .badge-cond { background:#fef9c3; color:#854d0e; padding:1px 6px; border-radius:8px; }
   .badge-nop { background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:8px; }
   .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; margin-top: 10px; color: #64748b; }
-  .sin-datos-titulo { font-size: 15px; font-weight: bold; margin-bottom: 8px; }
   .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   @media print { @page { margin: 1.5cm; size: landscape; } }
 </style></head><body>
 <div class="header">
-  <div class="hospital">Hospital Universitario de Gran Canaria Doctor Negrín</div>
-  <div class="titulo">Historial de Auditorías</div>
-  <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre} · Total registros: ${datos.length}</div>
-  <div class="codigo" style="margin-top:4px">
-    ${filtros.desde ? `Desde: ${filtros.desde} · ` : ''}${filtros.hasta ? `Hasta: ${filtros.hasta} · ` : ''}Resultado: ${filtros.resultado || 'Todos'}
+  ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}" />` : ''}
+  <div class="header-text">
+    <div class="hospital">${nombreHospital}</div>
+    <div class="titulo">Historial de Auditorías</div>
+    <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre} · Total: ${datos.length} registros</div>
+    <div class="codigo" style="margin-top:4px">
+      ${filtros.desde ? `Desde: ${filtros.desde} · ` : ''}${filtros.hasta ? `Hasta: ${filtros.hasta} · ` : ''}Resultado: ${filtros.resultado || 'Todos'}
+    </div>
   </div>
 </div>
 ${datos.length === 0 ? `
 <div class="sin-datos">
-  <div class="sin-datos-titulo">Sin registros</div>
-  <div style="font-size:12px;">No se encontraron auditorías para los filtros seleccionados en la fecha de generación de este informe.</div>
+  <div style="font-size:15px;font-weight:bold;margin-bottom:8px;">Sin registros</div>
+  <div style="font-size:12px;">No se encontraron auditorías para los filtros seleccionados.</div>
 </div>
 ` : `
 <table>
@@ -117,13 +133,14 @@ ${datos.length === 0 ? `
   </tbody>
 </table>
 `}
-<div class="footer">Hospital Universitario de Gran Canaria Doctor Negrín · Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe</div>
+<div class="footer">${nombreHospital} · Plataforma ÁSTOR · Desarrollado por CRITIC SL — Servicios Médicos</div>
 </body></html>`
     const v = window.open('', '_blank')
     if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
   }
 
   function generarExcel() {
+    const nombreHospital = hospital?.nombre || 'Hospital'
     const headers = ['Fecha y hora', 'Código carro', 'Nombre carro', 'Servicio', 'Ubicación', 'Responsable', 'Tipo control', 'Resultado', 'Auditor']
     const rows = datos.map(ins => [
       new Date(ins.fecha).toLocaleString('es-ES'),
@@ -147,9 +164,10 @@ ${datos.length === 0 ? `
   }
 
   async function compartir() {
+    const nombreHospital = hospital?.nombre || 'Hospital'
     const texto = datos.length === 0
-      ? `*Historial Auditorías - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\nSin registros para los filtros seleccionados a fecha ${new Date().toLocaleDateString('es-ES')}`
-      : `*Historial Auditorías - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\nTotal: ${datos.length} controles\n\n${datos.slice(0, 10).map(ins => `• ${new Date(ins.fecha).toLocaleDateString('es-ES')} · ${ins.carros?.codigo} · ${ins.tipo?.replace('_', ' ')} · ${ins.resultado}`).join('\n')}${datos.length > 10 ? `\n...y ${datos.length - 10} más` : ''}`
+      ? `*Historial Auditorías - ${codigo}*\n${nombreHospital}\n\nSin registros para los filtros seleccionados a fecha ${new Date().toLocaleDateString('es-ES')}`
+      : `*Historial Auditorías - ${codigo}*\n${nombreHospital}\nTotal: ${datos.length} controles\n\n${datos.slice(0, 10).map(ins => `• ${new Date(ins.fecha).toLocaleDateString('es-ES')} · ${ins.carros?.codigo} · ${ins.tipo?.replace('_', ' ')} · ${ins.resultado}`).join('\n')}${datos.length > 10 ? `\n...y ${datos.length - 10} más` : ''}`
     if (navigator.share) {
       await navigator.share({ title: `Informe ${codigo}`, text: texto })
     } else {
@@ -164,7 +182,8 @@ ${datos.length === 0 ? `
     <div className="page">
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
-        <span className="font-semibold text-sm flex-1 text-right">Historial auditorías</span>
+        <span className="font-semibold text-sm flex-1 text-center">{hospital?.nombre || 'Hospital'}</span>
+        <span className="font-semibold text-sm text-right">Historial</span>
       </div>
       <div className="content">
         <div className="card">
@@ -214,7 +233,9 @@ ${datos.length === 0 ? `
         </div>
 
         <div className="card bg-blue-50 border-blue-100">
-          <div className="text-sm font-semibold text-blue-800">{datos.length} registro{datos.length !== 1 ? 's' : ''} encontrado{datos.length !== 1 ? 's' : ''}</div>
+          <div className="text-sm font-semibold text-blue-800">
+            {datos.length} registro{datos.length !== 1 ? 's' : ''} encontrado{datos.length !== 1 ? 's' : ''}
+          </div>
         </div>
 
         {datos.map(ins => {
