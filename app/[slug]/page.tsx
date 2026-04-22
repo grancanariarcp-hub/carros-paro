@@ -42,15 +42,16 @@ export default function LoginHospitalPage() {
 
       const { data: perfil, error: perfilError } = await supabase
         .from('perfiles')
-        .select('*, hospitales(slug)')
+        .select('*')
         .eq('id', data.user.id)
         .single()
 
       if (perfilError || !perfil) throw new Error('Perfil no encontrado')
       if (!perfil.activo) throw new Error('Tu cuenta aún no fue aprobada. Contacta al administrador.')
 
-      // Verificar que el usuario pertenece a este hospital
-      if (perfil.hospital_id !== hospital.id) {
+      // El superadmin puede acceder a cualquier hospital
+      // Los demás usuarios deben pertenecer al hospital de esta URL
+      if (perfil.rol !== 'superadmin' && perfil.hospital_id !== hospital.id) {
         await supabase.auth.signOut()
         throw new Error('No tienes acceso a este centro. Verifica la URL.')
       }
@@ -96,7 +97,6 @@ export default function LoginHospitalPage() {
         overflow: 'hidden',
       }} className="login-left-panel">
 
-        {/* Cuadrícula de fondo */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
@@ -104,7 +104,6 @@ export default function LoginHospitalPage() {
         }}/>
 
         <div style={{position:'relative', zIndex:1}}>
-          {/* Logo del hospital */}
           {hospital?.logo_url ? (
             <img src={hospital.logo_url} alt={hospital.nombre}
               style={{height:'52px', objectFit:'contain', marginBottom:'2.5rem', filter:'brightness(0) invert(1)'}}/>
@@ -132,7 +131,6 @@ export default function LoginHospitalPage() {
             Plataforma de gestión y auditoría de material crítico hospitalario
           </p>
 
-          {/* Features */}
           {[
             'Control mensual y post-utilización',
             'Alertas automáticas de vencimientos',
@@ -164,7 +162,6 @@ export default function LoginHospitalPage() {
         background: 'white',
       }}>
 
-        {/* Header móvil */}
         <div className="login-mobile-top" style={{
           width: '100%',
           maxWidth: '400px',
@@ -193,9 +190,7 @@ export default function LoginHospitalPage() {
           <div style={{fontSize:'0.75rem', color:'#9ca3af', letterSpacing:'0.05em'}}>{hospital?.nombre}</div>
         </div>
 
-        {/* Formulario */}
         <div style={{width:'100%', maxWidth:'380px'}}>
-
           <h2 style={{
             fontSize: '1.4rem',
             fontWeight: 700,
