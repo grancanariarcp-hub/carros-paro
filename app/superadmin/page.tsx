@@ -142,7 +142,22 @@ export default function SuperAdminPage() {
       })
       .eq('id', hospital.id)
     if (error) { toast.error('Error'); return }
-    toast.success(hospital.activo ? 'Hospital desactivado' : 'Hospital activado')
+
+    // Si se está activando, enviar email de bienvenida
+    if (!hospital.activo && hospital.email_admin) {
+      try {
+        await supabase.functions.invoke('email-bienvenida', {
+          body: { hospital_id: hospital.id }
+        })
+        toast.success('Hospital activado — Email de bienvenida enviado')
+      } catch (err) {
+        toast.success('Hospital activado')
+        toast.error('No se pudo enviar el email de bienvenida')
+      }
+    } else {
+      toast.success(hospital.activo ? 'Hospital desactivado' : 'Hospital activado')
+    }
+
     await cargarHospitales()
   }
 
