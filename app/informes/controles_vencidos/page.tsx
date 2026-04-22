@@ -5,11 +5,56 @@ import { useRouter } from 'next/navigation'
 import { formatFecha } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
+function nombreArchivoPDF(codigo: string, tipo: string): string {
+  const ahora = new Date()
+  const fecha = ahora.toLocaleDateString('es-ES').replace(/\//g, '-')
+  const hora = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }).replace(':', '-')
+  const tipoLimpio = tipo.replace(/ /g, '_').toLowerCase()
+  return `${codigo}_${tipoLimpio}_${fecha}_${hora}.pdf`
+}
+
+async function descargarPDF(html: string, nombreArchivo: string) {
+  return new Promise<void>((resolve) => {
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+    script.onload = async () => {
+      const contenedor = document.createElement('div')
+      contenedor.innerHTML = html
+      contenedor.style.position = 'absolute'
+      contenedor.style.left = '-9999px'
+      document.body.appendChild(contenedor)
+
+      const opt = {
+        margin: [1.5, 1.5, 1.5, 1.5],
+        filename: nombreArchivo,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' }
+      }
+
+      try {
+        await (window as any).html2pdf().set(opt).from(contenedor).save()
+      } finally {
+        document.body.removeChild(contenedor)
+        resolve()
+      }
+    }
+    script.onerror = () => {
+      // Fallback: abrir en ventana nueva si falla la librería
+      const v = window.open('', '_blank')
+      if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
+      resolve()
+    }
+    document.head.appendChild(script)
+  })
+}
+
 export default function InformeControlesVencidosPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [descargando, setDescargando] = useState(false)
   const [codigo, setCodigo] = useState('')
   const [servicio, setServicio] = useState('')
   const [servicios, setServicios] = useState<any[]>([])
@@ -57,12 +102,13 @@ export default function InformeControlesVencidosPage() {
     return Math.floor((new Date().getTime() - new Date(fecha).getTime()) / (1000 * 60 * 60 * 24))
   }
 
-  function generarPDF() {
+  function generarHTML(): string {
     const fecha = new Date().toLocaleDateString('es-ES')
+    const hora = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
     const nombreHospital = hospital?.nombre || 'Hospital'
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
-  body { font-family: Arial, sans-serif; margin: 2cm; color: #1e293b; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1e293b; }
   .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
   .header-logo { max-height: 48px; object-fit: contain; }
   .header-text { flex: 1; }
@@ -75,17 +121,15 @@ export default function InformeControlesVencidosPage() {
   td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; }
   tr:nth-child(even) td { background: #f8fafc; }
   .badge-red { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-  .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; margin-top: 10px; color: #64748b; }
-  .sin-datos-titulo { font-size: 15px; font-weight: bold; margin-bottom: 8px; color: #16a34a; }
+  .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; color: #64748b; }
   .footer { margin-top: 30px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
-  @media print { @page { margin: 1.5cm; } }
 </style></head><body>
 <div class="header">
   ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}" />` : ''}
   <div class="header-text">
     <div class="hospital">${nombreHospital}</div>
     <div class="titulo">Informe de Controles Vencidos</div>
-    <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
+    <div class="codigo">Código: ${codigo} · Generado: ${fecha} ${hora} · Por: ${perfil?.nombre}</div>
   </div>
 </div>
 <div class="meta">
@@ -94,8 +138,8 @@ export default function InformeControlesVencidosPage() {
 </div>
 ${datos.length === 0 ? `
 <div class="sin-datos">
-  <div class="sin-datos-titulo">✓ Sin controles vencidos</div>
-  <div style="font-size:12px;">No se encontraron carros con controles vencidos para los filtros seleccionados.</div>
+  <div style="font-size:15px;font-weight:bold;color:#16a34a;margin-bottom:8px">✓ Sin controles vencidos</div>
+  <div style="font-size:12px">No se encontraron carros con controles vencidos.</div>
 </div>
 ` : `
 <table>
@@ -117,9 +161,21 @@ ${datos.length === 0 ? `
 `}
 <div class="footer">${nombreHospital} · Plataforma ÁSTOR · Desarrollado por CRITIC SL — Servicios Médicos</div>
 </body></html>`
+  }
 
-    const v = window.open('', '_blank')
-    if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
+  async function generarPDF() {
+    setDescargando(true)
+    toast('Generando PDF...', { icon: '⏳' })
+    try {
+      const html = generarHTML()
+      const nombre = nombreArchivoPDF(codigo, 'controles_vencidos')
+      await descargarPDF(html, nombre)
+      toast.success(`PDF descargado: ${nombre}`)
+    } catch {
+      toast.error('Error al generar el PDF')
+    } finally {
+      setDescargando(false)
+    }
   }
 
   async function compartir() {
@@ -195,7 +251,9 @@ ${datos.length === 0 ? `
         )}
 
         <div className="grid grid-cols-2 gap-2">
-          <button className="btn-primary" onClick={generarPDF}>Imprimir PDF</button>
+          <button className="btn-primary" onClick={generarPDF} disabled={descargando}>
+            {descargando ? 'Generando...' : '⬇ Descargar PDF'}
+          </button>
           <button className="btn-secondary" onClick={compartir}>Compartir</button>
         </div>
       </div>
