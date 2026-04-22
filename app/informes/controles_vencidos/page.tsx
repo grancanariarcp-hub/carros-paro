@@ -120,7 +120,7 @@ export default function InformeControlesVencidosPage() {
 <style>
   body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1e293b; }
   .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
-  .header-logo { max-height: 48px; object-fit: contain; }
+  .header-logo { max-height: 40px; max-width: 120px; object-fit: contain; }
   .header-text { flex: 1; }
   .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
   .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
