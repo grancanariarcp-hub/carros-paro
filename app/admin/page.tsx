@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import NotificacionesBell from '@/components/NotificacionesBell'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { estadoColor, formatFechaHora, formatFecha, rolLabel, diasHastaControl } from '@/lib/utils'
@@ -155,10 +156,13 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
-        <button onClick={cerrarSesion}
-          className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 flex-shrink-0">
-          Salir
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {perfil?.id && <NotificacionesBell usuarioId={perfil.id} />}
+          <button onClick={cerrarSesion}
+            className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5">
+            Salir
+          </button>
+        </div>
       </div>
 
       {/* TABS */}
