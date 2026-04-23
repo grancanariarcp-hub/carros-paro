@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { estadoColor, formatFechaHora, formatFecha, rolLabel, diasHastaControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import type { Carro, Perfil, Inspeccion } from '@/lib/types'
 
 export default function AdminPage() {
@@ -118,6 +119,7 @@ export default function AdminPage() {
   const tiposCarro = Array.from(new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean)))
 
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
+  useHospitalTheme(hospital?.color_primario)
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
