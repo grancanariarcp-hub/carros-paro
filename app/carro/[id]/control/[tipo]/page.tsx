@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { colorVencimiento, classBadgeVto, formatFecha, proximoControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import type { Carro, Cajon, Material, Perfil, Desfibrilador } from '@/lib/types'
 
 interface ItemState {
@@ -38,6 +39,8 @@ export default function ControlPage() {
   const [precintoRetirado, setPrecintoRetirado] = useState<PrecintoState>({ numero: '', foto_url: '' })
   const [precintoColocado, setPrecintoColocado] = useState<PrecintoState>({ numero: '', foto_url: '' })
   const [guardando, setGuardando] = useState(false)
+  const [escaneando, setEscaneando] = useState(false)
+  const [campoEscaneo, setCampoEscaneo] = useState<'precinto_retirado'|'precinto_colocado'|'desf_censo'>('precinto_retirado')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const params = useParams()
@@ -301,6 +304,20 @@ export default function ControlPage() {
     }
   }
 
+  function handleEscaneo(codigo: string) {
+    setEscaneando(false)
+    if (campoEscaneo === 'precinto_retirado') {
+      setPrecintoRetirado(prev => ({ ...prev, numero: codigo }))
+      toast.success('Precinto retirado: ' + codigo)
+    } else if (campoEscaneo === 'precinto_colocado') {
+      setPrecintoColocado(prev => ({ ...prev, numero: codigo }))
+      toast.success('Precinto colocado: ' + codigo)
+    } else if (campoEscaneo === 'desf_censo') {
+      setDesfForm(prev => ({ ...prev, numero_censo: codigo }))
+      toast.success('N° censo desfibrilador: ' + codigo)
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
 
   const tipoLabel = tipo === 'mensual' ? 'Control mensual'
@@ -309,6 +326,12 @@ export default function ControlPage() {
 
   return (
     <div className="page">
+      {escaneando && (
+        <EscanerCodigoBarras
+          onResult={handleEscaneo}
+          onClose={() => setEscaneando(false)}
+        />
+      )}
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">{tipoLabel}</span>
@@ -363,12 +386,19 @@ export default function ControlPage() {
           <div className="flex flex-col gap-3">
             <div>
               <label className="label">Número de precinto retirado</label>
-              <input
-                className="input"
-                placeholder="Ej: PR-2024-00312"
-                value={precintoRetirado.numero}
-                onChange={e => setPrecintoRetirado(prev => ({ ...prev, numero: e.target.value }))}
-              />
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="Ej: PR-2024-00312"
+                  value={precintoRetirado.numero}
+                  onChange={e => setPrecintoRetirado(prev => ({ ...prev, numero: e.target.value }))}
+                />
+                <button type="button"
+                  onClick={() => { setCampoEscaneo('precinto_retirado'); setEscaneando(true) }}
+                  className="flex-shrink-0 px-3 py-2 bg-amber-700 text-white rounded-xl text-xs font-semibold active:opacity-80">
+                  📷
+                </button>
+              </div>
             </div>
 
             <div>
@@ -575,8 +605,15 @@ export default function ControlPage() {
             </div>
             <div>
               <label className="label">N° censo *</label>
-              <input className="input" placeholder="Ej: DEF-2024-0312" value={desfForm.numero_censo}
-                onChange={e => setDesfForm({...desfForm, numero_censo: e.target.value})} />
+              <div className="flex gap-2">
+                <input className="input flex-1" placeholder="Ej: DEF-2024-0312" value={desfForm.numero_censo}
+                  onChange={e => setDesfForm({...desfForm, numero_censo: e.target.value})} />
+                <button type="button"
+                  onClick={() => { setCampoEscaneo('desf_censo'); setEscaneando(true) }}
+                  className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:opacity-80">
+                  📷
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -613,12 +650,19 @@ export default function ControlPage() {
           <div className="flex flex-col gap-3">
             <div>
               <label className="label">Número de precinto colocado</label>
-              <input
-                className="input"
-                placeholder="Ej: PR-2024-00313"
-                value={precintoColocado.numero}
-                onChange={e => setPrecintoColocado(prev => ({ ...prev, numero: e.target.value }))}
-              />
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="Ej: PR-2024-00313"
+                  value={precintoColocado.numero}
+                  onChange={e => setPrecintoColocado(prev => ({ ...prev, numero: e.target.value }))}
+                />
+                <button type="button"
+                  onClick={() => { setCampoEscaneo('precinto_colocado'); setEscaneando(true) }}
+                  className="flex-shrink-0 px-3 py-2 bg-blue-700 text-white rounded-xl text-xs font-semibold active:opacity-80">
+                  📷
+                </button>
+              </div>
             </div>
 
             <div>
