@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import type { Perfil, Carro } from '@/lib/types'
+import { useHospitalTheme } from '@/lib/useHospitalTheme'
 
 export default function SupervisorPage() {
   const [perfil, setPerfil] = useState<Perfil|null>(null)
