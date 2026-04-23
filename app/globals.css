@@ -6,7 +6,7 @@
   body {
     @apply text-gray-900 antialiased;
     font-family: system-ui, -apple-system, sans-serif;
-    background: #f0f4f8;
+    background: #d0d8e8;
   }
 }
 
@@ -40,8 +40,12 @@
      ELEMENTOS BASE
   ============================================================ */
   .card {
-    @apply bg-white rounded-2xl border border-gray-100 p-4
-           shadow-sm hover:shadow-md transition-shadow;
+    @apply bg-white rounded-2xl p-4 transition-shadow;
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
   }
   .input {
     @apply w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm
@@ -81,7 +85,7 @@
            flex items-center gap-3 sticky top-0 z-10
            md:px-6 md:py-4
            lg:px-8;
-    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.10);
   }
 
   /* ============================================================
@@ -137,7 +141,7 @@
   .login-page {
     @apply min-h-screen flex flex-col
            md:flex-row;
-    background: #f0f4f8;
+    background: #d0d8e8;
   }
   .login-panel-left {
     @apply hidden
