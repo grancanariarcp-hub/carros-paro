@@ -135,20 +135,20 @@ export default function ServiciosPage() {
     <div className="page">
       {/* TOPBAR */}
       <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <button onClick={() => router.back()}
-            className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
-          <div className="min-w-0">
-            <div className="text-xs text-gray-400 leading-none truncate">{hospital?.nombre}</div>
-            <div className="font-semibold text-sm">Servicios y Unidades</div>
-          </div>
+        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
+        <div className="flex-1 min-w-0 text-center">
+          <div className="text-xs text-gray-400 leading-none">{hospital?.nombre}</div>
+          <div className="font-semibold text-sm">Servicios y Unidades</div>
         </div>
-        {mostrando === 'lista' && (
+        {mostrando === 'lista' ? (
           <button
             onClick={() => { setMostrando('nuevo'); setForm({ nombre: '', descripcion: '', color: '#1d4ed8' }) }}
-            className="btn-primary text-xs px-3 py-1.5 flex-shrink-0">
-            + Nuevo servicio
+            style={{background: colorPrimario}}
+            className="text-xs text-white px-3 py-1.5 rounded-lg font-semibold flex-shrink-0 active:opacity-80">
+            + Nuevo
           </button>
+        ) : (
+          <div className="w-16 flex-shrink-0" />
         )}
       </div>
 
