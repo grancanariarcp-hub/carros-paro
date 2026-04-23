@@ -4,8 +4,9 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply text-gray-900 antialiased;
     font-family: system-ui, -apple-system, sans-serif;
+    background: #f0f4f8;
   }
 }
 
@@ -59,14 +60,12 @@
 
   /* ============================================================
      LAYOUT RESPONSIVE — PAGE Y CONTENT
-     Móvil: ancho completo
-     Tablet (md): max-w-2xl centrado
-     Escritorio (lg): max-w-4xl centrado con sidebar posible
   ============================================================ */
   .page {
-    @apply w-full min-h-screen flex flex-col bg-gray-50
+    @apply w-full min-h-screen flex flex-col
            md:max-w-2xl md:mx-auto
            lg:max-w-4xl;
+    background: transparent;
   }
   .content {
     @apply flex-1 p-4 flex flex-col gap-3
@@ -82,6 +81,7 @@
            flex items-center gap-3 sticky top-0 z-10
            md:px-6 md:py-4
            lg:px-8;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
   }
 
   /* ============================================================
@@ -132,17 +132,13 @@
   }
 
   /* ============================================================
-     LOGIN — RESPONSIVE COMPLETO
-     Móvil: pantalla completa con header azul arriba
-     Tablet/Escritorio: split izquierda azul + derecha blanca
+     LOGIN
   ============================================================ */
   .login-page {
     @apply min-h-screen flex flex-col
            md:flex-row;
-    background: #f8fafc;
+    background: #f0f4f8;
   }
-
-  /* Panel izquierdo — oculto en móvil, visible en tablet/escritorio */
   .login-panel-left {
     @apply hidden
            md:flex md:flex-col md:justify-between md:w-1/2
@@ -187,8 +183,6 @@
     color: #6b9ee8;
     line-height: 1.7;
   }
-
-  /* Panel derecho — formulario */
   .login-panel-right {
     @apply flex-1 flex items-center justify-center
            md:w-1/2 lg:w-3/5;
@@ -198,8 +192,6 @@
     @apply w-full flex flex-col min-h-screen
            md:min-h-0 md:max-w-sm lg:max-w-md;
   }
-
-  /* Header móvil */
   .login-mobile-header {
     @apply flex flex-col items-center text-center px-6 pt-14 pb-10
            md:hidden;
@@ -214,8 +206,6 @@
   .login-mobile-sub {
     @apply text-blue-200 text-xs mt-2 leading-snug px-4;
   }
-
-  /* Formulario interior */
   .login-form-inner {
     @apply flex-1 flex flex-col justify-center px-6 py-8
            md:px-8 md:py-10;
@@ -268,7 +258,7 @@
   }
 
   /* ============================================================
-     GRIDS RESPONSIVE PARA TARJETAS
+     GRIDS RESPONSIVE
   ============================================================ */
   .cards-grid {
     @apply grid grid-cols-1 gap-3
