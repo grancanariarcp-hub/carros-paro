@@ -9,22 +9,20 @@ interface Props {
 export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [iniciando, setIniciando] = useState(true)
-  const [resultado, setResultado] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const readerRef = useRef<any>(null)
+  const [leido, setLeido] = useState<string | null>(null)
+  const scannerRef = useRef<any>(null)
   const yaLeyoRef = useRef(false)
+  const idRef = useRef('scanner-' + Date.now())
 
   useEffect(() => {
     let montado = true
 
     async function iniciar() {
       try {
-        // Cargar ZXing
-        if (!(window as any).ZXing) {
+        if (!(window as any).Html5Qrcode) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement('script')
-            script.src = 'https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js'
+            script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
             script.onload = () => resolve()
             script.onerror = () => reject(new Error('No se pudo cargar el escáner'))
             document.head.appendChild(script)
@@ -33,96 +31,49 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
 
         if (!montado) return
 
-        // Obtener cámara
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        })
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = (window as any)
 
-        if (!montado) { stream.getTracks().forEach(t => t.stop()); return }
+        // Todos los formatos disponibles en la librería
+        const formatos = Html5QrcodeSupportedFormats
+          ? Object.keys(Html5QrcodeSupportedFormats)
+              .filter(k => !isNaN(Number(k)))
+              .map(k => Number(k))
+          : [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
 
-        streamRef.current = stream
+        const scanner = new Html5Qrcode(idRef.current, { verbose: false })
+        scannerRef.current = scanner
 
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
-        }
-
-        // Iniciar lector ZXing
-        const ZXing = (window as any).ZXing
-        const hints = new Map()
-        const formats = [
-          ZXing.BarcodeFormat.CODE_128,
-          ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.CODE_93,
-          ZXing.BarcodeFormat.EAN_13,
-          ZXing.BarcodeFormat.EAN_8,
-          ZXing.BarcodeFormat.UPC_A,
-          ZXing.BarcodeFormat.UPC_E,
-          ZXing.BarcodeFormat.ITF,
-          ZXing.BarcodeFormat.PDF_417,
-          ZXing.BarcodeFormat.DATA_MATRIX,
-          ZXing.BarcodeFormat.QR_CODE,
-          ZXing.BarcodeFormat.AZTEC,
-          ZXing.BarcodeFormat.CODABAR,
-        ]
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats)
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true)
-
-        const reader = new ZXing.MultiFormatReader()
-        reader.setHints(hints)
-        readerRef.current = reader
+        await scanner.start(
+          { facingMode: 'environment' },
+          {
+            fps: 15,
+            qrbox: { width: 280, height: 180 },
+            aspectRatio: 1.5,
+            formatsToSupport: formatos,
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          },
+          (text: string) => {
+            if (yaLeyoRef.current) return
+            yaLeyoRef.current = true
+            setLeido(text)
+            const s = scannerRef.current
+            scannerRef.current = null
+            if (s) {
+              s.stop().catch(() => {}).finally(() => {
+                if (montado) setTimeout(() => onResult(text), 500)
+              })
+            } else {
+              if (montado) setTimeout(() => onResult(text), 500)
+            }
+          },
+          () => {}
+        )
 
         if (montado) setIniciando(false)
 
-        // Loop de escaneo
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-
-        const escanear = () => {
-          if (!montado || yaLeyoRef.current) return
-          const video = videoRef.current
-          if (!video || video.readyState < 2) {
-            requestAnimationFrame(escanear)
-            return
-          }
-
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
-          ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-          try {
-            const imageData = ctx?.getImageData(0, 0, canvas.width, canvas.height)
-            if (imageData) {
-              const luminanceSource = new ZXing.RGBLuminanceSource(imageData.data, canvas.width, canvas.height)
-              const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource))
-              const result = reader.decode(binaryBitmap)
-              if (result && !yaLeyoRef.current) {
-                yaLeyoRef.current = true
-                detener()
-                if (montado) {
-                  setResultado(result.getText())
-                  setTimeout(() => onResult(result.getText()), 300)
-                }
-              }
-            }
-          } catch {
-            // Sin código en este frame — continuar
-          }
-
-          if (!yaLeyoRef.current && montado) {
-            requestAnimationFrame(escanear)
-          }
-        }
-
-        requestAnimationFrame(escanear)
-
       } catch (err: any) {
         if (montado) {
-          if (err.name === 'NotAllowedError') {
-            setError('Permiso de cámara denegado. Activa la cámara en los ajustes del navegador.')
-          } else {
-            setError(err.message || 'No se pudo acceder a la cámara')
-          }
+          setError(err.message || 'No se pudo acceder a la cámara')
           setIniciando(false)
         }
       }
@@ -132,21 +83,18 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
 
     return () => {
       montado = false
-      detener()
+      const s = scannerRef.current
+      scannerRef.current = null
+      if (s) s.stop().catch(() => {})
     }
   }, [])
 
-  function detener() {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
-    }
-  }
-
   function cerrar() {
     yaLeyoRef.current = true
-    detener()
-    onClose()
+    const s = scannerRef.current
+    scannerRef.current = null
+    if (s) s.stop().catch(() => {}).finally(() => onClose())
+    else onClose()
   }
 
   return (
@@ -167,7 +115,7 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
           <div>
             <div style={{color: 'white', fontWeight: 700, fontSize: '0.9rem'}}>Escanear código</div>
             <div style={{color: '#9ca3af', fontSize: '0.7rem', marginTop: '2px'}}>
-              Centra el código en el recuadro
+              Centra el código en el recuadro azul
             </div>
           </div>
           <button onClick={cerrar} style={{
@@ -178,49 +126,12 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
         </div>
 
         {/* Visor */}
-        <div style={{position: 'relative', background: '#000', minHeight: '240px', overflow: 'hidden'}}>
-
-          {/* Video */}
-          <video
-            ref={videoRef}
-            style={{width: '100%', display: iniciando || error ? 'none' : 'block'}}
-            muted playsInline
-          />
-
-          {/* Guía de escaneo */}
-          {!iniciando && !error && !resultado && (
-            <div style={{
-              position: 'absolute', inset: 0, display: 'flex',
-              alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-            }}>
-              <div style={{
-                width: '280px', height: '140px', position: 'relative',
-              }}>
-                {/* Esquinas del visor */}
-                {[
-                  {top:0, left:0, borderTop:'3px solid #3b82f6', borderLeft:'3px solid #3b82f6'},
-                  {top:0, right:0, borderTop:'3px solid #3b82f6', borderRight:'3px solid #3b82f6'},
-                  {bottom:0, left:0, borderBottom:'3px solid #3b82f6', borderLeft:'3px solid #3b82f6'},
-                  {bottom:0, right:0, borderBottom:'3px solid #3b82f6', borderRight:'3px solid #3b82f6'},
-                ].map((s, i) => (
-                  <div key={i} style={{position:'absolute', width:'20px', height:'20px', ...s}} />
-                ))}
-                {/* Línea de escaneo animada */}
-                <div style={{
-                  position: 'absolute', left: '8px', right: '8px', height: '2px',
-                  background: 'rgba(59,130,246,0.8)',
-                  animation: 'scan 2s linear infinite',
-                  top: '50%',
-                }} />
-              </div>
-            </div>
-          )}
-
-          {/* Estado iniciando */}
+        <div style={{position: 'relative', background: '#000', minHeight: '220px'}}>
           {iniciando && !error && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
-              alignItems: 'center', justifyContent: 'center', background: '#111',
+              alignItems: 'center', justifyContent: 'center',
+              background: '#111', zIndex: 10,
             }}>
               <div style={{color: '#9ca3af', fontSize: '0.8rem', textAlign: 'center'}}>
                 <div style={{marginBottom: '8px', fontSize: '1.5rem'}}>📷</div>
@@ -229,24 +140,23 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
             </div>
           )}
 
-          {/* Resultado */}
-          {resultado && (
+          {leido && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
-              alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)',
+              alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.75)', zIndex: 10,
             }}>
               <div style={{textAlign: 'center', color: 'white'}}>
-                <div style={{fontSize: '2rem', marginBottom: '8px'}}>✓</div>
+                <div style={{fontSize: '2.5rem', marginBottom: '8px'}}>✓</div>
                 <div style={{fontSize: '0.9rem', fontWeight: 700}}>Código leído</div>
-                <div style={{fontSize: '0.75rem', color: '#93c5fd', marginTop: '4px'}}>{resultado}</div>
+                <div style={{fontSize: '0.72rem', color: '#93c5fd', marginTop: '6px', padding: '0 1rem', wordBreak: 'break-all'}}>{leido}</div>
               </div>
             </div>
           )}
 
-          {/* Error */}
-          {error && (
+          {error ? (
             <div style={{
-              padding: '2rem', textAlign: 'center', minHeight: '240px',
+              padding: '2rem', textAlign: 'center', minHeight: '220px',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', background: '#111',
             }}>
@@ -254,6 +164,8 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
               <div style={{color: '#ef4444', fontSize: '0.8rem', fontWeight: 600}}>Error de cámara</div>
               <div style={{color: '#9ca3af', fontSize: '0.72rem', marginTop: '4px', padding: '0 1rem'}}>{error}</div>
             </div>
+          ) : (
+            <div id={idRef.current} style={{width: '100%'}} />
           )}
         </div>
 
@@ -269,14 +181,6 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
           }}>Cancelar</button>
         </div>
       </div>
-
-      <style>{`
-        @keyframes scan {
-          0% { top: 10%; }
-          50% { top: 85%; }
-          100% { top: 10%; }
-        }
-      `}</style>
     </div>
   )
 }
