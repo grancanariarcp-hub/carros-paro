@@ -10,14 +10,16 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [iniciando, setIniciando] = useState(true)
   const scannerRef = useRef<any>(null)
-  const activoRef = useRef(false)
-  const divId = 'escanerQR'
+  const yaLeyoRef = useRef(false)
+  const divId = 'escanerQR-' + Math.random().toString(36).slice(2)
+  const divIdRef = useRef(divId)
 
   useEffect(() => {
-    let cancelado = false
+    let montado = true
 
     async function iniciar() {
       try {
+        // Cargar librería si no está
         if (!(window as any).Html5Qrcode) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement('script')
@@ -28,29 +30,54 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
           })
         }
 
-        if (cancelado) return
+        if (!montado) return
 
-        const html5QrCode = new (window as any).Html5Qrcode(divId)
-        scannerRef.current = html5QrCode
+        const Html5Qrcode = (window as any).Html5Qrcode
+        const Html5QrcodeSupportedFormats = (window as any).Html5QrcodeSupportedFormats
 
-        await html5QrCode.start(
+        const scanner = new Html5Qrcode(divIdRef.current)
+        scannerRef.current = scanner
+
+        const formatos = Html5QrcodeSupportedFormats
+          ? Object.values(Html5QrcodeSupportedFormats).filter(v => typeof v === 'number')
+          : []
+
+        const config: any = {
+          fps: 10,
+          qrbox: { width: 260, height: 150 },
+          aspectRatio: 1.5,
+        }
+
+        if (formatos.length > 0) {
+          config.formatsToSupport = formatos
+        }
+
+        await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 260, height: 150 }, aspectRatio: 1.5 },
+          config,
           (decodedText: string) => {
-            if (!activoRef.current) return
-            activoRef.current = false
-            html5QrCode.stop()
-              .catch(() => {})
-              .finally(() => { onResult(decodedText) })
+            // Evitar doble disparo
+            if (yaLeyoRef.current) return
+            yaLeyoRef.current = true
+
+            // Parar escáner y notificar resultado
+            const s = scannerRef.current
+            scannerRef.current = null
+            if (s) {
+              s.stop().catch(() => {}).finally(() => {
+                if (montado) onResult(decodedText)
+              })
+            } else {
+              if (montado) onResult(decodedText)
+            }
           },
-          () => {}
+          () => {} // ignorar errores de frame
         )
 
-        activoRef.current = true
-        if (!cancelado) setIniciando(false)
+        if (montado) setIniciando(false)
 
       } catch (err: any) {
-        if (!cancelado) {
+        if (montado) {
           setError(err.message || 'No se pudo acceder a la cámara')
           setIniciando(false)
         }
@@ -60,27 +87,27 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
     iniciar()
 
     return () => {
-      cancelado = true
-      activoRef.current = false
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {})
-        scannerRef.current = null
-      }
+      montado = false
+      const s = scannerRef.current
+      scannerRef.current = null
+      if (s) s.stop().catch(() => {})
     }
   }, [])
 
   function cerrar() {
-    activoRef.current = false
-    if (scannerRef.current) {
-      scannerRef.current.stop().catch(() => {})
-      scannerRef.current = null
+    yaLeyoRef.current = true
+    const s = scannerRef.current
+    scannerRef.current = null
+    if (s) {
+      s.stop().catch(() => {}).finally(() => onClose())
+    } else {
+      onClose()
     }
-    onClose()
   }
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)',
       zIndex: 100, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
     }}>
@@ -88,6 +115,7 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
         background: 'white', borderRadius: '20px', overflow: 'hidden',
         width: '100%', maxWidth: '400px', margin: '0 1rem',
       }}>
+        {/* Header */}
         <div style={{
           background: '#111827', padding: '1rem 1.25rem',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -106,7 +134,8 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
           }}>✕</button>
         </div>
 
-        <div style={{position: 'relative', background: '#000', minHeight: '200px'}}>
+        {/* Visor */}
+        <div style={{position: 'relative', background: '#000', minHeight: '220px'}}>
           {iniciando && !error && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
@@ -121,7 +150,7 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
           )}
           {error ? (
             <div style={{
-              padding: '2rem', textAlign: 'center', minHeight: '200px',
+              padding: '2rem', textAlign: 'center', minHeight: '220px',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', background: '#111',
             }}>
@@ -129,13 +158,14 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
               <div style={{color: '#ef4444', fontSize: '0.8rem', marginBottom: '4px', fontWeight: 600}}>
                 Error de cámara
               </div>
-              <div style={{color: '#9ca3af', fontSize: '0.72rem'}}>{error}</div>
+              <div style={{color: '#9ca3af', fontSize: '0.72rem', padding: '0 1rem'}}>{error}</div>
             </div>
           ) : (
-            <div id={divId} style={{width: '100%'}} />
+            <div id={divIdRef.current} style={{width: '100%'}} />
           )}
         </div>
 
+        {/* Footer */}
         <div style={{padding: '1rem', background: '#f9fafb', borderTop: '1px solid #e5e7eb'}}>
           <div style={{fontSize: '0.7rem', color: '#9ca3af', textAlign: 'center', marginBottom: '0.75rem'}}>
             Soporta Code 128, EAN, QR, Data Matrix y otros formatos estándar
