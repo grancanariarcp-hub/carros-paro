@@ -89,6 +89,7 @@ export default function SupervisorPage() {
   const pctOperativos = stats.total > 0 ? Math.round((stats.operativos / stats.total) * 100) : 0
 
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
+  useHospitalTheme(hospital?.color_primario)
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
