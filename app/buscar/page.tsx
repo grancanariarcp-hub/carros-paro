@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -26,9 +27,20 @@ export default function BuscadorPage() {
   const [buscado, setBuscado] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   useEffect(() => { cargarPerfil() }, [])
+
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q) {
+      setBusqueda(q)
+      // Esperar a que perfil esté cargado
+      const timer = setTimeout(() => buscar(q), 800)
+      return () => clearTimeout(timer)
+    }
+  }, [searchParams])
 
   async function cargarPerfil() {
     const { data: { user } } = await supabase.auth.getUser()
