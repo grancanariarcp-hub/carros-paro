@@ -43,6 +43,15 @@ function tiempoRelativo(fecha: string): string {
   return `Hace ${Math.floor(diff / 86400)} días`
 }
 
+// Rutas válidas internas de ÁSTOR
+function esUrlValida(url?: string): boolean {
+  if (!url) return false
+  // Solo permitir rutas relativas internas
+  if (url.startsWith('http')) return false
+  const rutasPermitidas = ['/admin', '/supervisor', '/auditor', '/carro/', '/buscar', '/informes']
+  return rutasPermitidas.some(r => url.startsWith(r))
+}
+
 export default function NotificacionesBell({ usuarioId }: { usuarioId: string }) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([])
   const [abierto, setAbierto] = useState(false)
@@ -55,7 +64,6 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
 
   useEffect(() => {
     cargar()
-    // Cerrar panel al hacer clic fuera
     function handleClick(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setAbierto(false)
@@ -65,10 +73,9 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
     return () => document.removeEventListener('mousedown', handleClick)
   }, [usuarioId])
 
-  // Suscripción en tiempo real
   useEffect(() => {
     const channel = supabase
-      .channel('notificaciones')
+      .channel('notificaciones-' + usuarioId)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -98,21 +105,29 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
   }
 
   async function marcarTodasLeidas() {
-    await supabase.from('notificaciones').update({ leida: true }).eq('usuario_id', usuarioId).eq('leida', false)
+    await supabase.from('notificaciones')
+      .update({ leida: true })
+      .eq('usuario_id', usuarioId)
+      .eq('leida', false)
     setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })))
   }
 
-  async function handleNotificacion(n: Notificacion) {
+  async function handleNotificacion(e: React.MouseEvent, n: Notificacion) {
+    e.stopPropagation()
     if (!n.leida) await marcarLeida(n.id)
     setAbierto(false)
-    if (n.accion_url) router.push(n.accion_url)
+    // Solo navegar si la URL es una ruta interna válida
+    if (esUrlValida(n.accion_url)) {
+      router.push(n.accion_url!)
+    }
+    // Si no hay URL válida simplemente marca como leída y cierra
   }
 
   return (
     <div className="relative" ref={panelRef}>
       {/* Botón campana */}
       <button
-        onClick={() => setAbierto(!abierto)}
+        onClick={(e) => { e.stopPropagation(); setAbierto(!abierto) }}
         className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50"
       >
         <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,7 +149,7 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
             <div className="font-semibold text-sm">Notificaciones</div>
             <div className="flex items-center gap-2">
               {noLeidas > 0 && (
-                <button onClick={marcarTodasLeidas}
+                <button onClick={(e) => { e.stopPropagation(); marcarTodasLeidas() }}
                   className="text-xs text-blue-600 font-semibold">
                   Marcar todas leídas
                 </button>
@@ -158,7 +173,7 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
             {notificaciones.map(n => (
               <div
                 key={n.id}
-                onClick={() => handleNotificacion(n)}
+                onClick={(e) => handleNotificacion(e, n)}
                 className={`flex gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors border-l-4 ${colorTipo[n.tipo] || 'border-l-gray-300 bg-white'} ${!n.leida ? 'opacity-100' : 'opacity-60'}`}
               >
                 <div className="text-lg flex-shrink-0 mt-0.5">{iconoTipo[n.tipo] || 'ℹ️'}</div>
@@ -172,7 +187,12 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
                   {n.mensaje && (
                     <div className="text-xs text-gray-500 mt-0.5 leading-tight line-clamp-2">{n.mensaje}</div>
                   )}
-                  <div className="text-xs text-gray-400 mt-1">{tiempoRelativo(n.creado_en)}</div>
+                  <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                    <span>{tiempoRelativo(n.creado_en)}</span>
+                    {esUrlValida(n.accion_url) && (
+                      <span className="text-blue-500 font-semibold">Ver →</span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -182,7 +202,7 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
           {notificaciones.length > 0 && (
             <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50">
               <button
-                onClick={() => { setAbierto(false) }}
+                onClick={(e) => { e.stopPropagation(); setAbierto(false) }}
                 className="text-xs text-gray-500 text-center w-full">
                 Cerrar
               </button>
