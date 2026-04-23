@@ -6,20 +6,40 @@ interface Props {
   onClose: () => void
 }
 
+// Formatos soportados en html5-qrcode 2.3.8
+// https://github.com/mebjas/html5-qrcode/blob/master/src/core.ts
+const FORMATOS_BARCODE = [
+  0,  // QR_CODE
+  1,  // AZTEC
+  2,  // CODABAR
+  3,  // CODE_39
+  4,  // CODE_93
+  5,  // CODE_128  ← el más común en hospitales
+  6,  // DATA_MATRIX
+  7,  // MAXICODE
+  8,  // ITF
+  9,  // EAN_13
+  10, // EAN_8
+  11, // PDF_417
+  12, // RSS_14
+  13, // RSS_EXPANDED
+  14, // UPC_A
+  15, // UPC_E
+  16, // UPC_EAN_EXTENSION
+]
+
 export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [iniciando, setIniciando] = useState(true)
   const scannerRef = useRef<any>(null)
   const yaLeyoRef = useRef(false)
-  const divId = 'escanerQR-' + Math.random().toString(36).slice(2)
-  const divIdRef = useRef(divId)
+  const idRef = useRef('escanerQR-' + Date.now())
 
   useEffect(() => {
     let montado = true
 
     async function iniciar() {
       try {
-        // Cargar librería si no está
         if (!(window as any).Html5Qrcode) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement('script')
@@ -32,46 +52,30 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
 
         if (!montado) return
 
-        const Html5Qrcode = (window as any).Html5Qrcode
-        const Html5QrcodeSupportedFormats = (window as any).Html5QrcodeSupportedFormats
-
-        const scanner = new Html5Qrcode(divIdRef.current)
+        const scanner = new (window as any).Html5Qrcode(idRef.current)
         scannerRef.current = scanner
-
-        const formatos = Html5QrcodeSupportedFormats
-          ? Object.values(Html5QrcodeSupportedFormats).filter(v => typeof v === 'number')
-          : []
-
-        const config: any = {
-          fps: 10,
-          qrbox: { width: 260, height: 150 },
-          aspectRatio: 1.5,
-        }
-
-        if (formatos.length > 0) {
-          config.formatsToSupport = formatos
-        }
 
         await scanner.start(
           { facingMode: 'environment' },
-          config,
+          {
+            fps: 15,
+            qrbox: { width: 280, height: 160 },
+            aspectRatio: 1.7,
+            formatsToSupport: FORMATOS_BARCODE,
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true
+            },
+          },
           (decodedText: string) => {
-            // Evitar doble disparo
             if (yaLeyoRef.current) return
             yaLeyoRef.current = true
-
-            // Parar escáner y notificar resultado
             const s = scannerRef.current
             scannerRef.current = null
-            if (s) {
-              s.stop().catch(() => {}).finally(() => {
-                if (montado) onResult(decodedText)
-              })
-            } else {
-              if (montado) onResult(decodedText)
-            }
+            const finish = () => { if (montado) onResult(decodedText) }
+            if (s) s.stop().catch(() => {}).finally(finish)
+            else finish()
           },
-          () => {} // ignorar errores de frame
+          () => {}
         )
 
         if (montado) setIniciando(false)
@@ -98,11 +102,8 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
     yaLeyoRef.current = true
     const s = scannerRef.current
     scannerRef.current = null
-    if (s) {
-      s.stop().catch(() => {}).finally(() => onClose())
-    } else {
-      onClose()
-    }
+    if (s) s.stop().catch(() => {}).finally(() => onClose())
+    else onClose()
   }
 
   return (
@@ -115,7 +116,6 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
         background: 'white', borderRadius: '20px', overflow: 'hidden',
         width: '100%', maxWidth: '400px', margin: '0 1rem',
       }}>
-        {/* Header */}
         <div style={{
           background: '#111827', padding: '1rem 1.25rem',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -123,18 +123,16 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
           <div>
             <div style={{color: 'white', fontWeight: 700, fontSize: '0.9rem'}}>Escanear código</div>
             <div style={{color: '#9ca3af', fontSize: '0.7rem', marginTop: '2px'}}>
-              Apunta la cámara al código de barras o QR
+              Centra el código en el recuadro
             </div>
           </div>
           <button onClick={cerrar} style={{
             color: '#9ca3af', background: 'rgba(255,255,255,0.1)',
             border: 'none', borderRadius: '8px', width: '32px', height: '32px',
-            cursor: 'pointer', fontSize: '1rem', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: '1.1rem',
           }}>✕</button>
         </div>
 
-        {/* Visor */}
         <div style={{position: 'relative', background: '#000', minHeight: '220px'}}>
           {iniciando && !error && (
             <div style={{
@@ -155,20 +153,17 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
               justifyContent: 'center', background: '#111',
             }}>
               <div style={{fontSize: '2rem', marginBottom: '8px'}}>⚠️</div>
-              <div style={{color: '#ef4444', fontSize: '0.8rem', marginBottom: '4px', fontWeight: 600}}>
-                Error de cámara
-              </div>
-              <div style={{color: '#9ca3af', fontSize: '0.72rem', padding: '0 1rem'}}>{error}</div>
+              <div style={{color: '#ef4444', fontSize: '0.8rem', fontWeight: 600}}>Error de cámara</div>
+              <div style={{color: '#9ca3af', fontSize: '0.72rem', marginTop: '4px', padding: '0 1rem'}}>{error}</div>
             </div>
           ) : (
-            <div id={divIdRef.current} style={{width: '100%'}} />
+            <div id={idRef.current} style={{width: '100%'}} />
           )}
         </div>
 
-        {/* Footer */}
         <div style={{padding: '1rem', background: '#f9fafb', borderTop: '1px solid #e5e7eb'}}>
           <div style={{fontSize: '0.7rem', color: '#9ca3af', textAlign: 'center', marginBottom: '0.75rem'}}>
-            Soporta Code 128, EAN, QR, Data Matrix y otros formatos estándar
+            Code 128 · EAN · QR · Data Matrix · PDF417 y más
           </div>
           <button onClick={cerrar} style={{
             width: '100%', padding: '0.6rem', background: 'white',
