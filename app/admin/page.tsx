@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { estadoColor, formatFechaHora, formatFecha, rolLabel, diasHastaControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import type { Carro, Perfil, Inspeccion } from '@/lib/types'
 
 export default function AdminPage() {
@@ -129,6 +130,15 @@ export default function AdminPage() {
 
   return (
     <div className="page">
+      {escaneando && (
+        <EscanerCodigoBarras
+          onResult={(codigo) => {
+            setEscaneando(false)
+            router.push('/buscar?q=' + encodeURIComponent(codigo))
+          }}
+          onClose={() => setEscaneando(false)}
+        />
+      )}
       {/* TOPBAR con identidad del hospital */}
       <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -160,9 +170,8 @@ export default function AdminPage() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {perfil?.id && <NotificacionesBell usuarioId={perfil.id} />}
-          <button
-            onClick={() => router.push('/buscar')}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50 flex-shrink-0">
+          <button onClick={() => router.push('/buscar')}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50">
             <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" strokeWidth={2}/>
               <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round"/>
@@ -195,6 +204,29 @@ export default function AdminPage() {
 
         {/* ============ TAB RESUMEN ============ */}
         {tab === 'resumen' && <>
+          {/* Buscador rápido */}
+          <div className="card">
+            <div className="flex gap-2">
+              <input
+                className="input flex-1 text-sm"
+                placeholder="Buscar equipo, carro, censo, serie..."
+                onFocus={() => router.push('/buscar')}
+                readOnly
+              />
+              <button
+                onClick={() => setEscaneando(true)}
+                className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:opacity-80 flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="7" height="7" strokeWidth={2}/>
+                  <rect x="14" y="3" width="7" height="7" strokeWidth={2}/>
+                  <rect x="3" y="14" width="7" height="7" strokeWidth={2}/>
+                  <rect x="14" y="14" width="3" height="3" strokeWidth={2}/>
+                </svg>
+                Escanear
+              </button>
+            </div>
+          </div>
+
           {/* Accesos rápidos */}
           <div className="grid grid-cols-2 gap-2">
             <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
