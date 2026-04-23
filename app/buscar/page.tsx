@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, Suspense } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -17,7 +17,7 @@ interface Resultado {
   datos: any
 }
 
-export default function BuscadorPage() {
+function BuscadorContent() {
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -379,5 +379,17 @@ export default function BuscadorPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function BuscadorPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Cargando...</div>
+      </div>
+    }>
+      <BuscadorContent />
+    </Suspense>
   )
 }
