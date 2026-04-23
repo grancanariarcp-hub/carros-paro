@@ -185,7 +185,39 @@ export default function AdminPage() {
 
         {/* ============ TAB RESUMEN ============ */}
         {tab === 'resumen' && <>
-          {/* KPIs */}
+          {/* Accesos rápidos */}
+          <div className="grid grid-cols-2 gap-2">
+            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
+              onClick={() => router.push('/admin/nuevo-carro')}>
+              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" strokeWidth={2}/></svg>
+              </div>
+              <span className="text-sm font-semibold">Nuevo carro</span>
+            </button>
+            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
+              onClick={() => router.push('/admin/nuevo-usuario')}>
+              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeWidth={2}/><circle cx="12" cy="7" r="4" strokeWidth={2}/></svg>
+              </div>
+              <span className="text-sm font-semibold">Nuevo usuario</span>
+            </button>
+            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
+              onClick={() => router.push('/admin/servicios')}>
+              <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeWidth={2}/></svg>
+              </div>
+              <span className="text-sm font-semibold">Servicios</span>
+            </button>
+            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
+              onClick={() => router.push('/admin/equipos')}>
+              <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </div>
+              <span className="text-sm font-semibold">Equipos</span>
+            </button>
+          </div>
+
+          {/* KPIs */
           <div className="grid grid-cols-2 gap-2">
             <div className="card text-center">
               <div className="text-2xl font-bold text-green-700">{stats.operativos}</div>
@@ -279,37 +311,6 @@ export default function AdminPage() {
             })}
           </div>
 
-          {/* Accesos rápidos */}
-          <div className="grid grid-cols-2 gap-2">
-            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
-              onClick={() => router.push('/admin/nuevo-carro')}>
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" strokeWidth={2}/></svg>
-              </div>
-              <span className="text-sm font-semibold">Nuevo carro</span>
-            </button>
-            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
-              onClick={() => router.push('/admin/nuevo-usuario')}>
-              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeWidth={2}/><circle cx="12" cy="7" r="4" strokeWidth={2}/></svg>
-              </div>
-              <span className="text-sm font-semibold">Nuevo usuario</span>
-            </button>
-            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
-              onClick={() => router.push('/admin/servicios')}>
-              <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeWidth={2}/></svg>
-              </div>
-              <span className="text-sm font-semibold">Servicios</span>
-            </button>
-            <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
-              onClick={() => router.push('/admin/equipos')}>
-              <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </div>
-              <span className="text-sm font-semibold">Equipos</span>
-            </button>
-          </div>
         </>}
 
         {/* ============ TAB ALERTAS ============ */}
