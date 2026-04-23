@@ -1,21 +1,38 @@
 'use client'
 import { useEffect, useState } from 'react'
-import NotificacionesBell from '@/components/NotificacionesBell'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
-import type { Carro, Perfil } from '@/lib/types'
 
-export default function AuditorPage() {
-  const [perfil, setPerfil] = useState<Perfil|null>(null)
-  const [hospital, setHospital] = useState<any|null>(null)
-  const [carros, setCarros] = useState<Carro[]>([])
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState<'todos'|'operativo'|'condicional'|'no_operativo'>('todos')
-  const [filtroTipo, setFiltroTipo] = useState<string>('todos')
+interface Servicio {
+  id: string
+  nombre: string
+  descripcion?: string
+  color?: string
+  activo: boolean
+  hospital_id: string
+  _carros?: number
+  _equipos?: number
+}
+
+const COLORES_PRESET = [
+  '#1d4ed8', '#0891b2', '#059669', '#65a30d',
+  '#ca8a04', '#dc2626', '#9333ea', '#db2777',
+  '#374151', '#0f172a',
+]
+
+export default function ServiciosPage() {
+  const [servicios, setServicios] = useState<Servicio[]>([])
+  const [perfil, setPerfil] = useState<any>(null)
+  const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [mostrando, setMostrando] = useState<'lista'|'nuevo'|'editar'>('lista')
+  const [editando, setEditando] = useState<Servicio|null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const [form, setForm] = useState({
+    nombre: '', descripcion: '', color: '#1d4ed8'
+  })
   const router = useRouter()
   const supabase = createClient()
 
@@ -25,7 +42,9 @@ export default function AuditorPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || !p.activo) { router.push('/'); return }
+    if (!p || !['administrador', 'supervisor', 'superadmin'].includes(p.rol)) {
+      router.push('/'); return
+    }
     setPerfil(p)
 
     if (p.hospital_id) {
@@ -33,31 +52,75 @@ export default function AuditorPage() {
       setHospital(h)
     }
 
-    const { data: c } = await supabase.from('carros')
-      .select('*, servicios(nombre)')
-      .eq('activo', true)
-      .eq('hospital_id', p.hospital_id)
-      .order('codigo')
-    setCarros(c || [])
+    await cargarServicios(p.hospital_id)
     setLoading(false)
   }
 
-  const tiposCarro = Array.from(new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean)))
+  async function cargarServicios(hospitalId: string) {
+    const { data: svcs } = await supabase
+      .from('servicios')
+      .select('*')
+      .eq('hospital_id', hospitalId)
+      .order('nombre')
 
-  const carrosFiltrados = carros.filter(c => {
-    const matchBusqueda = !busqueda ||
-      c.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
-      c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (c.ubicacion || '').toLowerCase().includes(busqueda.toLowerCase())
-    const matchEstado = filtroEstado === 'todos' || c.estado === filtroEstado
-    const matchTipo = filtroTipo === 'todos' || (c as any).tipo_carro === filtroTipo
-    return matchBusqueda && matchEstado && matchTipo
-  })
+    if (!svcs) return
 
-  const urgentes = carros.filter(c => {
-    const dias = diasHastaControl(c.proximo_control)
-    return dias !== null && dias <= 3
-  })
+    // Contar carros y equipos por servicio
+    const enriquecidos = await Promise.all(svcs.map(async s => {
+      const [{ count: carros }, { count: equipos }] = await Promise.all([
+        supabase.from('carros').select('*', { count: 'exact', head: true }).eq('servicio_id', s.id).eq('activo', true),
+        supabase.from('equipos').select('*', { count: 'exact', head: true }).eq('servicio_id', s.id).eq('activo', true),
+      ])
+      return { ...s, _carros: carros || 0, _equipos: equipos || 0 }
+    }))
+
+    setServicios(enriquecidos)
+  }
+
+  async function guardarNuevo() {
+    if (!form.nombre.trim()) { toast.error('El nombre es obligatorio'); return }
+    setGuardando(true)
+    const { error } = await supabase.from('servicios').insert({
+      nombre: form.nombre.trim(),
+      descripcion: form.descripcion.trim() || null,
+      color: form.color,
+      hospital_id: perfil?.hospital_id,
+      activo: true,
+    })
+    if (error) { toast.error('Error al crear el servicio'); setGuardando(false); return }
+    toast.success(`Servicio "${form.nombre}" creado`)
+    setForm({ nombre: '', descripcion: '', color: '#1d4ed8' })
+    setMostrando('lista')
+    await cargarServicios(perfil?.hospital_id)
+    setGuardando(false)
+  }
+
+  async function guardarEdicion() {
+    if (!editando || !editando.nombre.trim()) { toast.error('El nombre es obligatorio'); return }
+    setGuardando(true)
+    const { error } = await supabase.from('servicios').update({
+      nombre: editando.nombre.trim(),
+      descripcion: editando.descripcion?.trim() || null,
+      color: editando.color,
+    }).eq('id', editando.id)
+    if (error) { toast.error('Error al guardar'); setGuardando(false); return }
+    toast.success('Servicio actualizado')
+    setEditando(null)
+    setMostrando('lista')
+    await cargarServicios(perfil?.hospital_id)
+    setGuardando(false)
+  }
+
+  async function toggleActivo(s: Servicio) {
+    if (!s.activo === false && (s._carros || 0) > 0) {
+      toast.error(`No se puede desactivar — tiene ${s._carros} carros asignados`)
+      return
+    }
+    const { error } = await supabase.from('servicios').update({ activo: !s.activo }).eq('id', s.id)
+    if (error) { toast.error('Error'); return }
+    toast.success(s.activo ? 'Servicio desactivado' : 'Servicio activado')
+    await cargarServicios(perfil?.hospital_id)
+  }
 
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
   useHospitalTheme(hospital?.color_primario)
@@ -70,172 +133,228 @@ export default function AuditorPage() {
 
   return (
     <div className="page">
-      {/* TOPBAR con identidad del hospital */}
+      {/* TOPBAR */}
       <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {hospital?.logo_url ? (
-            <img src={hospital.logo_url} alt={hospital.nombre}
-              style={{height:'28px', objectFit:'contain', flexShrink:0}}/>
-          ) : (
-            <div style={{
-              width:'28px', height:'28px', borderRadius:'6px',
-              background: colorPrimario,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              flexShrink:0,
-            }}>
-              <svg width="14" height="14" viewBox="0 0 80 80" fill="none">
-                <path d="M40 68C40 68 8 50 8 28C8 18 16 10 26 10C32 10 37.5 13 40 18C42.5 13 48 10 54 10C64 10 72 18 72 28C72 50 40 68 40 68Z"
-                  fill="white" fillOpacity="0.2" stroke="white" strokeWidth="2.5"/>
-                <polyline points="16,40 24,40 28,30 33,52 38,24 43,48 47,40 56,40 60,35 64,40"
-                  stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          )}
+          <button onClick={() => router.back()}
+            className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
           <div className="min-w-0">
-            <div className="text-xs text-gray-400 leading-none truncate">{hospital?.nombre || 'Hospital'}</div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="font-semibold text-sm truncate">{perfil?.nombre}</span>
-              <span className="badge bg-blue-100 text-blue-800 text-xs flex-shrink-0">{perfil?.rol}</span>
-            </div>
+            <div className="text-xs text-gray-400 leading-none truncate">{hospital?.nombre}</div>
+            <div className="font-semibold text-sm">Servicios y Unidades</div>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {perfil?.id && <NotificacionesBell usuarioId={perfil.id} />}
-          <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
-            className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5">
-            Salir
+        {mostrando === 'lista' && (
+          <button
+            onClick={() => { setMostrando('nuevo'); setForm({ nombre: '', descripcion: '', color: '#1d4ed8' }) }}
+            className="btn-primary text-xs px-3 py-1.5 flex-shrink-0">
+            + Nuevo servicio
           </button>
-        </div>
+        )}
       </div>
 
       <div className="content">
-        {/* Buscador */}
-        <div className="card">
-          <div className="section-title mb-2">Buscar carro</div>
-          <input
-            className="input mb-2"
-            placeholder="Nombre, código o ubicación..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-          />
-          <button
-            className="btn-secondary flex items-center justify-center gap-2"
-            onClick={() => toast('Escanea el QR del carro con la cámara', { icon: '📷' })}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
-            </svg>
-            Escanear QR / NFC
-          </button>
-        </div>
 
-        {/* Filtros */}
-        <div className="flex gap-1.5 flex-wrap">
-          {([
-            ['todos', 'Todos'],
-            ['operativo', 'Operativos'],
-            ['condicional', 'Condicionales'],
-            ['no_operativo', 'No operativos'],
-          ] as const).map(([val, label]) => (
-            <button key={val}
-              onClick={() => setFiltroEstado(val)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                filtroEstado === val
-                  ? val === 'operativo' ? 'bg-green-100 text-green-700 border-green-300'
-                    : val === 'condicional' ? 'bg-amber-100 text-amber-700 border-amber-300'
-                    : val === 'no_operativo' ? 'bg-red-100 text-red-700 border-red-300'
-                    : 'bg-gray-200 text-gray-700 border-gray-300'
-                  : 'bg-white text-gray-400 border-gray-200'
-              }`}
-            >{label}</button>
-          ))}
-        </div>
-
-        {/* Filtro por tipo si hay más de uno */}
-        {tiposCarro.length > 1 && (
-          <div className="flex gap-1.5 flex-wrap">
-            <button
-              onClick={() => setFiltroTipo('todos')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroTipo === 'todos' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}
-            >Todos los tipos</button>
-            {tiposCarro.map(t => (
-              <button key={t}
-                onClick={() => setFiltroTipo(t)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroTipo === t ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}
-              >{t.replace('_',' ')}</button>
-            ))}
-          </div>
-        )}
-
-        {/* Urgentes */}
-        {urgentes.length > 0 && (
-          <div className="card border-amber-200 bg-amber-50">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="section-title text-amber-700">Controles urgentes</span>
-              <span className="badge bg-amber-100 text-amber-800">{urgentes.length}</span>
-            </div>
-            {urgentes.map(c => {
-              const dias = diasHastaControl(c.proximo_control)
-              return (
-                <div key={c.id} className="row-item cursor-pointer" onClick={() => router.push(`/carro/${c.id}`)}>
-                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold">{c.codigo} — {c.nombre}</div>
-                    <div className="text-xs text-gray-500">
-                      {dias !== null && dias < 0 ? `Control vencido hace ${Math.abs(dias)} día${Math.abs(dias) !== 1 ? 's' : ''}`
-                        : dias === 0 ? 'Control vence hoy'
-                        : `Control vence en ${dias} día${dias !== 1 ? 's' : ''}`}
-                    </div>
-                  </div>
-                  <span className="badge bg-amber-100 text-amber-800">Urgente</span>
+        {/* ============ FORMULARIO NUEVO ============ */}
+        {mostrando === 'nuevo' && (
+          <div className="card">
+            <div className="section-title mb-4">Nuevo servicio</div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="label">Nombre del servicio *</label>
+                <input className="input" placeholder="Ej: UCI Médica, Urgencias, Cardiología..."
+                  value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Descripción <span className="text-gray-400">(opcional)</span></label>
+                <input className="input" placeholder="Ej: Unidad de Cuidados Intensivos Médica"
+                  value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Color identificativo</label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {COLORES_PRESET.map(c => (
+                    <button key={c}
+                      onClick={() => setForm({...form, color: c})}
+                      style={{
+                        width:'28px', height:'28px', borderRadius:'50%', background:c,
+                        border: form.color === c ? '3px solid #111' : '2px solid transparent',
+                        outline: form.color === c ? '2px solid white' : 'none',
+                        outlineOffset: '-4px',
+                        flexShrink:0,
+                      }}
+                    />
+                  ))}
+                  <input type="color" value={form.color}
+                    onChange={e => setForm({...form, color: e.target.value})}
+                    className="w-8 h-8 rounded-full border border-gray-200 cursor-pointer"
+                    title="Color personalizado" />
                 </div>
-              )
-            })}
+              </div>
+              {/* Preview */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                <div style={{width:'4px', height:'40px', borderRadius:'2px', background:form.color, flexShrink:0}}></div>
+                <div>
+                  <div className="text-sm font-semibold">{form.nombre || 'Nombre del servicio'}</div>
+                  <div className="text-xs text-gray-400">{form.descripcion || 'Descripción del servicio'}</div>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button className="btn-primary flex-1" onClick={guardarNuevo} disabled={guardando}>
+                  {guardando ? 'Guardando...' : 'Crear servicio'}
+                </button>
+                <button className="btn-secondary flex-1" onClick={() => setMostrando('lista')}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Lista carros */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="section-title">
-              Carros ({carrosFiltrados.length}{carrosFiltrados.length !== carros.length ? ` de ${carros.length}` : ''})
+        {/* ============ FORMULARIO EDICIÓN ============ */}
+        {mostrando === 'editar' && editando && (
+          <div className="card">
+            <div className="section-title mb-4">Editar servicio</div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="label">Nombre del servicio *</label>
+                <input className="input"
+                  value={editando.nombre}
+                  onChange={e => setEditando({...editando, nombre: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Descripción <span className="text-gray-400">(opcional)</span></label>
+                <input className="input"
+                  value={editando.descripcion || ''}
+                  onChange={e => setEditando({...editando, descripcion: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Color identificativo</label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {COLORES_PRESET.map(c => (
+                    <button key={c}
+                      onClick={() => setEditando({...editando, color: c})}
+                      style={{
+                        width:'28px', height:'28px', borderRadius:'50%', background:c,
+                        border: editando.color === c ? '3px solid #111' : '2px solid transparent',
+                        outline: editando.color === c ? '2px solid white' : 'none',
+                        outlineOffset: '-4px',
+                        flexShrink:0,
+                      }}
+                    />
+                  ))}
+                  <input type="color" value={editando.color || '#1d4ed8'}
+                    onChange={e => setEditando({...editando, color: e.target.value})}
+                    className="w-8 h-8 rounded-full border border-gray-200 cursor-pointer" />
+                </div>
+              </div>
+              {/* Preview */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                <div style={{width:'4px', height:'40px', borderRadius:'2px', background:editando.color || colorPrimario, flexShrink:0}}></div>
+                <div>
+                  <div className="text-sm font-semibold">{editando.nombre}</div>
+                  <div className="text-xs text-gray-400">{editando.descripcion || 'Sin descripción'}</div>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button className="btn-primary flex-1" onClick={guardarEdicion} disabled={guardando}>
+                  {guardando ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+                <button className="btn-secondary flex-1" onClick={() => { setEditando(null); setMostrando('lista') }}>
+                  Cancelar
+                </button>
+              </div>
             </div>
-            {(filtroEstado !== 'todos' || filtroTipo !== 'todos' || busqueda) && (
-              <button
-                onClick={() => { setFiltroEstado('todos'); setFiltroTipo('todos'); setBusqueda('') }}
-                className="text-xs text-blue-600 font-semibold">
-                Limpiar filtros
-              </button>
-            )}
           </div>
-          {carrosFiltrados.length === 0 && (
-            <div className="text-xs text-gray-400 text-center py-6">
-              {busqueda ? 'No se encontraron carros' : 'No hay carros que coincidan con los filtros'}
+        )}
+
+        {/* ============ LISTA DE SERVICIOS ============ */}
+        {mostrando === 'lista' && <>
+          {/* Resumen */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="card text-center p-3">
+              <div className="text-2xl font-bold text-blue-700">{servicios.length}</div>
+              <div className="text-xs text-gray-500 mt-0.5">Total</div>
+            </div>
+            <div className="card text-center p-3">
+              <div className="text-2xl font-bold text-green-700">{servicios.filter(s => s.activo).length}</div>
+              <div className="text-xs text-gray-500 mt-0.5">Activos</div>
+            </div>
+            <div className="card text-center p-3">
+              <div className="text-2xl font-bold text-gray-500">{servicios.reduce((a, s) => a + (s._carros || 0), 0)}</div>
+              <div className="text-xs text-gray-500 mt-0.5">Carros</div>
+            </div>
+          </div>
+
+          {servicios.length === 0 && (
+            <div className="card text-center py-10">
+              <div className="text-3xl mb-3">🏥</div>
+              <div className="text-sm font-semibold text-gray-600">Sin servicios creados</div>
+              <div className="text-xs text-gray-400 mt-1 mb-4">Crea el primer servicio o unidad del hospital</div>
+              <button className="btn-primary"
+                onClick={() => setMostrando('nuevo')}>
+                + Crear primer servicio
+              </button>
             </div>
           )}
-          {carrosFiltrados.map(c => {
-            const e = estadoColor(c.estado)
-            const dias = diasHastaControl(c.proximo_control)
-            const controlVencido = dias !== null && dias < 0
-            return (
-              <div key={c.id} className="row-item cursor-pointer" onClick={() => router.push(`/carro/${c.id}`)}>
-                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${e.dot}`}></div>
+
+          {servicios.map(s => (
+            <div key={s.id} className={`card ${!s.activo ? 'opacity-60' : ''}`}>
+              <div className="flex items-start gap-3">
+                {/* Indicador de color */}
+                <div style={{
+                  width:'4px', height:'48px', borderRadius:'2px',
+                  background: s.color || colorPrimario, flexShrink:0
+                }}></div>
+
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold">{c.codigo} — {c.nombre}</div>
-                  <div className="text-xs flex items-center gap-1">
-                    <span className="text-gray-400">{(c.servicios as any)?.nombre || c.ubicacion || '—'}</span>
-                    {controlVencido && <span className="text-red-600 font-semibold">· Control vencido</span>}
-                    {!controlVencido && c.proximo_control && (
-                      <span className="text-gray-400">· {formatFecha(c.proximo_control)}</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-sm">{s.nombre}</span>
+                    {!s.activo && (
+                      <span className="badge bg-gray-100 text-gray-500 text-xs">Inactivo</span>
                     )}
                   </div>
+                  {s.descripcion && (
+                    <div className="text-xs text-gray-400 mb-2">{s.descripcion}</div>
+                  )}
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <rect x="2" y="7" width="20" height="14" rx="2" strokeWidth={2}/>
+                        <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" strokeWidth={2}/>
+                      </svg>
+                      {s._carros} carro{s._carros !== 1 ? 's' : ''}
+                    </span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      {s._equipos} equipo{s._equipos !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 </div>
-                <span className={`badge ${e.bg} ${e.text}`}>{e.label}</span>
+
+                {/* Acciones */}
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => { setEditando({...s}); setMostrando('editar') }}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 bg-gray-50 font-semibold">
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => toggleActivo(s)}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-semibold ${
+                      s.activo
+                        ? 'border-red-200 text-red-600 bg-red-50'
+                        : 'border-green-200 text-green-600 bg-green-50'
+                    }`}>
+                    {s.activo ? 'Desactivar' : 'Activar'}
+                  </button>
+                </div>
               </div>
-            )
-          })}
-        </div>
+            </div>
+          ))}
+        </>}
+
       </div>
     </div>
   )
