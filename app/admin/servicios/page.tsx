@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { useHospitalTheme } from '@/lib/useHospitalTheme'
 
 interface Servicio {
   id: string
@@ -122,6 +123,7 @@ export default function ServiciosPage() {
   }
 
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
+  useHospitalTheme(hospital?.color_primario)
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
