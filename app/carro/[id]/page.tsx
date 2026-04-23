@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import { estadoColor, formatFecha, formatFechaHora } from '@/lib/utils'
+import toast from 'react-hot-toast'
 import type { Carro, Inspeccion, Perfil } from '@/lib/types'
+import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 
 export default function MenuCarroPage() {
   const [carro, setCarro] = useState<Carro|null>(null)
@@ -11,6 +13,10 @@ export default function MenuCarroPage() {
   const [perfil, setPerfil] = useState<Perfil|null>(null)
   const [loading, setLoading] = useState(true)
   const [vencimientosAlert, setVencimientosAlert] = useState(0)
+  const [editandoCenso, setEditandoCenso] = useState(false)
+  const [numeroCenso, setNumeroCenso] = useState('')
+  const [guardandoCenso, setGuardandoCenso] = useState(false)
+  const [escaneando, setEscaneando] = useState(false)
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
@@ -28,6 +34,7 @@ export default function MenuCarroPage() {
       .select('*, servicios(nombre)').eq('id', id).single()
     if (!c) { router.back(); return }
     setCarro(c)
+    setNumeroCenso((c as any).numero_censo || '')
 
     const { data: ins } = await supabase.from('inspecciones')
       .select('*, perfiles(nombre)')
@@ -53,13 +60,41 @@ export default function MenuCarroPage() {
     setLoading(false)
   }
 
+  async function guardarCenso() {
+    setGuardandoCenso(true)
+    const { error } = await supabase.from('carros').update({
+      numero_censo: numeroCenso || null,
+      codigo_barras_censo: numeroCenso || null,
+    }).eq('id', id)
+    if (error) { toast.error('Error al guardar'); setGuardandoCenso(false); return }
+    toast.success('Número de censo actualizado')
+    setCarro(prev => prev ? { ...prev, numero_censo: numeroCenso } as any : prev)
+    setEditandoCenso(false)
+    setGuardandoCenso(false)
+  }
+
+  function handleEscaneo(codigo: string) {
+    setEscaneando(false)
+    setNumeroCenso(codigo)
+    setEditandoCenso(true)
+    toast.success('Código leído: ' + codigo)
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
   if (!carro) return null
 
   const e = estadoColor(carro.estado)
+  const puedeEditar = perfil?.rol === 'administrador' || perfil?.rol === 'supervisor' || perfil?.rol === 'superadmin'
 
   return (
     <div className="page">
+      {escaneando && (
+        <EscanerCodigoBarras
+          onResult={handleEscaneo}
+          onClose={() => setEscaneando(false)}
+        />
+      )}
+
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">{carro.codigo}</span>
@@ -101,6 +136,70 @@ export default function MenuCarroPage() {
           )}
         </div>
 
+        {/* Número de censo del carro */}
+        {puedeEditar && (
+          <div className="card">
+            <div className="flex items-center justify-between mb-2">
+              <div className="section-title">Número de censo</div>
+              {!editandoCenso && (
+                <button
+                  onClick={() => setEditandoCenso(true)}
+                  className="text-xs text-blue-600 font-semibold">
+                  {(carro as any).numero_censo ? 'Editar' : 'Añadir'}
+                </button>
+              )}
+            </div>
+
+            {!editandoCenso ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  {(carro as any).numero_censo ? (
+                    <div className="font-semibold text-sm">{(carro as any).numero_censo}</div>
+                  ) : (
+                    <div className="text-xs text-gray-400">Sin número de censo asignado</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setEscaneando(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold active:opacity-80">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="7" height="7" strokeWidth={2}/>
+                    <rect x="14" y="3" width="7" height="7" strokeWidth={2}/>
+                    <rect x="3" y="14" width="7" height="7" strokeWidth={2}/>
+                    <rect x="14" y="14" width="3" height="3" strokeWidth={2}/>
+                  </svg>
+                  Escanear
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    className="input flex-1"
+                    placeholder="Escribe o escanea el número de censo"
+                    value={numeroCenso}
+                    onChange={e => setNumeroCenso(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => setEscaneando(true)}
+                    className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:opacity-80">
+                    📷
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button className="btn-primary flex-1 py-2 text-xs" onClick={guardarCenso} disabled={guardandoCenso}>
+                    {guardandoCenso ? 'Guardando...' : 'Guardar'}
+                  </button>
+                  <button className="btn-secondary flex-1 py-2 text-xs" onClick={() => { setEditandoCenso(false); setNumeroCenso((carro as any).numero_censo || '') }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="section-title">Tipo de control</div>
 
         <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/control/mensual`)}>
@@ -138,7 +237,6 @@ export default function MenuCarroPage() {
           </button>
         )}
 
-        {/* Vencimientos */}
         <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/vencimientos`)}>
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${vencimientosAlert > 0 ? 'bg-amber-100' : 'bg-green-100'}`}>
             <svg className={`w-5 h-5 ${vencimientosAlert > 0 ? 'text-amber-700' : 'text-green-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,7 +262,6 @@ export default function MenuCarroPage() {
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
         </button>
 
-        {/* Historial */}
         <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/historial`)}>
           <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9" strokeWidth={2}/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeWidth={2}/></svg>
@@ -176,7 +273,6 @@ export default function MenuCarroPage() {
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
         </button>
 
-        {/* QR — visible para todos los roles */}
         <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/carro/${id}/qr`)}>
           <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
             <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,7 +293,6 @@ export default function MenuCarroPage() {
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" strokeWidth={2}/></svg>
         </button>
 
-        {/* Gestión materiales — solo admin y supervisor */}
         {(perfil?.rol === 'supervisor' || perfil?.rol === 'administrador') && (
           <button className="btn-secondary text-left flex items-center gap-3" onClick={() => router.push(`/admin/carro/${id}/materiales`)}>
             <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -217,4 +312,3 @@ export default function MenuCarroPage() {
     </div>
   )
 }
-
