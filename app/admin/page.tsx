@@ -13,6 +13,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<'resumen'|'alertas'|'carros'|'usuarios'|'informes'>('resumen')
   const [perfil, setPerfil] = useState<Perfil|null>(null)
   const [hospital, setHospital] = useState<any|null>(null)
+  const [escaneando, setEscaneando] = useState(false)
   const [carros, setCarros] = useState<Carro[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [pendientes, setPendientes] = useState<any[]>([])
