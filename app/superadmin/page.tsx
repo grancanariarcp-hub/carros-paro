@@ -212,13 +212,13 @@ export default function SuperAdminPage() {
       }}>
         <div style={{display:'flex', alignItems:'baseline', gap:'0.75rem'}}>
           <span style={{fontSize:'1.1rem', fontWeight:800, color:'white', letterSpacing:'0.08em'}}>ÁSTOR</span>
-          <span style={{fontSize:'0.6rem', color:'#4b5563', letterSpacing:'0.15em', textTransform:'uppercase', fontWeight:500}}>Superadmin · CRITIC SL</span>
+          <span style={{fontSize:'0.6rem', color:'#9ca3af', letterSpacing:'0.15em', textTransform:'uppercase', fontWeight:500}}>Superadmin · CRITIC SL</span>
         </div>
         <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
-          <span style={{fontSize:'0.78rem', color:'#6b7280'}}>{perfil?.nombre}</span>
+          <span style={{fontSize:'0.78rem', color:'#d1d5db'}}>{perfil?.nombre}</span>
           <button onClick={cerrarSesion} style={{
             fontSize:'0.72rem', color:'#6b7280', background:'transparent',
-            border:'1px solid rgba(255,255,255,0.08)', borderRadius:'5px',
+            border:'1px solid rgba(255,255,255,0.2)', borderRadius:'5px',
             padding:'0.35rem 0.75rem', cursor:'pointer', fontFamily:"'Inter', sans-serif",
           }}>Salir</button>
         </div>
