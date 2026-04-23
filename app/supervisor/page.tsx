@@ -123,6 +123,14 @@ export default function SupervisorPage() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {perfil?.id && <NotificacionesBell usuarioId={perfil.id} />}
+          <button
+            onClick={() => router.push('/buscar')}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50 flex-shrink-0">
+            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" strokeWidth={2}/>
+              <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round"/>
+            </svg>
+          </button>
           <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
             className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5">Salir</button>
         </div>
