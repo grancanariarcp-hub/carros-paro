@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 
 interface Equipo {
   id: string
@@ -114,6 +115,8 @@ export default function EquiposPage() {
   const [historial, setHistorial] = useState<Mantenimiento[]>([])
   const [guardando, setGuardando] = useState(false)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [escaneando, setEscaneando] = useState(false)
+  const [campoEscaneo, setCampoEscaneo] = useState<'censo'|'barras'>('barras')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [filtroCategoria, setFiltroCategoria] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
@@ -297,6 +300,24 @@ export default function EquiposPage() {
 
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
   useHospitalTheme(hospital?.color_primario)
+
+  function handleEscaneo(codigo: string) {
+    setEscaneando(false)
+    if (campoEscaneo === 'barras') {
+      if (vista === 'nuevo' && equipoSeleccionado) {
+        setEquipoSeleccionado(prev => prev ? {...prev, codigo_barras: codigo} : prev)
+      } else {
+        setForm(prev => ({...prev, codigo_barras: codigo}))
+      }
+    } else {
+      if (vista === 'nuevo' && equipoSeleccionado) {
+        setEquipoSeleccionado(prev => prev ? {...prev, numero_censo: codigo} : prev)
+      } else {
+        setForm(prev => ({...prev, numero_censo: codigo}))
+      }
+    }
+    toast.success('Código leído: ' + codigo)
+  }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
 
@@ -537,6 +558,12 @@ export default function EquiposPage() {
 
     return (
       <div className="page">
+        {escaneando && (
+          <EscanerCodigoBarras
+            onResult={handleEscaneo}
+            onClose={() => setEscaneando(false)}
+          />
+        )}
         <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
           <button onClick={() => { setVista(isEditing ? 'detalle' : 'lista'); if (!isEditing) setForm(formInicial) }}
             className="text-blue-700 text-sm font-medium">← Volver</button>
@@ -570,8 +597,15 @@ export default function EquiposPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">N° de censo</label>
-                  <input className="input" placeholder="CEN-2024-0001"
-                    value={f.numero_censo || ''} onChange={e => setF({...f, numero_censo: e.target.value})} />
+                  <div className="flex gap-1.5">
+                    <input className="input flex-1" placeholder="CEN-2024-0001"
+                      value={f.numero_censo || ''} onChange={e => setF({...f, numero_censo: e.target.value})} />
+                    <button type="button"
+                      onClick={() => { setCampoEscaneo('censo'); setEscaneando(true) }}
+                      className="flex-shrink-0 px-2 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:bg-gray-700">
+                      📷
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="label">N° de serie</label>
@@ -581,8 +615,15 @@ export default function EquiposPage() {
               </div>
               <div>
                 <label className="label">Código de barras</label>
-                <input className="input" placeholder="Escanea o escribe el código"
-                  value={f.codigo_barras || ''} onChange={e => setF({...f, codigo_barras: e.target.value})} />
+                <div className="flex gap-2">
+                  <input className="input flex-1" placeholder="Escanea o escribe el código"
+                    value={f.codigo_barras || ''} onChange={e => setF({...f, codigo_barras: e.target.value})} />
+                  <button type="button"
+                    onClick={() => { setCampoEscaneo('barras'); setEscaneando(true) }}
+                    className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:bg-gray-700">
+                    📷
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
