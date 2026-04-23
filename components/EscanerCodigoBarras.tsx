@@ -78,7 +78,7 @@ export default function EscanerCodigoBarras({ onResult, onClose }: Props) {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
 
-        function escanear() {
+        const escanear = () => {
           if (!montado || yaLeyoRef.current) return
           const video = videoRef.current
           if (!video || video.readyState < 2) {
