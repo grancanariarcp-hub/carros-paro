@@ -217,7 +217,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* KPIs */
+          {/* KPIs */}
           <div className="grid grid-cols-2 gap-2">
             <div className="card text-center">
               <div className="text-2xl font-bold text-green-700">{stats.operativos}</div>
@@ -310,7 +310,6 @@ export default function AdminPage() {
               )
             })}
           </div>
-
         </>}
 
         {/* ============ TAB ALERTAS ============ */}
