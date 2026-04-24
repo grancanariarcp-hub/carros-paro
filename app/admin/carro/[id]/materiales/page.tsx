@@ -45,18 +45,7 @@ interface Equipo {
   categoria_id: string | null
   estado: string | null
   foto_url: string | null
-  fecha_adquisicion: string | null
-  fecha_fabricacion: string | null
-  fecha_ultimo_mantenimiento: string | null
   fecha_proximo_mantenimiento: string | null
-  fecha_ultima_calibracion: string | null
-  fecha_proxima_calibracion: string | null
-  fecha_garantia_hasta: string | null
-  empresa_mantenimiento: string | null
-  contacto_mantenimiento: string | null
-  numero_contrato: string | null
-  frecuencia_mantenimiento: string | null
-  observaciones: string | null
   activo: boolean
   indispensable: boolean
 }
@@ -65,7 +54,6 @@ interface CategoriaEquipo {
   id: string
   nombre: string
   hospital_id: string | null
-  es_global: boolean
   favorita: boolean
   orden_grupo: number
 }
@@ -125,7 +113,7 @@ const SUGERENCIAS_FRECUENCIA = [
 
 function colorVto(fecha: string | null): string {
   if (!fecha) return ''
-  const dias = Math.ceil((new Date(fecha).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  const dias = Math.ceil((new Date(fecha).getTime() - Date.now()) / 86400000)
   if (dias < 0) return 'bg-red-100 border-red-300 text-red-700'
   if (dias <= 7) return 'bg-red-100 border-red-300 text-red-700'
   if (dias <= 30) return 'bg-amber-100 border-amber-300 text-amber-700'
@@ -134,7 +122,7 @@ function colorVto(fecha: string | null): string {
 
 function labelVto(fecha: string | null): string {
   if (!fecha) return 'Sin fecha'
-  const dias = Math.ceil((new Date(fecha).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  const dias = Math.ceil((new Date(fecha).getTime() - Date.now()) / 86400000)
   if (dias < 0) return 'Vencido'
   if (dias === 0) return 'Vence hoy'
   if (dias <= 7) return `${dias}d ⚠️`
@@ -152,12 +140,9 @@ function useDebounce<T>(value: T, delay = 400): T {
 
 function useCategorias(hospitalId: string | null) {
   const [categorias, setCategorias] = useState<CategoriaEquipo[]>([])
-  const [cargando, setCargando] = useState(true)
   const supabase = createClient()
-
   const cargar = useCallback(async () => {
-    if (!hospitalId) { setCargando(false); return }
-    setCargando(true)
+    if (!hospitalId) return
     const { data } = await supabase
       .from('v_categorias_por_hospital')
       .select('*')
@@ -166,11 +151,9 @@ function useCategorias(hospitalId: string | null) {
       .order('orden_grupo')
       .order('nombre')
     setCategorias(data || [])
-    setCargando(false)
   }, [hospitalId, supabase])
-
   useEffect(() => { cargar() }, [cargar])
-  return { categorias, cargando, recargar: cargar }
+  return { categorias, recargar: cargar }
 }
 
 // =====================================================================
@@ -217,7 +200,7 @@ export default function GestionMaterialesPage() {
     })))
 
     const { data: eqs } = await supabase.from('equipos')
-      .select('*')
+      .select('id, hospital_id, servicio_id, carro_id, cajon_id, nombre, marca, modelo, numero_serie, numero_censo, codigo_barras, categoria, categoria_id, estado, foto_url, fecha_proximo_mantenimiento, activo, indispensable')
       .eq('carro_id', carroId)
       .eq('activo', true)
       .order('nombre')
@@ -288,7 +271,7 @@ export default function GestionMaterialesPage() {
     setGuardando(null)
   }
 
-  async function editarNombre(matId: string, cajonId: string, nombreActual: string) {
+  async function editarNombreMaterial(matId: string, cajonId: string, nombreActual: string) {
     const nuevo = prompt('Nuevo nombre:', nombreActual)
     if (!nuevo?.trim() || nuevo === nombreActual) return
     await updateMaterial(matId, cajonId, 'nombre', nuevo.trim())
@@ -305,12 +288,9 @@ export default function GestionMaterialesPage() {
     await cargarDatos()
   }
 
-  async function desactivarEquipo(equipoId: string) {
-    if (!confirm('¿Quitar este equipo del carro? (Se desactiva, no se borra)')) return
-    const { error } = await supabase.from('equipos').update({ activo: false }).eq('id', equipoId)
-    if (error) { toast.error('Error'); return }
-    setEquipos(prev => prev.filter(e => e.id !== equipoId))
-    toast.success('Equipo desvinculado')
+  // CAMBIO CLAVE: click en equipo navega a su ficha
+  function abrirFichaEquipo(equipoId: string) {
+    router.push(`/admin/equipos/${equipoId}`)
   }
 
   if (loading) return (
@@ -353,6 +333,7 @@ export default function GestionMaterialesPage() {
           </button>
         </div>
 
+        {/* Equipos sobre el carro */}
         {equiposSobreCarro.length > 0 && (
           <div className="card border-purple-100">
             <div className="flex items-center justify-between mb-2">
@@ -360,11 +341,13 @@ export default function GestionMaterialesPage() {
               <span className="text-xs text-gray-400">{equiposSobreCarro.length}</span>
             </div>
             {equiposSobreCarro.map(eq => (
-              <FilaEquipo key={eq.id} equipo={eq} onDesactivar={() => desactivarEquipo(eq.id)} />
+              <FilaEquipo key={eq.id} equipo={eq}
+                onClick={() => abrirFichaEquipo(eq.id)} />
             ))}
           </div>
         )}
 
+        {/* Leyenda semáforo */}
         <div className="card py-2.5 px-3">
           <div className="section-title mb-2">Semáforo vencimientos</div>
           <div className="flex flex-wrap gap-3 text-xs text-gray-500">
@@ -374,6 +357,7 @@ export default function GestionMaterialesPage() {
           </div>
         </div>
 
+        {/* Cajones activos */}
         {cajonesActivos.map(cajon => {
           const equiposDeEsteCajon = equiposPorCajon(cajon.id)
           return (
@@ -394,15 +378,18 @@ export default function GestionMaterialesPage() {
 
               {cajon.expandido && (
                 <>
+                  {/* Equipos dentro del cajón — click abre ficha */}
                   {equiposDeEsteCajon.length > 0 && (
                     <div className="mb-3 pb-3 border-b border-gray-100">
                       <div className="text-xs text-purple-600 font-semibold mb-1">Equipos en este cajón</div>
                       {equiposDeEsteCajon.map(eq => (
-                        <FilaEquipo key={eq.id} equipo={eq} compacta onDesactivar={() => desactivarEquipo(eq.id)} />
+                        <FilaEquipo key={eq.id} equipo={eq} compacta
+                          onClick={() => abrirFichaEquipo(eq.id)} />
                       ))}
                     </div>
                   )}
 
+                  {/* Materiales */}
                   <div className="grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 px-1 mb-1">
                     <div className="text-xs text-gray-400 font-semibold">Material</div>
                     <div className="text-xs text-gray-400 text-center">Cant</div>
@@ -414,10 +401,9 @@ export default function GestionMaterialesPage() {
 
                   {cajon.materiales.map(mat => (
                     <div key={mat.id}
-                      className={`grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${!mat.activo ? 'opacity-40' : ''}`}
-                    >
+                      className={`grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${!mat.activo ? 'opacity-40' : ''}`}>
                       <button className="text-xs text-left font-medium leading-tight"
-                        onClick={() => editarNombre(mat.id, cajon.id, mat.nombre)}>
+                        onClick={() => editarNombreMaterial(mat.id, cajon.id, mat.nombre)}>
                         <div className="flex items-center gap-1">
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                             mat.tipo_falla === 'grave' ? 'bg-red-500' :
@@ -476,6 +462,7 @@ export default function GestionMaterialesPage() {
           )
         })}
 
+        {/* Cajones desactivados */}
         {cajonesInactivos.length > 0 && (
           <div className="card border-gray-100">
             <div className="section-title mb-3">Cajones desactivados ({cajonesInactivos.length})</div>
@@ -491,7 +478,7 @@ export default function GestionMaterialesPage() {
 
         <div className="card bg-amber-50 border-amber-100">
           <p className="text-xs text-amber-700 leading-relaxed">
-            Los cambios se guardan automáticamente. Los equipos médicos van en la tabla de equipos con censo, serie y fechas de mantenimiento. Los consumibles van como materiales dentro de cada cajón.
+            Toca un equipo para ver su ficha completa. Los consumibles (fármacos, gasas, jeringas) van como materiales dentro de cada cajón.
           </p>
         </div>
       </div>
@@ -513,44 +500,53 @@ export default function GestionMaterialesPage() {
 }
 
 // =====================================================================
-// Fila de equipo
+// FilaEquipo — ahora con onClick en vez de desactivar inline
 // =====================================================================
 
-function FilaEquipo({ equipo, compacta = false, onDesactivar }: {
-  equipo: Equipo; compacta?: boolean; onDesactivar: () => void
+function FilaEquipo({ equipo, compacta = false, onClick }: {
+  equipo: Equipo
+  compacta?: boolean
+  onClick: () => void
 }) {
   const proximoMant = equipo.fecha_proximo_mantenimiento
+  const diasMant = proximoMant
+    ? Math.ceil((new Date(proximoMant).getTime() - Date.now()) / 86400000)
+    : null
+  const colorMant = diasMant === null ? '' :
+    diasMant < 0 ? 'bg-red-100 border-red-300 text-red-700' :
+    diasMant <= 30 ? 'bg-amber-100 border-amber-300 text-amber-700' :
+    'bg-green-100 border-green-300 text-green-700'
+
   return (
-    <div className={`flex items-center gap-2 ${compacta ? 'py-1.5' : 'py-2'} border-b border-gray-50 last:border-0`}>
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-2 ${compacta ? 'py-1.5' : 'py-2'} border-b border-gray-50 last:border-0 text-left active:bg-gray-50 transition-colors`}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {equipo.indispensable && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">★ Indisp</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold flex-shrink-0">★</span>
           )}
           <span className="text-xs font-semibold text-gray-900 truncate">{equipo.nombre}</span>
-          {equipo.categoria && <span className="text-xs text-gray-400">· {equipo.categoria}</span>}
+          {equipo.categoria && <span className="text-xs text-gray-400 truncate">· {equipo.categoria}</span>}
         </div>
         <div className="text-xs text-gray-500 truncate mt-0.5">
           {[equipo.marca, equipo.modelo].filter(Boolean).join(' ')}
           {equipo.numero_censo && <span className="ml-2 text-gray-400">Censo: {equipo.numero_censo}</span>}
-          {equipo.numero_serie && <span className="ml-2 text-gray-400">S/N: {equipo.numero_serie}</span>}
         </div>
       </div>
-      {proximoMant && (
-        <span className={`text-xs px-1.5 py-0.5 rounded border`}>
-          Mant: {labelVto(proximoMant)}
+      {diasMant !== null && (
+        <span className={`text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${colorMant}`}>
+          {labelVto(proximoMant)}
         </span>
       )}
-      <button onClick={onDesactivar}
-        className="text-xs px-2 py-1 rounded-lg border border-red-200 text-red-600 bg-red-50 active:bg-red-100">
-        ✕
-      </button>
-    </div>
+      <span className="text-gray-300 text-xs flex-shrink-0">›</span>
+    </button>
   )
 }
 
 // =====================================================================
-// Modal de Agregar Equipo
+// Modal de Agregar Equipo (idéntico al v2.5)
 // =====================================================================
 
 function ModalAgregarEquipo({
@@ -623,19 +619,16 @@ function ModalAgregarEquipo({
     const nombre = nuevaCategoria.trim()
     if (!nombre) return
     if (categorias.some(c => c.nombre.toLowerCase() === nombre.toLowerCase())) {
-      toast.error('Ya existe esa categoría')
-      return
+      toast.error('Ya existe esa categoría'); return
     }
     setCreandoCategoria(true)
     const { data, error } = await supabase.from('categorias_equipo').insert({
       nombre, hospital_id: hospitalId, es_global: false, activo: true,
     }).select().single()
-    if (error) {
-      toast.error('Error al crear categoría')
-    } else {
+    if (error) { toast.error('Error al crear categoría') }
+    else {
       toast.success(`Categoría "${nombre}" creada`)
-      setNuevaCategoria('')
-      setMostrarNuevaCat(false)
+      setNuevaCategoria(''); setMostrarNuevaCat(false)
       await recargarCategorias()
       if (data) setForm(f => ({ ...f, categoria_id: data.id }))
     }
@@ -643,10 +636,8 @@ function ModalAgregarEquipo({
   }
 
   const camposOk =
-    form.nombre.trim().length > 0 &&
-    form.categoria_id.trim().length > 0 &&
-    form.marca.trim().length > 0 &&
-    form.modelo.trim().length > 0 &&
+    form.nombre.trim().length > 0 && form.categoria_id.trim().length > 0 &&
+    form.marca.trim().length > 0 && form.modelo.trim().length > 0 &&
     form.numero_censo.trim().length > 0
 
   async function onCodigoEscaneado(codigo: string) {
@@ -656,8 +647,7 @@ function ModalAgregarEquipo({
     const { data } = await supabase
       .from('equipos')
       .select('*, carros(id, codigo, nombre), servicios(id, nombre)')
-      .eq('hospital_id', hospitalId)
-      .eq('activo', true)
+      .eq('hospital_id', hospitalId).eq('activo', true)
       .or(`codigo_barras.eq.${c},numero_censo.eq.${c},numero_serie.eq.${c}`)
       .limit(1).maybeSingle()
 
@@ -682,41 +672,24 @@ function ModalAgregarEquipo({
         carro_id: carroId, cajon_id: form.cajon_id || null, servicio_id: servicioId,
       }).eq('id', eq.id)
       if (error) throw error
-
       await supabase.from('historial_mantenimientos').insert({
         equipo_id: eq.id, tipo: 'reasignacion',
         fecha: new Date().toISOString().split('T')[0],
         descripcion: `Equipo reasignado a carro ${carroNombre}`, resultado: 'ok',
       })
-
       if (eq.indispensable && (eq.carro_id || eq.servicio_id)) {
-        const { error: errRpc } = await supabase.rpc('crear_alerta_con_notificaciones', {
-          p_hospital_id: hospitalId,
-          p_tipo: 'equipo_indispensable_movido',
-          p_severidad: 'alta',
-          p_titulo: `Equipo indispensable movido: ${eq.nombre}`,
-          p_mensaje:
-            `El equipo "${eq.nombre}"` +
-            (eq.numero_censo ? ` (censo ${eq.numero_censo})` : '') +
-            ` marcado como INDISPENSABLE ha sido movido a ${carroNombre}. Revisa si el origen requiere reposición.`,
-          p_carro_id: eq.carro_id,
-          p_servicio_id: eq.servicio_id,
+        await supabase.rpc('crear_alerta_con_notificaciones', {
+          p_hospital_id: hospitalId, p_tipo: 'equipo_indispensable_movido',
+          p_severidad: 'alta', p_titulo: `Equipo indispensable movido: ${eq.nombre}`,
+          p_mensaje: `El equipo "${eq.nombre}"${eq.numero_censo ? ` (censo ${eq.numero_censo})` : ''} marcado como INDISPENSABLE ha sido movido a ${carroNombre}.`,
+          p_carro_id: eq.carro_id, p_servicio_id: eq.servicio_id,
         })
-        if (errRpc) {
-          console.warn('[reasignar] RPC error:', errRpc.message)
-          toast('Equipo movido, pero no se pudo crear alerta automática', { icon: '⚠️' })
-        }
       }
-
-      toast.success(eq.indispensable
-        ? '✓ Equipo reasignado. Alerta enviada a responsables.'
-        : '✓ Equipo reasignado a este carro')
+      toast.success(eq.indispensable ? '✓ Reasignado. Alerta enviada.' : '✓ Equipo reasignado')
       onCreado()
     } catch (err: any) {
       toast.error(err.message || 'Error al reasignar')
-    } finally {
-      setGuardando(false)
-    }
+    } finally { setGuardando(false) }
   }
 
   async function crear() {
@@ -728,8 +701,7 @@ function ModalAgregarEquipo({
       const payload: Record<string, any> = {
         hospital_id: hospitalId, servicio_id: servicioId, carro_id: carroId,
         cajon_id: form.cajon_id || null, nombre: form.nombre.trim(),
-        categoria_id: form.categoria_id,
-        categoria: catNombre,           // sincronizar campo legacy
+        categoria_id: form.categoria_id, categoria: catNombre,
         marca: form.marca.trim(), modelo: form.modelo.trim(),
         numero_censo: form.numero_censo.trim(),
         numero_serie: form.numero_serie.trim() || null,
@@ -744,26 +716,20 @@ function ModalAgregarEquipo({
       const fechas: (keyof FormEquipo)[] = [
         'fecha_adquisicion', 'fecha_fabricacion',
         'fecha_ultimo_mantenimiento', 'fecha_proximo_mantenimiento',
-        'fecha_ultima_calibracion', 'fecha_proxima_calibracion',
-        'fecha_garantia_hasta',
+        'fecha_ultima_calibracion', 'fecha_proxima_calibracion', 'fecha_garantia_hasta',
       ]
       fechas.forEach(k => { if (form[k]) payload[k] = form[k] })
-
       const { error } = await supabase.from('equipos').insert(payload)
       if (error) throw error
       toast.success('Equipo creado y vinculado al carro')
       onCreado()
     } catch (err: any) {
-      toast.error(err.code === '23505'
-        ? 'Ese censo/serie/código ya existe en este hospital'
-        : err.message || 'Error')
-    } finally {
-      setGuardando(false)
-    }
+      toast.error(err.code === '23505' ? 'Ese censo/serie/código ya existe' : err.message || 'Error')
+    } finally { setGuardando(false) }
   }
 
-  const catsFav     = categorias.filter(c => c.favorita)
-  const catsPropias = categorias.filter(c => !c.favorita && c.hospital_id !== null)
+  const catsFav      = categorias.filter(c => c.favorita)
+  const catsPropias  = categorias.filter(c => !c.favorita && c.hospital_id !== null)
   const catsGlobales = categorias.filter(c => !c.favorita && c.hospital_id === null)
 
   return (
@@ -794,17 +760,14 @@ function ModalAgregarEquipo({
           {duplicado && (
             <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
               <div className="text-xs font-semibold text-amber-800 mb-1">
-                ⚠️ Ya existe un equipo con ese {
-                  duplicado.campoColisionado === 'numero_censo' ? 'número de censo' :
-                  duplicado.campoColisionado === 'numero_serie' ? 'número de serie' : 'código de barras'
-                }
+                ⚠️ Ya existe un equipo con ese{' '}
+                {duplicado.campoColisionado === 'numero_censo' ? 'número de censo' :
+                 duplicado.campoColisionado === 'numero_serie' ? 'número de serie' : 'código de barras'}
               </div>
               <div className="text-xs text-amber-700 mb-2">
                 <strong>{duplicado.equipo.nombre}</strong> está en <strong>{duplicado.ubicacionDesc}</strong>.
                 {duplicado.equipo.indispensable && (
-                  <span className="block mt-1 text-red-700 font-semibold">
-                    ★ Marcado como INDISPENSABLE: mover generará una alerta
-                  </span>
+                  <span className="block mt-1 text-red-700 font-semibold">★ INDISPENSABLE: mover generará una alerta</span>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -821,11 +784,9 @@ function ModalAgregarEquipo({
           )}
 
           <div className="p-4 space-y-3">
-            <Campo label="Nombre *" value={form.nombre}
-              onChange={v => setForm(f => ({ ...f, nombre: v }))}
-              placeholder="Ej: Desfibrilador bifásico" />
+            <CampoModal label="Nombre *" value={form.nombre}
+              onChange={v => setForm(f => ({ ...f, nombre: v }))} placeholder="Ej: Desfibrilador bifásico" />
 
-            {/* Categoría dinámica */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="label mb-0">Categoría *</label>
@@ -836,14 +797,10 @@ function ModalAgregarEquipo({
               </div>
               {mostrarNuevaCat ? (
                 <div className="flex gap-2">
-                  <input type="text" className="input flex-1 text-sm"
-                    placeholder="Nombre de la nueva categoría"
-                    value={nuevaCategoria}
-                    onChange={e => setNuevaCategoria(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && crearCategoria()}
-                    autoFocus />
-                  <button onClick={crearCategoria}
-                    disabled={!nuevaCategoria.trim() || creandoCategoria}
+                  <input type="text" className="input flex-1 text-sm" placeholder="Nombre de la nueva categoría"
+                    value={nuevaCategoria} onChange={e => setNuevaCategoria(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && crearCategoria()} autoFocus />
+                  <button onClick={crearCategoria} disabled={!nuevaCategoria.trim() || creandoCategoria}
                     className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-40">
                     {creandoCategoria ? '…' : 'Crear'}
                   </button>
@@ -852,42 +809,26 @@ function ModalAgregarEquipo({
                 <select className="input" value={form.categoria_id}
                   onChange={e => setForm(f => ({ ...f, categoria_id: e.target.value }))}>
                   <option value="">Seleccionar…</option>
-                  {catsFav.length > 0 && (
-                    <optgroup label="⭐ Favoritas">
-                      {catsFav.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </optgroup>
-                  )}
-                  {catsPropias.length > 0 && (
-                    <optgroup label="🏥 De este hospital">
-                      {catsPropias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </optgroup>
-                  )}
-                  {catsGlobales.length > 0 && (
-                    <optgroup label="🌐 Globales del sistema">
-                      {catsGlobales.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </optgroup>
-                  )}
+                  {catsFav.length > 0 && <optgroup label="⭐ Favoritas">{catsFav.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</optgroup>}
+                  {catsPropias.length > 0 && <optgroup label="🏥 De este hospital">{catsPropias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</optgroup>}
+                  {catsGlobales.length > 0 && <optgroup label="🌐 Globales del sistema">{catsGlobales.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</optgroup>}
                 </select>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Campo label="Marca *" value={form.marca}
-                onChange={v => setForm(f => ({ ...f, marca: v }))} placeholder="Ej: Philips" />
-              <Campo label="Modelo *" value={form.modelo}
-                onChange={v => setForm(f => ({ ...f, modelo: v }))} placeholder="Ej: HeartStart XL+" />
+              <CampoModal label="Marca *" value={form.marca} onChange={v => setForm(f => ({ ...f, marca: v }))} placeholder="Ej: Philips" />
+              <CampoModal label="Modelo *" value={form.modelo} onChange={v => setForm(f => ({ ...f, modelo: v }))} placeholder="Ej: HeartStart" />
             </div>
 
-            <Campo label="Nº de censo *" value={form.numero_censo}
+            <CampoModal label="Nº de censo *" value={form.numero_censo}
               onChange={v => setForm(f => ({ ...f, numero_censo: v }))}
               placeholder="Código interno del hospital"
               hint={comprobandoDup ? 'Comprobando duplicados…' : undefined} />
 
             <div className="grid grid-cols-2 gap-2">
-              <Campo label="Nº de serie" value={form.numero_serie}
-                onChange={v => setForm(f => ({ ...f, numero_serie: v }))} />
-              <Campo label="Código de barras" value={form.codigo_barras}
-                onChange={v => setForm(f => ({ ...f, codigo_barras: v }))} />
+              <CampoModal label="Nº de serie" value={form.numero_serie} onChange={v => setForm(f => ({ ...f, numero_serie: v }))} />
+              <CampoModal label="Código de barras" value={form.codigo_barras} onChange={v => setForm(f => ({ ...f, codigo_barras: v }))} />
             </div>
 
             <div>
@@ -900,10 +841,9 @@ function ModalAgregarEquipo({
             </div>
 
             <label className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl cursor-pointer">
-              <input type="checkbox" checked={form.indispensable}
-                onChange={e => setForm(f => ({ ...f, indispensable: e.target.checked }))}
-                className="w-4 h-4" />
-              <div className="flex-1">
+              <input type="checkbox" checked={form.indispensable} className="w-4 h-4"
+                onChange={e => setForm(f => ({ ...f, indispensable: e.target.checked }))} />
+              <div>
                 <div className="text-xs font-semibold text-red-700">Equipo indispensable en este carro</div>
                 <div className="text-xs text-red-600">Si se mueve, se generará alerta crítica automática.</div>
               </div>
@@ -911,36 +851,29 @@ function ModalAgregarEquipo({
 
             <details className="pt-1">
               <summary className="text-xs font-semibold text-gray-600 cursor-pointer py-1">
-                Fechas (adquisición, fabricación, mantenimiento, calibración, garantía)
+                Fechas y mantenimiento (opcional)
               </summary>
               <div className="mt-2 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <CampoFecha label="Fecha adquisición" value={form.fecha_adquisicion}
-                    onChange={v => setForm(f => ({ ...f, fecha_adquisicion: v }))} />
-                  <CampoFecha label="Fecha fabricación" value={form.fecha_fabricacion}
-                    onChange={v => setForm(f => ({ ...f, fecha_fabricacion: v }))} />
+                  <CampoFechaModal label="Adquisición" value={form.fecha_adquisicion} onChange={v => setForm(f => ({ ...f, fecha_adquisicion: v }))} />
+                  <CampoFechaModal label="Fabricación" value={form.fecha_fabricacion} onChange={v => setForm(f => ({ ...f, fecha_fabricacion: v }))} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <CampoFecha label="Último mantenimiento" value={form.fecha_ultimo_mantenimiento}
-                    onChange={v => setForm(f => ({ ...f, fecha_ultimo_mantenimiento: v }))} />
-                  <CampoFecha label="Próximo mantenimiento" value={form.fecha_proximo_mantenimiento}
-                    onChange={v => setForm(f => ({ ...f, fecha_proximo_mantenimiento: v }))} />
+                  <CampoFechaModal label="Último mant." value={form.fecha_ultimo_mantenimiento} onChange={v => setForm(f => ({ ...f, fecha_ultimo_mantenimiento: v }))} />
+                  <CampoFechaModal label="Próximo mant." value={form.fecha_proximo_mantenimiento} onChange={v => setForm(f => ({ ...f, fecha_proximo_mantenimiento: v }))} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <CampoFecha label="Última calibración" value={form.fecha_ultima_calibracion}
-                    onChange={v => setForm(f => ({ ...f, fecha_ultima_calibracion: v }))} />
-                  <CampoFecha label="Próxima calibración" value={form.fecha_proxima_calibracion}
-                    onChange={v => setForm(f => ({ ...f, fecha_proxima_calibracion: v }))} />
+                  <CampoFechaModal label="Última calibr." value={form.fecha_ultima_calibracion} onChange={v => setForm(f => ({ ...f, fecha_ultima_calibracion: v }))} />
+                  <CampoFechaModal label="Próxima calibr." value={form.fecha_proxima_calibracion} onChange={v => setForm(f => ({ ...f, fecha_proxima_calibracion: v }))} />
                 </div>
-                <CampoFecha label="Garantía hasta" value={form.fecha_garantia_hasta}
-                  onChange={v => setForm(f => ({ ...f, fecha_garantia_hasta: v }))} />
+                <CampoFechaModal label="Garantía hasta" value={form.fecha_garantia_hasta} onChange={v => setForm(f => ({ ...f, fecha_garantia_hasta: v }))} />
                 <div>
                   <label className="label">Frecuencia de mantenimiento</label>
-                  <input className="input" list="frecuencias-modal"
+                  <input className="input" list="frecuencias-modal-v6"
                     placeholder="Ej: Anual, Semestral..."
                     value={form.frecuencia_mantenimiento}
                     onChange={e => setForm(f => ({ ...f, frecuencia_mantenimiento: e.target.value }))} />
-                  <datalist id="frecuencias-modal">
+                  <datalist id="frecuencias-modal-v6">
                     {SUGERENCIAS_FRECUENCIA.map(s => <option key={s} value={s} />)}
                   </datalist>
                 </div>
@@ -948,17 +881,12 @@ function ModalAgregarEquipo({
             </details>
 
             <details>
-              <summary className="text-xs font-semibold text-gray-600 cursor-pointer py-1">
-                Proveedor y contrato (opcional)
-              </summary>
+              <summary className="text-xs font-semibold text-gray-600 cursor-pointer py-1">Proveedor y contrato</summary>
               <div className="mt-2 space-y-2">
-                <Campo label="Empresa de mantenimiento" value={form.empresa_mantenimiento}
-                  onChange={v => setForm(f => ({ ...f, empresa_mantenimiento: v }))} />
+                <CampoModal label="Empresa de mantenimiento" value={form.empresa_mantenimiento} onChange={v => setForm(f => ({ ...f, empresa_mantenimiento: v }))} />
                 <div className="grid grid-cols-2 gap-2">
-                  <Campo label="Contacto" value={form.contacto_mantenimiento}
-                    onChange={v => setForm(f => ({ ...f, contacto_mantenimiento: v }))} />
-                  <Campo label="Nº de contrato" value={form.numero_contrato}
-                    onChange={v => setForm(f => ({ ...f, numero_contrato: v }))} />
+                  <CampoModal label="Contacto" value={form.contacto_mantenimiento} onChange={v => setForm(f => ({ ...f, contacto_mantenimiento: v }))} />
+                  <CampoModal label="Nº de contrato" value={form.numero_contrato} onChange={v => setForm(f => ({ ...f, numero_contrato: v }))} />
                 </div>
               </div>
             </details>
@@ -976,7 +904,7 @@ function ModalAgregarEquipo({
               Cancelar
             </button>
             <button onClick={crear} disabled={!camposOk || guardando || !!duplicado}
-              className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+              className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40">
               {guardando ? 'Guardando…' : 'Crear equipo'}
             </button>
           </div>
@@ -984,22 +912,14 @@ function ModalAgregarEquipo({
       </div>
 
       {escanerAbierto && (
-        <EscanerCodigoBarras
-          onResult={onCodigoEscaneado}
-          onClose={() => setEscanerAbierto(false)}
-        />
+        <EscanerCodigoBarras onResult={onCodigoEscaneado} onClose={() => setEscanerAbierto(false)} />
       )}
     </>
   )
 }
 
-// =====================================================================
-// Inputs auxiliares
-// =====================================================================
-
-function Campo({ label, value, onChange, placeholder, hint }: {
-  label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; hint?: string
+function CampoModal({ label, value, onChange, placeholder, hint }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string
 }) {
   return (
     <div>
@@ -1011,7 +931,7 @@ function Campo({ label, value, onChange, placeholder, hint }: {
   )
 }
 
-function CampoFecha({ label, value, onChange }: {
+function CampoFechaModal({ label, value, onChange }: {
   label: string; value: string; onChange: (v: string) => void
 }) {
   return (
