@@ -5,6 +5,10 @@ import { createClient } from '@/lib/supabase'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import FichaEquipo from '@/components/FichaEquipo'
 
+// Todos los roles autenticados pueden ver la ficha de un equipo.
+// Los roles con edición (admin, supervisor, superadmin) ven el botón Editar.
+// Los demás (auditor, tecnico, readonly) ven solo lectura.
+
 export default function EquipoDetallePage() {
   const [rol, setRol] = useState<string | null>(null)
   const [hospitalColor, setHospitalColor] = useState<string | undefined>()
@@ -29,7 +33,7 @@ export default function EquipoDetallePage() {
 
       if (!perfil || !perfil.activo) { router.push('/'); return }
 
-      // Cualquier rol autenticado puede ver la ficha
+      // Todos los roles activos pueden ver fichas de equipos
       setRol(perfil.rol)
 
       if (perfil.hospital_id) {
