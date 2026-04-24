@@ -11,8 +11,8 @@
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
-    "@supabase/supabase-js": "^2.43.1",
-    "@supabase/ssr": "^0.3.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/ssr": "^0.5.2",
     "react-hot-toast": "^2.4.1",
     "date-fns": "^3.6.0"
   },
