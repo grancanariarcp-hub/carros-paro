@@ -12,6 +12,7 @@ export interface Perfil {
   rol: Rol
   activo: boolean
   hospital_id?: string
+  servicio_id?: string        // añadido: asignación de supervisor a servicio
   recibir_alertas?: boolean
   email_alertas?: string
   creado_en: string
@@ -124,6 +125,13 @@ export interface Inspeccion {
   precinto_colocado?: string
   foto_precinto_retirado?: string
   foto_precinto_colocado?: string
+  // Campos de firma digital
+  firma_url?: string
+  firmante_nombre?: string
+  firmante_cargo?: string
+  firmado_en?: string
+  firmante_usuario_id?: string
+  // Relaciones
   perfiles?: Perfil
   carros?: Carro
 }
