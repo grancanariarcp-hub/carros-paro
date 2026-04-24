@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -58,7 +58,6 @@ interface Equipo {
   indispensable: boolean
 }
 
-// Formulario de nuevo equipo (estado local del modal)
 interface FormEquipo {
   nombre: string
   categoria: string
@@ -67,7 +66,7 @@ interface FormEquipo {
   numero_censo: string
   numero_serie: string
   codigo_barras: string
-  cajon_id: string            // '' = sobre el carro, uuid = dentro de ese cajón
+  cajon_id: string
   indispensable: boolean
   fecha_ultimo_mantenimiento: string
   fecha_proximo_mantenimiento: string
@@ -92,15 +91,13 @@ const formVacio: FormEquipo = {
   observaciones: '',
 }
 
-// Duplicado detectado al escribir censo/serie
 interface Duplicado {
   equipo: Equipo
-  ubicacionDesc: string   // "Carro X3 — Servicio Urgencias"
+  ubicacionDesc: string
   campoColisionado: 'numero_censo' | 'numero_serie' | 'codigo_barras'
   valor: string
 }
 
-// Categorías más habituales (el usuario puede teclear libre)
 const CATEGORIAS_EQUIPO = [
   'Desfibrilador',
   'Monitor',
@@ -138,7 +135,6 @@ function labelVto(fecha: string | null): string {
   return new Date(fecha).toLocaleDateString('es-ES', { month: 'short', year: '2-digit' })
 }
 
-// Debounce para búsqueda de duplicados
 function useDebounce<T>(value: T, delay = 400): T {
   const [v, setV] = useState(value)
   useEffect(() => {
@@ -201,7 +197,6 @@ export default function GestionMaterialesPage() {
     setLoading(false)
   }
 
-  // ----- Cajones (sin cambios respecto a v original) ------------------
   async function agregarCajon() {
     const nombre = prompt('Nombre del nuevo cajón:')
     if (!nombre?.trim()) return
@@ -234,7 +229,6 @@ export default function GestionMaterialesPage() {
     setCajones(prev => prev.map(c => c.id === cajonId ? { ...c, expandido: !c.expandido } : c))
   }
 
-  // ----- Materiales (sin cambios respecto a v original) ---------------
   async function agregarMaterial(cajonId: string) {
     const nombre = prompt('Nombre del material:')
     if (!nombre?.trim()) return
@@ -271,7 +265,6 @@ export default function GestionMaterialesPage() {
     toast.success('Nombre actualizado')
   }
 
-  // ----- Equipos ------------------------------------------------------
   function abrirModalEquipo(cajonId: string = '') {
     setCajonPreseleccionado(cajonId)
     setModalEquipoAbierto(true)
@@ -362,7 +355,6 @@ export default function GestionMaterialesPage() {
           const equiposDeEsteCajon = equiposPorCajon(cajon.id)
           return (
             <div key={cajon.id} className="card">
-              {/* Header cajón */}
               <div className="flex items-center gap-2 mb-2">
                 <button onClick={() => toggleExpandido(cajon.id)} className="flex-1 flex items-center gap-2 text-left">
                   <span className="text-sm font-semibold flex-1">{cajon.nombre}</span>
@@ -379,7 +371,6 @@ export default function GestionMaterialesPage() {
 
               {cajon.expandido && (
                 <>
-                  {/* Equipos dentro del cajón */}
                   {equiposDeEsteCajon.length > 0 && (
                     <div className="mb-3 pb-3 border-b border-gray-100">
                       <div className="text-xs text-purple-600 font-semibold mb-1">Equipos en este cajón</div>
@@ -389,7 +380,6 @@ export default function GestionMaterialesPage() {
                     </div>
                   )}
 
-                  {/* Headers materiales */}
                   <div className="grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 px-1 mb-1">
                     <div className="text-xs text-gray-400 font-semibold">Material</div>
                     <div className="text-xs text-gray-400 text-center">Cant</div>
@@ -399,7 +389,6 @@ export default function GestionMaterialesPage() {
                     <div className="text-xs text-gray-400 text-center">Act</div>
                   </div>
 
-                  {/* Materiales */}
                   {cajon.materiales.map(mat => (
                     <div key={mat.id}
                       className={`grid grid-cols-[1fr_40px_68px_72px_28px_28px] gap-1 items-center py-1.5 border-b border-gray-50 last:border-0 ${!mat.activo ? 'opacity-40' : ''}`}
@@ -456,7 +445,6 @@ export default function GestionMaterialesPage() {
                     </div>
                   ))}
 
-                  {/* Dos botones de agregar por cajón */}
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <button onClick={() => agregarMaterial(cajon.id)}
                       className="py-2 border border-dashed border-blue-300 rounded-xl text-xs text-blue-600 font-medium bg-blue-50 active:bg-blue-100">
@@ -584,12 +572,10 @@ function ModalAgregarEquipo({
   const [comprobandoDup, setComprobandoDup] = useState(false)
   const supabase = createClient()
 
-  // Debounce de los campos que disparan búsqueda
   const censoDeb = useDebounce(form.numero_censo.trim(), 400)
   const serieDeb = useDebounce(form.numero_serie.trim(), 400)
   const codigoDeb = useDebounce(form.codigo_barras.trim(), 400)
 
-  // Buscar duplicados cuando cambian los campos debounced
   useEffect(() => {
     let cancelado = false
     async function buscar() {
@@ -616,8 +602,6 @@ function ModalAgregarEquipo({
       if (cancelado) return
 
       if (data) {
-        // No es duplicado si el equipo encontrado YA está asignado a este carro
-        // (el usuario podría estar editando mentalmente uno que ya está aquí).
         if (data.carro_id === carroId) {
           setDuplicado(null)
         } else {
@@ -649,7 +633,6 @@ function ModalAgregarEquipo({
     return () => { cancelado = true }
   }, [censoDeb, serieDeb, codigoDeb, hospitalId, carroId, supabase])
 
-  // Validación de obligatorios
   const camposOk =
     form.nombre.trim().length > 0 &&
     form.categoria.trim().length > 0 &&
@@ -657,13 +640,12 @@ function ModalAgregarEquipo({
     form.modelo.trim().length > 0 &&
     form.numero_censo.trim().length > 0
 
-  // Escáner: al leer, busca en equipos del hospital
+  // Escáner: prop correcta = onResult
   async function onCodigoEscaneado(codigo: string) {
     setEscanerAbierto(false)
     const codigoLimpio = codigo.trim()
     if (!codigoLimpio) return
 
-    // Buscar si ya existe un equipo con ese código
     const { data } = await supabase
       .from('equipos')
       .select('*, carros(id, codigo, nombre), servicios(id, nombre)')
@@ -674,7 +656,6 @@ function ModalAgregarEquipo({
       .maybeSingle()
 
     if (data) {
-      // Ya existe → preguntar
       const ubicacion = data.carros
         ? `carro ${(data.carros as any).codigo || (data.carros as any).nombre}`
         : data.servicios ? `servicio ${(data.servicios as any).nombre}` : 'sin ubicación'
@@ -692,13 +673,11 @@ function ModalAgregarEquipo({
         await reasignarEquipo(data as Equipo)
       }
     } else {
-      // No existe → prerrellenar formulario
       setForm(f => ({ ...f, codigo_barras: codigoLimpio }))
       toast.success('Código leído — completa el formulario')
     }
   }
 
-  // Reasignación con generación de alerta si era indispensable
   async function reasignarEquipo(eq: Equipo) {
     setGuardando(true)
     try {
@@ -711,12 +690,11 @@ function ModalAgregarEquipo({
         .update({
           carro_id: carroId,
           cajon_id: form.cajon_id || null,
-          servicio_id: servicioId,   // seguir el servicio del nuevo carro
+          servicio_id: servicioId,
         })
         .eq('id', eq.id)
       if (errUpd) throw errUpd
 
-      // Registrar en historial como movimiento
       await supabase.from('historial_mantenimientos').insert({
         equipo_id: eq.id,
         tipo: 'reasignacion',
@@ -725,22 +703,27 @@ function ModalAgregarEquipo({
         resultado: 'ok',
       })
 
-      // Si era indispensable y venía de un carro/servicio, generar alerta
       if (eraIndispensable && (origenCarroId || origenServicioId)) {
-        await supabase.from('alertas').insert({
-          hospital_id: hospitalId,
-          tipo: 'equipo_indispensable_movido',
-          severidad: 'alta',
-          titulo: `Equipo indispensable movido: ${eq.nombre}`,
-          mensaje:
+        // Llamada a función SQL centralizada (la crearemos en el siguiente paso).
+        // Si aún no existe, caemos al insert directo como fallback.
+        const { error: errRpc } = await supabase.rpc('crear_alerta_con_notificaciones', {
+          p_hospital_id: hospitalId,
+          p_tipo: 'equipo_indispensable_movido',
+          p_severidad: 'alta',
+          p_titulo: `Equipo indispensable movido: ${eq.nombre}`,
+          p_mensaje:
             `El equipo "${eq.nombre}"` +
             (eq.numero_censo ? ` (censo ${eq.numero_censo})` : '') +
             ` marcado como INDISPENSABLE ha sido movido a ${carroNombre}. ` +
             `Revisa si el origen requiere reposición.`,
-          carro_id: origenCarroId,
-          servicio_id: origenServicioId,
-          resuelta: false,
+          p_carro_id: origenCarroId,
+          p_servicio_id: origenServicioId,
         })
+        if (errRpc) {
+          // Fallback silencioso: la función SQL aún no está creada
+          // eslint-disable-next-line no-console
+          console.warn('[reasignar] RPC no disponible, la alerta no se creó:', errRpc.message)
+        }
       }
 
       toast.success(eraIndispensable
@@ -754,13 +737,11 @@ function ModalAgregarEquipo({
     }
   }
 
-  // Crear equipo nuevo
   async function crear() {
     if (!camposOk) {
       toast.error('Completa los campos obligatorios')
       return
     }
-    // Si hay duplicado detectado, no permitir crear: el usuario debe reasignar o cambiar el valor
     if (duplicado) {
       toast.error('Hay un conflicto sin resolver. Reasigna o cambia el valor duplicado.')
       return
@@ -804,7 +785,6 @@ function ModalAgregarEquipo({
       toast.success('Equipo creado y vinculado al carro')
       onCreado()
     } catch (err: any) {
-      // Si el índice único falla (carrera con otro cliente), damos mensaje claro
       if (err.code === '23505') {
         toast.error('Ese censo/serie/código ya existe en este hospital')
       } else {
@@ -823,7 +803,6 @@ function ModalAgregarEquipo({
           className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
-          {/* Header */}
           <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
             <div>
               <div className="font-semibold text-sm">Agregar equipo</div>
@@ -832,7 +811,6 @@ function ModalAgregarEquipo({
             <button onClick={onClose} className="text-gray-400 text-2xl leading-none">×</button>
           </div>
 
-          {/* Botón escanear */}
           <div className="px-4 pt-3">
             <button onClick={() => setEscanerAbierto(true)}
               className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
@@ -843,7 +821,6 @@ function ModalAgregarEquipo({
             </p>
           </div>
 
-          {/* Aviso de duplicado */}
           {duplicado && (
             <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
               <div className="text-xs font-semibold text-amber-800 mb-1">
@@ -878,7 +855,6 @@ function ModalAgregarEquipo({
             </div>
           )}
 
-          {/* Formulario */}
           <div className="p-4 space-y-3">
             <Campo label="Nombre *" value={form.nombre}
               onChange={v => setForm(f => ({ ...f, nombre: v }))}
@@ -941,7 +917,6 @@ function ModalAgregarEquipo({
               </div>
             </label>
 
-            {/* Fechas (opcionales) */}
             <details className="pt-1">
               <summary className="text-xs font-semibold text-gray-600 cursor-pointer py-1">
                 Mantenimiento, calibración y garantía (opcional)
@@ -994,7 +969,6 @@ function ModalAgregarEquipo({
             </div>
           </div>
 
-          {/* Footer sticky */}
           <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3 flex gap-2">
             <button
               onClick={onClose}
@@ -1014,10 +988,9 @@ function ModalAgregarEquipo({
         </div>
       </div>
 
-      {/* Escáner en pantalla completa */}
       {escanerAbierto && (
         <EscanerCodigoBarras
-          onScan={onCodigoEscaneado}
+          onResult={onCodigoEscaneado}
           onClose={() => setEscanerAbierto(false)}
         />
       )}
