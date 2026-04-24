@@ -6,16 +6,19 @@ import { useRouter } from 'next/navigation'
 import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import type { Carro, Perfil } from '@/lib/types'
 
 export default function AuditorPage() {
-  const [perfil, setPerfil] = useState<Perfil|null>(null)
-  const [hospital, setHospital] = useState<any|null>(null)
+  const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const [hospital, setHospital] = useState<any | null>(null)
   const [carros, setCarros] = useState<Carro[]>([])
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState<'todos'|'operativo'|'condicional'|'no_operativo'>('todos')
+  const [filtroEstado, setFiltroEstado] = useState<'todos' | 'operativo' | 'condicional' | 'no_operativo'>('todos')
   const [filtroTipo, setFiltroTipo] = useState<string>('todos')
   const [loading, setLoading] = useState(true)
+  const [escaneando, setEscaneando] = useState(false)
+  const [buscandoCodigo, setBuscandoCodigo] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -40,6 +43,52 @@ export default function AuditorPage() {
       .order('codigo')
     setCarros(c || [])
     setLoading(false)
+  }
+
+  // ================================================================
+  // Escáner: busca carro o equipo por código y navega a su ficha
+  // ================================================================
+  async function onCodigoEscaneado(codigo: string) {
+    setEscaneando(false)
+    setBuscandoCodigo(true)
+    const codigoLimpio = codigo.trim()
+
+    // 1) Buscar en carros: codigo, numero_censo, codigo_barras_censo
+    const { data: carro } = await supabase
+      .from('carros')
+      .select('id, codigo, nombre')
+      .eq('hospital_id', perfil?.hospital_id)
+      .or(`codigo.eq.${codigoLimpio},numero_censo.eq.${codigoLimpio},codigo_barras_censo.eq.${codigoLimpio}`)
+      .eq('activo', true)
+      .limit(1)
+      .maybeSingle()
+
+    if (carro) {
+      setBuscandoCodigo(false)
+      toast.success(`Carro encontrado: ${carro.codigo}`)
+      router.push(`/carro/${carro.id}`)
+      return
+    }
+
+    // 2) Buscar en equipos: codigo_barras, numero_censo, numero_serie
+    const { data: equipo } = await supabase
+      .from('equipos')
+      .select('id, nombre')
+      .eq('hospital_id', perfil?.hospital_id)
+      .or(`codigo_barras.eq.${codigoLimpio},numero_censo.eq.${codigoLimpio},numero_serie.eq.${codigoLimpio}`)
+      .eq('activo', true)
+      .limit(1)
+      .maybeSingle()
+
+    if (equipo) {
+      setBuscandoCodigo(false)
+      toast.success(`Equipo encontrado: ${equipo.nombre}`)
+      router.push(`/admin/equipos/${equipo.id}`)
+      return
+    }
+
+    setBuscandoCodigo(false)
+    toast.error(`No se encontró ningún carro ni equipo con el código "${codigoLimpio}"`)
   }
 
   const tiposCarro = Array.from(new Set(carros.map(c => (c as any).tipo_carro).filter(Boolean)))
@@ -70,24 +119,41 @@ export default function AuditorPage() {
 
   return (
     <div className="page">
-      {/* TOPBAR con identidad del hospital */}
-      <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
+      {escaneando && (
+        <EscanerCodigoBarras
+          onResult={onCodigoEscaneado}
+          onClose={() => setEscaneando(false)}
+        />
+      )}
+
+      {/* Overlay mientras busca el código */}
+      {buscandoCodigo && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl px-8 py-6 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-sm font-semibold text-gray-700">Buscando...</div>
+          </div>
+        </div>
+      )}
+
+      {/* TOPBAR */}
+      <div className="topbar" style={{ borderBottom: `2px solid ${colorPrimario}20` }}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {hospital?.logo_url ? (
             <img src={hospital.logo_url} alt={hospital.nombre}
-              style={{height:'28px', objectFit:'contain', flexShrink:0}}/>
+              style={{ height: '28px', objectFit: 'contain', flexShrink: 0 }} />
           ) : (
             <div style={{
-              width:'28px', height:'28px', borderRadius:'6px',
+              width: '28px', height: '28px', borderRadius: '6px',
               background: colorPrimario,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              flexShrink:0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
             }}>
               <svg width="14" height="14" viewBox="0 0 80 80" fill="none">
                 <path d="M40 68C40 68 8 50 8 28C8 18 16 10 26 10C32 10 37.5 13 40 18C42.5 13 48 10 54 10C64 10 72 18 72 28C72 50 40 68 40 68Z"
-                  fill="white" fillOpacity="0.2" stroke="white" strokeWidth="2.5"/>
+                  fill="white" fillOpacity="0.2" stroke="white" strokeWidth="2.5" />
                 <polyline points="16,40 24,40 28,30 33,52 38,24 43,48 47,40 56,40 60,35 64,40"
-                  stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           )}
@@ -103,10 +169,10 @@ export default function AuditorPage() {
           {perfil?.id && <NotificacionesBell usuarioId={perfil.id} />}
           <button
             onClick={() => router.push('/buscar')}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50 flex-shrink-0">
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50">
             <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" strokeWidth={2}/>
-              <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round"/>
+              <circle cx="11" cy="11" r="8" strokeWidth={2} />
+              <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round" />
             </svg>
           </button>
           <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
@@ -117,28 +183,37 @@ export default function AuditorPage() {
       </div>
 
       <div className="content">
-        {/* Buscador */}
+        {/* Escáner prominente */}
+        <div className="card border-blue-100 bg-blue-50">
+          <div className="section-title mb-2 text-blue-800">Escanear carro o equipo</div>
+          <p className="text-xs text-blue-600 mb-3">
+            Escanea el código QR o de barras de cualquier carro o equipo para acceder directamente a su ficha.
+          </p>
+          <button
+            onClick={() => setEscaneando(true)}
+            className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 active:bg-blue-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7" strokeWidth={2} />
+              <rect x="14" y="3" width="7" height="7" strokeWidth={2} />
+              <rect x="3" y="14" width="7" height="7" strokeWidth={2} />
+              <rect x="14" y="14" width="3" height="3" strokeWidth={2} />
+            </svg>
+            Abrir escáner
+          </button>
+        </div>
+
+        {/* Buscador textual */}
         <div className="card">
           <div className="section-title mb-2">Buscar carro</div>
           <input
-            className="input mb-2"
+            className="input"
             placeholder="Nombre, código o ubicación..."
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
           />
-          <button
-            className="btn-secondary flex items-center justify-center gap-2"
-            onClick={() => toast('Escanea el QR del carro con la cámara', { icon: '📷' })}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
-            </svg>
-            Escanear QR / NFC
-          </button>
         </div>
 
-        {/* Filtros */}
+        {/* Filtros estado */}
         <div className="flex gap-1.5 flex-wrap">
           {([
             ['todos', 'Todos'],
@@ -148,30 +223,29 @@ export default function AuditorPage() {
           ] as const).map(([val, label]) => (
             <button key={val}
               onClick={() => setFiltroEstado(val)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                filtroEstado === val
-                  ? val === 'operativo' ? 'bg-green-100 text-green-700 border-green-300'
-                    : val === 'condicional' ? 'bg-amber-100 text-amber-700 border-amber-300'
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${filtroEstado === val
+                ? val === 'operativo' ? 'bg-green-100 text-green-700 border-green-300'
+                  : val === 'condicional' ? 'bg-amber-100 text-amber-700 border-amber-300'
                     : val === 'no_operativo' ? 'bg-red-100 text-red-700 border-red-300'
-                    : 'bg-gray-200 text-gray-700 border-gray-300'
-                  : 'bg-white text-gray-400 border-gray-200'
-              }`}
+                      : 'bg-gray-200 text-gray-700 border-gray-300'
+                : 'bg-white text-gray-400 border-gray-200'
+                }`}
             >{label}</button>
           ))}
         </div>
 
-        {/* Filtro por tipo si hay más de uno */}
+        {/* Filtro por tipo */}
         {tiposCarro.length > 1 && (
           <div className="flex gap-1.5 flex-wrap">
-            <button
-              onClick={() => setFiltroTipo('todos')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroTipo === 'todos' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}
-            >Todos los tipos</button>
+            <button onClick={() => setFiltroTipo('todos')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroTipo === 'todos' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}>
+              Todos los tipos
+            </button>
             {tiposCarro.map(t => (
-              <button key={t}
-                onClick={() => setFiltroTipo(t)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroTipo === t ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}
-              >{t.replace('_',' ')}</button>
+              <button key={t} onClick={() => setFiltroTipo(t)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroTipo === t ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}>
+                {t.replace('_', ' ')}
+              </button>
             ))}
           </div>
         )}
@@ -191,9 +265,10 @@ export default function AuditorPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold">{c.codigo} — {c.nombre}</div>
                     <div className="text-xs text-gray-500">
-                      {dias !== null && dias < 0 ? `Control vencido hace ${Math.abs(dias)} día${Math.abs(dias) !== 1 ? 's' : ''}`
+                      {dias !== null && dias < 0
+                        ? `Control vencido hace ${Math.abs(dias)} día${Math.abs(dias) !== 1 ? 's' : ''}`
                         : dias === 0 ? 'Control vence hoy'
-                        : `Control vence en ${dias} día${dias !== 1 ? 's' : ''}`}
+                          : `Control vence en ${dias} día${dias !== 1 ? 's' : ''}`}
                     </div>
                   </div>
                   <span className="badge bg-amber-100 text-amber-800">Urgente</span>
