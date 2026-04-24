@@ -42,6 +42,7 @@ interface Equipo {
   numero_censo: string | null
   codigo_barras: string | null
   categoria: string | null
+  categoria_id: string | null
   estado: string | null
   foto_url: string | null
   fecha_adquisicion: string | null
@@ -65,14 +66,13 @@ interface CategoriaEquipo {
   nombre: string
   hospital_id: string | null
   es_global: boolean
-  visible: boolean
   favorita: boolean
   orden_grupo: number
 }
 
 interface FormEquipo {
   nombre: string
-  categoria: string
+  categoria_id: string
   marca: string
   modelo: string
   numero_censo: string
@@ -95,7 +95,7 @@ interface FormEquipo {
 }
 
 const formVacio: FormEquipo = {
-  nombre: '', categoria: '', marca: '', modelo: '',
+  nombre: '', categoria_id: '', marca: '', modelo: '',
   numero_censo: '', numero_serie: '', codigo_barras: '',
   cajon_id: '', indispensable: false,
   fecha_adquisicion: '', fecha_fabricacion: '',
@@ -113,6 +113,11 @@ interface Duplicado {
   campoColisionado: 'numero_censo' | 'numero_serie' | 'codigo_barras'
   valor: string
 }
+
+const SUGERENCIAS_FRECUENCIA = [
+  'Mensual', 'Bimestral', 'Trimestral', 'Semestral',
+  'Anual', 'Bienal', 'Cada 2 años', 'Según fabricante',
+]
 
 // =====================================================================
 // Utilidades
@@ -145,10 +150,6 @@ function useDebounce<T>(value: T, delay = 400): T {
   return v
 }
 
-// =====================================================================
-// Hook: categorías dinámicas del hospital
-// =====================================================================
-
 function useCategorias(hospitalId: string | null) {
   const [categorias, setCategorias] = useState<CategoriaEquipo[]>([])
   const [cargando, setCargando] = useState(true)
@@ -169,7 +170,6 @@ function useCategorias(hospitalId: string | null) {
   }, [hospitalId, supabase])
 
   useEffect(() => { cargar() }, [cargar])
-
   return { categorias, cargando, recargar: cargar }
 }
 
@@ -537,7 +537,7 @@ function FilaEquipo({ equipo, compacta = false, onDesactivar }: {
         </div>
       </div>
       {proximoMant && (
-        <span className={`text-xs px-1.5 py-0.5 rounded border ${colorVto(proximoMant)}`}>
+        <span className={`text-xs px-1.5 py-0.5 rounded border`}>
           Mant: {labelVto(proximoMant)}
         </span>
       )}
@@ -627,12 +627,9 @@ function ModalAgregarEquipo({
       return
     }
     setCreandoCategoria(true)
-    const { error } = await supabase.from('categorias_equipo').insert({
-      nombre,
-      hospital_id: hospitalId,
-      es_global: false,
-      activo: true,
-    })
+    const { data, error } = await supabase.from('categorias_equipo').insert({
+      nombre, hospital_id: hospitalId, es_global: false, activo: true,
+    }).select().single()
     if (error) {
       toast.error('Error al crear categoría')
     } else {
@@ -640,14 +637,14 @@ function ModalAgregarEquipo({
       setNuevaCategoria('')
       setMostrarNuevaCat(false)
       await recargarCategorias()
-      setForm(f => ({ ...f, categoria: nombre }))
+      if (data) setForm(f => ({ ...f, categoria_id: data.id }))
     }
     setCreandoCategoria(false)
   }
 
   const camposOk =
     form.nombre.trim().length > 0 &&
-    form.categoria.trim().length > 0 &&
+    form.categoria_id.trim().length > 0 &&
     form.marca.trim().length > 0 &&
     form.modelo.trim().length > 0 &&
     form.numero_censo.trim().length > 0
@@ -727,11 +724,14 @@ function ModalAgregarEquipo({
     if (duplicado) { toast.error('Hay un conflicto sin resolver.'); return }
     setGuardando(true)
     try {
+      const catNombre = categorias.find(c => c.id === form.categoria_id)?.nombre || ''
       const payload: Record<string, any> = {
         hospital_id: hospitalId, servicio_id: servicioId, carro_id: carroId,
         cajon_id: form.cajon_id || null, nombre: form.nombre.trim(),
-        categoria: form.categoria.trim(), marca: form.marca.trim(),
-        modelo: form.modelo.trim(), numero_censo: form.numero_censo.trim(),
+        categoria_id: form.categoria_id,
+        categoria: catNombre,           // sincronizar campo legacy
+        marca: form.marca.trim(), modelo: form.modelo.trim(),
+        numero_censo: form.numero_censo.trim(),
         numero_serie: form.numero_serie.trim() || null,
         codigo_barras: form.codigo_barras.trim() || null,
         indispensable: form.indispensable, estado: 'operativo', activo: true,
@@ -754,16 +754,17 @@ function ModalAgregarEquipo({
       toast.success('Equipo creado y vinculado al carro')
       onCreado()
     } catch (err: any) {
-      toast.error(err.code === '23505' ? 'Ese censo/serie/código ya existe en este hospital' : err.message || 'Error')
+      toast.error(err.code === '23505'
+        ? 'Ese censo/serie/código ya existe en este hospital'
+        : err.message || 'Error')
     } finally {
       setGuardando(false)
     }
   }
 
-  // Agrupar categorías para el select: ⭐ favoritas → propias → globales
-  const favs = categorias.filter(c => c.favorita)
-  const propias = categorias.filter(c => !c.favorita && c.hospital_id !== null)
-  const globales = categorias.filter(c => !c.favorita && c.hospital_id === null)
+  const catsFav     = categorias.filter(c => c.favorita)
+  const catsPropias = categorias.filter(c => !c.favorita && c.hospital_id !== null)
+  const catsGlobales = categorias.filter(c => !c.favorita && c.hospital_id === null)
 
   return (
     <>
@@ -820,58 +821,50 @@ function ModalAgregarEquipo({
           )}
 
           <div className="p-4 space-y-3">
-            <Campo label="Nombre *" value={form.nombre} onChange={v => setForm(f => ({ ...f, nombre: v }))}
+            <Campo label="Nombre *" value={form.nombre}
+              onChange={v => setForm(f => ({ ...f, nombre: v }))}
               placeholder="Ej: Desfibrilador bifásico" />
 
-            {/* Select de categoría dinámico */}
+            {/* Categoría dinámica */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="label mb-0">Categoría *</label>
-                <button
-                  type="button"
-                  onClick={() => setMostrarNuevaCat(v => !v)}
-                  className="text-xs text-blue-600 font-semibold"
-                >
+                <button type="button" onClick={() => setMostrarNuevaCat(v => !v)}
+                  className="text-xs text-blue-600 font-semibold">
                   {mostrarNuevaCat ? 'Cancelar' : '+ Nueva categoría'}
                 </button>
               </div>
-
               {mostrarNuevaCat ? (
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="input flex-1 text-sm"
+                  <input type="text" className="input flex-1 text-sm"
                     placeholder="Nombre de la nueva categoría"
                     value={nuevaCategoria}
                     onChange={e => setNuevaCategoria(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && crearCategoria()}
-                    autoFocus
-                  />
-                  <button
-                    onClick={crearCategoria}
+                    autoFocus />
+                  <button onClick={crearCategoria}
                     disabled={!nuevaCategoria.trim() || creandoCategoria}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-40"
-                  >
+                    className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-40">
                     {creandoCategoria ? '…' : 'Crear'}
                   </button>
                 </div>
               ) : (
-                <select className="input" value={form.categoria}
-                  onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+                <select className="input" value={form.categoria_id}
+                  onChange={e => setForm(f => ({ ...f, categoria_id: e.target.value }))}>
                   <option value="">Seleccionar…</option>
-                  {favs.length > 0 && (
+                  {catsFav.length > 0 && (
                     <optgroup label="⭐ Favoritas">
-                      {favs.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                      {catsFav.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </optgroup>
                   )}
-                  {propias.length > 0 && (
+                  {catsPropias.length > 0 && (
                     <optgroup label="🏥 De este hospital">
-                      {propias.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                      {catsPropias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </optgroup>
                   )}
-                  {globales.length > 0 && (
+                  {catsGlobales.length > 0 && (
                     <optgroup label="🌐 Globales del sistema">
-                      {globales.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                      {catsGlobales.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </optgroup>
                   )}
                 </select>
@@ -879,10 +872,10 @@ function ModalAgregarEquipo({
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Campo label="Marca *" value={form.marca} onChange={v => setForm(f => ({ ...f, marca: v }))}
-                placeholder="Ej: Philips" />
-              <Campo label="Modelo *" value={form.modelo} onChange={v => setForm(f => ({ ...f, modelo: v }))}
-                placeholder="Ej: HeartStart XL+" />
+              <Campo label="Marca *" value={form.marca}
+                onChange={v => setForm(f => ({ ...f, marca: v }))} placeholder="Ej: Philips" />
+              <Campo label="Modelo *" value={form.modelo}
+                onChange={v => setForm(f => ({ ...f, modelo: v }))} placeholder="Ej: HeartStart XL+" />
             </div>
 
             <Campo label="Nº de censo *" value={form.numero_censo}
@@ -911,7 +904,7 @@ function ModalAgregarEquipo({
                 onChange={e => setForm(f => ({ ...f, indispensable: e.target.checked }))}
                 className="w-4 h-4" />
               <div className="flex-1">
-                <div className="text-xs font-semibold text-red-700">Equipo indispensable</div>
+                <div className="text-xs font-semibold text-red-700">Equipo indispensable en este carro</div>
                 <div className="text-xs text-red-600">Si se mueve, se generará alerta crítica automática.</div>
               </div>
             </label>
@@ -941,9 +934,16 @@ function ModalAgregarEquipo({
                 </div>
                 <CampoFecha label="Garantía hasta" value={form.fecha_garantia_hasta}
                   onChange={v => setForm(f => ({ ...f, fecha_garantia_hasta: v }))} />
-                <Campo label="Frecuencia de mantenimiento" value={form.frecuencia_mantenimiento}
-                  onChange={v => setForm(f => ({ ...f, frecuencia_mantenimiento: v }))}
-                  placeholder="Ej: 12 meses, semestral…" />
+                <div>
+                  <label className="label">Frecuencia de mantenimiento</label>
+                  <input className="input" list="frecuencias-modal"
+                    placeholder="Ej: Anual, Semestral..."
+                    value={form.frecuencia_mantenimiento}
+                    onChange={e => setForm(f => ({ ...f, frecuencia_mantenimiento: e.target.value }))} />
+                  <datalist id="frecuencias-modal">
+                    {SUGERENCIAS_FRECUENCIA.map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
               </div>
             </details>
 
