@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -9,7 +10,7 @@ interface Notificacion {
   titulo: string
   mensaje?: string
   leida: boolean
-  accion_url?: string
+  accion_url?: string | null
   creado_en: string
 }
 
@@ -43,36 +44,107 @@ function tiempoRelativo(fecha: string): string {
   return `Hace ${Math.floor(diff / 86400)} días`
 }
 
-// Rutas válidas internas de ÁSTOR
-function esUrlValida(url?: string): boolean {
-  if (!url) return false
-  // Solo permitir rutas relativas internas
-  if (url.startsWith('http')) return false
-  const rutasPermitidas = ['/admin', '/supervisor', '/auditor', '/carro/', '/buscar', '/informes']
-  return rutasPermitidas.some(r => url.startsWith(r))
+/**
+ * Validación estricta de accion_url. Rechaza:
+ *  - null, undefined, string vacío
+ *  - URLs absolutas (http/https/javascript:/data:)
+ *  - La raíz "/" y variantes peligrosas: "/login", "/logout", "/auth"
+ *  - Rutas que son SOLO un prefijo de recurso sin ID: "/carro/", "/admin/carro/", etc.
+ *    Regla: si la ruta termina en "/" y no es exactamente una sección de primer nivel,
+ *    se considera incompleta y se descarta.
+ *
+ * Solo acepta rutas que empiezan por una sección conocida Y tienen contenido útil.
+ */
+function esUrlValida(url?: string | null): url is string {
+  if (!url || typeof url !== 'string') return false
+  const clean = url.trim()
+  if (clean.length === 0) return false
+  if (!clean.startsWith('/')) return false
+
+  // Bloquear rutas peligrosas
+  const bloqueadas = ['/', '/login', '/logout', '/auth', '/api']
+  if (bloqueadas.includes(clean)) return false
+  if (clean.startsWith('/auth/') || clean.startsWith('/api/')) return false
+
+  // Secciones permitidas
+  const rutasPermitidas = [
+    '/admin',
+    '/supervisor',
+    '/auditor',
+    '/tecnico',
+    '/buscar',
+    '/informes',
+    '/equipos',
+  ]
+  const seccionOk = rutasPermitidas.some(r => clean === r || clean.startsWith(r + '/'))
+  if (!seccionOk) return false
+
+  // Rechazar rutas que terminan en "/" (incompletas, p.ej. "/carro/")
+  // salvo que sea exactamente la sección raíz ("/admin", "/supervisor"...)
+  if (clean.endsWith('/') && clean.length > 1) return false
+
+  // Rechazar segmentos dinámicos vacíos tipo "/admin/carro//algo" o "/admin/carro/"
+  if (/\/\//.test(clean)) return false
+
+  return true
 }
 
 export default function NotificacionesBell({ usuarioId }: { usuarioId: string }) {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([])
   const [abierto, setAbierto] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
+
+  const botonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
+  // Montar portal solo en cliente
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Carga inicial + click fuera
   useEffect(() => {
     cargar()
     function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setAbierto(false)
-      }
+      const target = e.target as Node
+      if (panelRef.current?.contains(target)) return
+      if (botonRef.current?.contains(target)) return
+      setAbierto(false)
+    }
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setAbierto(false)
     }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleEsc)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuarioId])
 
+  // Recalcular posición del panel al abrir y al hacer scroll/resize
+  useEffect(() => {
+    if (!abierto || !botonRef.current) return
+    const update = () => {
+      if (botonRef.current) setAnchorRect(botonRef.current.getBoundingClientRect())
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [abierto])
+
+  // Realtime
   useEffect(() => {
     const channel = supabase
       .channel('notificaciones-' + usuarioId)
@@ -86,6 +158,7 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuarioId])
 
   async function cargar() {
@@ -99,36 +172,145 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
     setLoading(false)
   }
 
-  async function marcarLeida(id: string) {
-    await supabase.from('notificaciones').update({ leida: true }).eq('id', id)
+  // Fire-and-forget: no bloquea la navegación
+  function marcarLeida(id: string) {
     setNotificaciones(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
+    supabase.from('notificaciones').update({ leida: true }).eq('id', id).then()
   }
 
-  async function marcarTodasLeidas() {
-    await supabase.from('notificaciones')
+  function marcarTodasLeidas() {
+    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })))
+    supabase.from('notificaciones')
       .update({ leida: true })
       .eq('usuario_id', usuarioId)
       .eq('leida', false)
-    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })))
+      .then()
   }
 
-  async function handleNotificacion(e: React.MouseEvent, n: Notificacion) {
+  function handleNotificacion(e: React.MouseEvent, n: Notificacion) {
+    e.preventDefault()
     e.stopPropagation()
-    if (!n.leida) await marcarLeida(n.id)
+
+    if (!n.leida) marcarLeida(n.id)
     setAbierto(false)
-    // Solo navegar si la URL es una ruta interna válida
-    if (esUrlValida(n.accion_url)) {
-      router.push(n.accion_url!)
+
+    // Telemetría defensiva
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.log('[NotifBell] click:', { id: n.id, tipo: n.tipo, accion_url: n.accion_url })
     }
-    // Si no hay URL válida simplemente marca como leída y cierra
+
+    if (esUrlValida(n.accion_url)) {
+      router.push(n.accion_url)
+    } else if (n.accion_url && process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn('[NotifBell] accion_url descartada por ser inválida:', n.accion_url)
+    }
+    // Si no es válida: no navega. Punto.
   }
+
+  // Panel renderizado como portal en document.body
+  const panel = abierto && anchorRect ? (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Notificaciones"
+      style={{
+        position: 'fixed',
+        top: anchorRect.bottom + 8,
+        right: Math.max(8, window.innerWidth - anchorRect.right),
+        width: 'min(20rem, calc(100vw - 16px))',
+        zIndex: 9999,
+      }}
+      className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="font-semibold text-sm">Notificaciones</div>
+        <div className="flex items-center gap-2">
+          {noLeidas > 0 && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); marcarTodasLeidas() }}
+              className="text-xs text-blue-600 font-semibold"
+            >
+              Marcar todas leídas
+            </button>
+          )}
+          <span className="badge bg-gray-100 text-gray-600">{notificaciones.length}</span>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="max-h-96 overflow-y-auto">
+        {loading && (
+          <div className="text-xs text-gray-400 text-center py-8">Cargando...</div>
+        )}
+        {!loading && notificaciones.length === 0 && (
+          <div className="text-center py-10">
+            <div className="text-2xl mb-2">🔔</div>
+            <div className="text-sm font-semibold text-gray-600">Sin notificaciones</div>
+            <div className="text-xs text-gray-400 mt-1">Todo está en orden</div>
+          </div>
+        )}
+        {notificaciones.map(n => {
+          const navegable = esUrlValida(n.accion_url)
+          return (
+            <div
+              key={n.id}
+              role={navegable ? 'button' : undefined}
+              tabIndex={navegable ? 0 : -1}
+              onClick={(e) => handleNotificacion(e, n)}
+              className={`flex gap-3 px-4 py-3 border-b border-gray-50 ${navegable ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'} transition-colors border-l-4 ${colorTipo[n.tipo] || 'border-l-gray-300 bg-white'} ${!n.leida ? 'opacity-100' : 'opacity-60'}`}
+            >
+              <div className="text-lg flex-shrink-0 mt-0.5">{iconoTipo[n.tipo] || 'ℹ️'}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-1">
+                  <div className={`text-xs font-semibold leading-tight ${!n.leida ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {n.titulo}
+                  </div>
+                  {!n.leida && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>}
+                </div>
+                {n.mensaje && (
+                  <div className="text-xs text-gray-500 mt-0.5 leading-tight line-clamp-2">{n.mensaje}</div>
+                )}
+                <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                  <span>{tiempoRelativo(n.creado_en)}</span>
+                  {navegable && (
+                    <span className="text-blue-500 font-semibold">Ver →</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      {notificaciones.length > 0 && (
+        <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAbierto(false) }}
+            className="text-xs text-gray-500 text-center w-full"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+    </div>
+  ) : null
 
   return (
-    <div className="relative" ref={panelRef}>
-      {/* Botón campana */}
+    <>
       <button
-        onClick={(e) => { e.stopPropagation(); setAbierto(!abierto) }}
+        ref={botonRef}
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAbierto(v => !v) }}
         className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white active:bg-gray-50"
+        aria-label="Notificaciones"
+        aria-expanded={abierto}
       >
         <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
@@ -141,75 +323,7 @@ export default function NotificacionesBell({ usuarioId }: { usuarioId: string })
         )}
       </button>
 
-      {/* Panel de notificaciones */}
-      {abierto && (
-        <div className="absolute right-0 top-10 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <div className="font-semibold text-sm">Notificaciones</div>
-            <div className="flex items-center gap-2">
-              {noLeidas > 0 && (
-                <button onClick={(e) => { e.stopPropagation(); marcarTodasLeidas() }}
-                  className="text-xs text-blue-600 font-semibold">
-                  Marcar todas leídas
-                </button>
-              )}
-              <span className="badge bg-gray-100 text-gray-600">{notificaciones.length}</span>
-            </div>
-          </div>
-
-          {/* Lista */}
-          <div className="max-h-96 overflow-y-auto">
-            {loading && (
-              <div className="text-xs text-gray-400 text-center py-8">Cargando...</div>
-            )}
-            {!loading && notificaciones.length === 0 && (
-              <div className="text-center py-10">
-                <div className="text-2xl mb-2">🔔</div>
-                <div className="text-sm font-semibold text-gray-600">Sin notificaciones</div>
-                <div className="text-xs text-gray-400 mt-1">Todo está en orden</div>
-              </div>
-            )}
-            {notificaciones.map(n => (
-              <div
-                key={n.id}
-                onClick={(e) => handleNotificacion(e, n)}
-                className={`flex gap-3 px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors border-l-4 ${colorTipo[n.tipo] || 'border-l-gray-300 bg-white'} ${!n.leida ? 'opacity-100' : 'opacity-60'}`}
-              >
-                <div className="text-lg flex-shrink-0 mt-0.5">{iconoTipo[n.tipo] || 'ℹ️'}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-1">
-                    <div className={`text-xs font-semibold leading-tight ${!n.leida ? 'text-gray-900' : 'text-gray-500'}`}>
-                      {n.titulo}
-                    </div>
-                    {!n.leida && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>}
-                  </div>
-                  {n.mensaje && (
-                    <div className="text-xs text-gray-500 mt-0.5 leading-tight line-clamp-2">{n.mensaje}</div>
-                  )}
-                  <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
-                    <span>{tiempoRelativo(n.creado_en)}</span>
-                    {esUrlValida(n.accion_url) && (
-                      <span className="text-blue-500 font-semibold">Ver →</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          {notificaciones.length > 0 && (
-            <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50">
-              <button
-                onClick={(e) => { e.stopPropagation(); setAbierto(false) }}
-                className="text-xs text-gray-500 text-center w-full">
-                Cerrar
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      {mounted && panel ? createPortal(panel, document.body) : null}
+    </>
   )
 }
