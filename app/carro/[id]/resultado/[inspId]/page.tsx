@@ -6,7 +6,7 @@ import { formatFechaHora, formatFecha } from '@/lib/utils'
 import type { Inspeccion, ItemInspeccion } from '@/lib/types'
 
 export default function ResultadoPage() {
-  const [insp, setInsp] = useState<Inspeccion|null>(null)
+  const [insp, setInsp] = useState<Inspeccion | null>(null)
   const [items, setItems] = useState<ItemInspeccion[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -24,15 +24,20 @@ export default function ResultadoPage() {
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
       setPerfil(p)
     }
+
     const { data: ins } = await supabase.from('inspecciones')
       .select('*, carros(codigo,nombre,proximo_control,frecuencia_control), perfiles(nombre)')
-      .eq('id', inspId).single()
+      .eq('id', inspId)
+      .single()
     setInsp(ins)
+
+    // FIX: usar .is() para booleanos en vez de .eq() para evitar el error 406
     const { data: its } = await supabase.from('items_inspeccion')
       .select('*, materiales(nombre,tipo_falla)')
       .eq('inspeccion_id', inspId)
-      .eq('tiene_falla', true)
+      .is('tiene_falla', true)
     setItems(its || [])
+
     setLoading(false)
   }
 
@@ -43,33 +48,38 @@ export default function ResultadoPage() {
     else router.push('/auditor')
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Cargando...</div>
+    </div>
+  )
   if (!insp) return null
 
-  const fallosGraves = items.filter(i => i.tipo_falla === 'grave')
+  const fallosGraves  = items.filter(i => i.tipo_falla === 'grave')
   const fallosMenores = items.filter(i => i.tipo_falla === 'menor')
-  const carro = insp.carros as any
+  const carro   = insp.carros as any
   const auditor = insp.perfiles as any
+  const inspAny = insp as any   // para acceder a los campos de firma (nuevos)
 
   const config = {
     operativo: {
       bg: 'bg-green-50', border: 'border-green-200', icon: '✓',
       iconBg: 'bg-green-500', title: 'Carro operativo',
-      titleColor: 'text-green-800', sub: 'Sin fallos detectados', subColor: 'text-green-600'
+      titleColor: 'text-green-800', sub: 'Sin fallos detectados', subColor: 'text-green-600',
     },
     condicional: {
       bg: 'bg-amber-50', border: 'border-amber-200', icon: '⚠',
       iconBg: 'bg-amber-500', title: 'Carro operativo condicional',
       titleColor: 'text-amber-800',
-      sub: `${fallosMenores.length} fallo${fallosMenores.length!==1?'s':''} menor${fallosMenores.length!==1?'es':''}`,
-      subColor: 'text-amber-600'
+      sub: `${fallosMenores.length} fallo${fallosMenores.length !== 1 ? 's' : ''} menor${fallosMenores.length !== 1 ? 'es' : ''}`,
+      subColor: 'text-amber-600',
     },
     no_operativo: {
       bg: 'bg-red-50', border: 'border-red-200', icon: '✕',
       iconBg: 'bg-red-600', title: 'CARRO NO OPERATIVO',
       titleColor: 'text-red-800',
-      sub: `${fallosGraves.length} fallo${fallosGraves.length!==1?'s':''} grave${fallosGraves.length!==1?'s':''}`,
-      subColor: 'text-red-600'
+      sub: `${fallosGraves.length} fallo${fallosGraves.length !== 1 ? 's' : ''} grave${fallosGraves.length !== 1 ? 's' : ''}`,
+      subColor: 'text-red-600',
     },
   }
 
@@ -91,7 +101,7 @@ export default function ResultadoPage() {
           <div className={`text-sm mt-1 ${r.subColor}`}>{r.sub}</div>
           {insp.resultado === 'no_operativo' && (
             <div className="mt-2 text-xs text-red-600 font-medium">
-              Se envió alerta por email al administrador y supervisores
+              Se envió alerta al administrador y supervisores
             </div>
           )}
         </div>
@@ -101,9 +111,9 @@ export default function ResultadoPage() {
           <div className="section-title mb-3">Resumen del control</div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><div className="label">Carro</div><div className="font-semibold">{carro?.codigo}</div></div>
-            <div><div className="label">Fecha y hora</div><div className="font-semibold">{formatFechaHora(insp.fecha)}</div></div>
+            <div><div className="label">Fecha y hora</div><div className="font-semibold">{formatFechaHora((insp as any).fecha)}</div></div>
             <div><div className="label">Auditor</div><div className="font-semibold">{auditor?.nombre}</div></div>
-            <div><div className="label">Tipo</div><div className="font-semibold">{insp.tipo?.replace('_',' ')}</div></div>
+            <div><div className="label">Tipo</div><div className="font-semibold">{insp.tipo?.replace('_', ' ')}</div></div>
             {insp.tipo !== 'post_uso' && (
               <div className="col-span-2">
                 <div className="label">Próximo control programado</div>
@@ -112,6 +122,45 @@ export default function ResultadoPage() {
             )}
           </div>
         </div>
+
+        {/* Firma digital — si existe */}
+        {inspAny.firma_url && (
+          <div className="card">
+            <div className="section-title mb-3">Firma digital</div>
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <img
+                  src={inspAny.firma_url}
+                  alt="Firma digital"
+                  className="w-full border border-gray-200 rounded-xl bg-white"
+                  style={{ maxHeight: '120px', objectFit: 'contain' }}
+                />
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <div className="text-xs font-semibold text-gray-800">
+                  {inspAny.firmante_nombre || auditor?.nombre}
+                </div>
+                {inspAny.firmante_cargo && (
+                  <div className="text-xs text-gray-500 mt-0.5">{inspAny.firmante_cargo}</div>
+                )}
+                {inspAny.firmado_en && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    {new Date(inspAny.firmado_en).toLocaleString('es-ES', {
+                      day: '2-digit', month: 'short', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </div>
+                )}
+                <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12" strokeWidth={2.5} />
+                  </svg>
+                  Firmado
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Fallos graves */}
         {fallosGraves.length > 0 && (
@@ -123,8 +172,13 @@ export default function ResultadoPage() {
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 flex-shrink-0"></div>
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{(f.materiales as any)?.nombre}</div>
-                    {f.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>}
-                    {f.foto_url && <img src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg"/>}
+                    {f.descripcion_falla && (
+                      <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>
+                    )}
+                    {f.foto_url && (
+                      <img src={f.foto_url} alt="evidencia"
+                        className="mt-2 w-full h-24 object-cover rounded-lg" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -142,8 +196,13 @@ export default function ResultadoPage() {
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0"></div>
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{(f.materiales as any)?.nombre}</div>
-                    {f.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>}
-                    {f.foto_url && <img src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg"/>}
+                    {f.descripcion_falla && (
+                      <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>
+                    )}
+                    {f.foto_url && (
+                      <img src={f.foto_url} alt="evidencia"
+                        className="mt-2 w-full h-24 object-cover rounded-lg" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -153,32 +212,35 @@ export default function ResultadoPage() {
 
         {/* Confirmación */}
         <div className="card bg-green-50 border-green-100">
-          <div className="text-sm font-semibold text-green-800 mb-1">✓ Control guardado correctamente</div>
+          <div className="text-sm font-semibold text-green-800 mb-1">
+            ✓ Control guardado correctamente
+          </div>
           <div className="text-xs text-green-700">
             Registrado con fecha, hora, auditor y trazabilidad completa.
+            {inspAny.firma_url && ' Firma digital incluida.'}
             {insp.tipo !== 'post_uso' && ` Próximo control: ${formatFecha(carro?.proximo_control)}.`}
           </div>
         </div>
 
-        {/* Botón informe del control */}
+        {/* Informe PDF */}
         <button
           className="btn-secondary text-left flex items-center gap-3"
           onClick={() => router.push(`/carro/${carroId}/informe/${inspId}`)}
         >
           <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
             <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2}/>
-              <polyline points="14 2 14 8 20 8" strokeWidth={2}/>
-              <line x1="16" y1="13" x2="8" y2="13" strokeWidth={2}/>
-              <line x1="16" y1="17" x2="8" y2="17" strokeWidth={2}/>
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2} />
+              <polyline points="14 2 14 8 20 8" strokeWidth={2} />
+              <line x1="16" y1="13" x2="8" y2="13" strokeWidth={2} />
+              <line x1="16" y1="17" x2="8" y2="17" strokeWidth={2} />
             </svg>
           </div>
           <div className="flex-1">
             <div className="font-semibold text-sm">Generar informe de este control</div>
-            <div className="text-xs text-gray-400">PDF con membrete, fallos, fotos y vencimientos</div>
+            <div className="text-xs text-gray-400">PDF con membrete, fallos, fotos y firma digital</div>
           </div>
           <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <polyline points="9 18 15 12 9 6" strokeWidth={2}/>
+            <polyline points="9 18 15 12 9 6" strokeWidth={2} />
           </svg>
         </button>
 
