@@ -1,10 +1,23 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+
+// =====================================================================
+// Tipos
+// =====================================================================
+
+interface CategoriaEquipo {
+  id: string
+  nombre: string
+  hospital_id: string | null
+  es_global: boolean
+  favorita: boolean
+  orden_grupo: number
+}
 
 interface Equipo {
   id: string
@@ -14,11 +27,14 @@ interface Equipo {
   numero_serie?: string
   numero_censo?: string
   codigo_barras?: string
-  categoria: string
+  categoria: string          // texto legacy — se mantiene sincronizado
+  categoria_id?: string      // FK → categorias_equipo (fuente de verdad)
   estado: string
   foto_url?: string
   servicio_id?: string
   carro_id?: string
+  cajon_id?: string
+  indispensable: boolean
   fecha_adquisicion?: string
   fecha_fabricacion?: string
   fecha_ultimo_mantenimiento?: string
@@ -29,7 +45,7 @@ interface Equipo {
   empresa_mantenimiento?: string
   contacto_mantenimiento?: string
   numero_contrato?: string
-  frecuencia_mantenimiento: string
+  frecuencia_mantenimiento?: string
   observaciones?: string
   activo: boolean
   servicios?: { nombre: string }
@@ -48,60 +64,81 @@ interface Mantenimiento {
   creado_en: string
 }
 
-const CATEGORIAS = [
-  { value: 'desfibrilador', label: 'Desfibrilador' },
-  { value: 'monitor', label: 'Monitor' },
-  { value: 'videolaringoscopio', label: 'Videolaringoscopio' },
-  { value: 'respirador', label: 'Respirador' },
-  { value: 'bomba_infusion', label: 'Bomba de infusión' },
-  { value: 'ecografo', label: 'Ecógrafo' },
-  { value: 'aspirador', label: 'Aspirador' },
-  { value: 'otro', label: 'Otro' },
-  { value: 'general', label: 'General' },
-]
+// =====================================================================
+// Constantes
+// =====================================================================
 
 const ESTADOS = [
-  { value: 'operativo', label: 'Operativo', color: 'bg-green-100 text-green-700' },
-  { value: 'en_mantenimiento', label: 'En mantenimiento', color: 'bg-amber-100 text-amber-700' },
-  { value: 'fuera_de_servicio', label: 'Fuera de servicio', color: 'bg-red-100 text-red-700' },
-  { value: 'baja', label: 'Baja', color: 'bg-gray-100 text-gray-500' },
-]
-
-const FRECUENCIAS = [
-  { value: 'mensual', label: 'Mensual' },
-  { value: 'trimestral', label: 'Trimestral' },
-  { value: 'semestral', label: 'Semestral' },
-  { value: 'anual', label: 'Anual' },
-  { value: 'bienal', label: 'Bienal' },
+  { value: 'operativo',          label: 'Operativo',         color: 'bg-green-100 text-green-700' },
+  { value: 'en_mantenimiento',   label: 'En mantenimiento',  color: 'bg-amber-100 text-amber-700' },
+  { value: 'fuera_de_servicio',  label: 'Fuera de servicio', color: 'bg-red-100 text-red-700' },
+  { value: 'baja',               label: 'Baja',              color: 'bg-gray-100 text-gray-500' },
 ]
 
 const TIPOS_MANTENIMIENTO = [
-  { value: 'preventivo', label: 'Preventivo' },
-  { value: 'correctivo', label: 'Correctivo' },
-  { value: 'calibracion', label: 'Calibración' },
-  { value: 'revision', label: 'Revisión' },
-  { value: 'baja', label: 'Baja del equipo' },
+  { value: 'preventivo',   label: 'Preventivo' },
+  { value: 'correctivo',   label: 'Correctivo' },
+  { value: 'calibracion',  label: 'Calibración' },
+  { value: 'revision',     label: 'Revisión' },
+  { value: 'reasignacion', label: 'Reasignación' },
+  { value: 'baja',         label: 'Baja del equipo' },
 ]
+
+// Sugerencias de frecuencia para el datalist (autocomplete)
+const SUGERENCIAS_FRECUENCIA = [
+  'Mensual', 'Bimestral', 'Trimestral', 'Semestral',
+  'Anual', 'Bienal', 'Cada 2 años', 'Según fabricante',
+]
+
+// =====================================================================
+// Utilidades
+// =====================================================================
 
 function estadoBadge(estado: string) {
   return ESTADOS.find(e => e.value === estado)?.color || 'bg-gray-100 text-gray-500'
 }
-
 function estadoLabel(estado: string) {
   return ESTADOS.find(e => e.value === estado)?.label || estado
 }
-
 function diasHasta(fecha?: string): number | null {
   if (!fecha) return null
   return Math.ceil((new Date(fecha).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
 }
-
 function colorDias(dias: number | null): string {
   if (dias === null) return 'text-gray-400'
   if (dias < 0) return 'text-red-600 font-semibold'
   if (dias <= 30) return 'text-amber-600 font-semibold'
   return 'text-green-600'
 }
+
+// =====================================================================
+// Hook: categorías del hospital (globales + propias, ordenadas)
+// =====================================================================
+
+function useCategorias(hospitalId: string | null) {
+  const [categorias, setCategorias] = useState<CategoriaEquipo[]>([])
+  const supabase = createClient()
+
+  const cargar = useCallback(async () => {
+    if (!hospitalId) return
+    const { data } = await supabase
+      .from('v_categorias_por_hospital')
+      .select('*')
+      .or(`hospital_id.is.null,hospital_id.eq.${hospitalId}`)
+      .eq('visible', true)
+      .order('orden_grupo')
+      .order('nombre')
+    setCategorias(data || [])
+  }, [hospitalId, supabase])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  return { categorias, recargar: cargar }
+}
+
+// =====================================================================
+// Componente principal
+// =====================================================================
 
 export default function EquiposPage() {
   const [equipos, setEquipos] = useState<Equipo[]>([])
@@ -110,26 +147,32 @@ export default function EquiposPage() {
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [vista, setVista] = useState<'lista'|'nuevo'|'detalle'|'mantenimiento'>('lista')
-  const [equipoSeleccionado, setEquipoSeleccionado] = useState<Equipo|null>(null)
+  const [vista, setVista] = useState<'lista' | 'nuevo' | 'detalle' | 'mantenimiento'>('lista')
+  const [equipoSeleccionado, setEquipoSeleccionado] = useState<Equipo | null>(null)
   const [historial, setHistorial] = useState<Mantenimiento[]>([])
   const [guardando, setGuardando] = useState(false)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [escaneando, setEscaneando] = useState(false)
-  const [campoEscaneo, setCampoEscaneo] = useState<'censo'|'barras'>('barras')
+  const [campoEscaneo, setCampoEscaneo] = useState<'censo' | 'barras'>('barras')
   const [filtroEstado, setFiltroEstado] = useState('todos')
-  const [filtroCategoria, setFiltroCategoria] = useState('todos')
+  const [filtroCategoriaId, setFiltroCategoriaId] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const fotoRef = useRef<HTMLInputElement>(null)
 
+  const router = useRouter()
+  const supabase = createClient()
+
   const formInicial = {
     nombre: '', marca: '', modelo: '', numero_serie: '', numero_censo: '',
-    codigo_barras: '', categoria: 'general', estado: 'operativo',
-    servicio_id: '', carro_id: '', fecha_adquisicion: '', fecha_fabricacion: '',
+    codigo_barras: '', categoria: '', categoria_id: '',
+    estado: 'operativo', indispensable: false,
+    servicio_id: '', carro_id: '', cajon_id: '',
+    fecha_adquisicion: '', fecha_fabricacion: '',
     fecha_ultimo_mantenimiento: '', fecha_proximo_mantenimiento: '',
     fecha_ultima_calibracion: '', fecha_proxima_calibracion: '',
-    fecha_garantia_hasta: '', empresa_mantenimiento: '', contacto_mantenimiento: '',
-    numero_contrato: '', frecuencia_mantenimiento: 'anual', observaciones: '', foto_url: '',
+    fecha_garantia_hasta: '', empresa_mantenimiento: '',
+    contacto_mantenimiento: '', numero_contrato: '',
+    frecuencia_mantenimiento: '', observaciones: '', foto_url: '',
   }
   const [form, setForm] = useState(formInicial)
 
@@ -139,8 +182,7 @@ export default function EquiposPage() {
   }
   const [mant, setMant] = useState(formMant)
 
-  const router = useRouter()
-  const supabase = createClient()
+  const { categorias, recargar: recargarCategorias } = useCategorias(perfil?.hospital_id || null)
 
   useEffect(() => { cargarDatos() }, [])
 
@@ -174,12 +216,14 @@ export default function EquiposPage() {
   }
 
   async function cargarServicios(hospitalId: string) {
-    const { data } = await supabase.from('servicios').select('id,nombre').eq('hospital_id', hospitalId).eq('activo', true).order('nombre')
+    const { data } = await supabase.from('servicios')
+      .select('id,nombre').eq('hospital_id', hospitalId).eq('activo', true).order('nombre')
     setServicios(data || [])
   }
 
   async function cargarCarros(hospitalId: string) {
-    const { data } = await supabase.from('carros').select('id,codigo,nombre').eq('hospital_id', hospitalId).eq('activo', true).order('codigo')
+    const { data } = await supabase.from('carros')
+      .select('id,codigo,nombre').eq('hospital_id', hospitalId).eq('activo', true).order('codigo')
     setCarros(data || [])
   }
 
@@ -189,23 +233,41 @@ export default function EquiposPage() {
     setHistorial(data || [])
   }
 
+  // Construye el nombre de categoría a partir de categoria_id o categoria (legacy)
+  function nombreCategoria(equipo: Equipo): string {
+    if (equipo.categoria_id) {
+      return categorias.find(c => c.id === equipo.categoria_id)?.nombre || equipo.categoria || '—'
+    }
+    return equipo.categoria || '—'
+  }
+
   async function guardarEquipo() {
     if (!form.nombre.trim()) { toast.error('El nombre es obligatorio'); return }
+    if (!form.categoria_id) { toast.error('La categoría es obligatoria'); return }
     setGuardando(true)
+
+    const catNombre = categorias.find(c => c.id === form.categoria_id)?.nombre || ''
     const payload: any = {
       ...form,
       hospital_id: perfil?.hospital_id,
       creado_por: perfil?.id,
       servicio_id: form.servicio_id || null,
       carro_id: form.carro_id || null,
+      cajon_id: form.cajon_id || null,
+      categoria_id: form.categoria_id,
+      categoria: catNombre,  // sincronizar campo legacy
+      indispensable: form.indispensable,
     }
-    // Limpiar fechas vacías
-    const fechas = ['fecha_adquisicion','fecha_fabricacion','fecha_ultimo_mantenimiento','fecha_proximo_mantenimiento','fecha_ultima_calibracion','fecha_proxima_calibracion','fecha_garantia_hasta']
+    const fechas = [
+      'fecha_adquisicion', 'fecha_fabricacion', 'fecha_ultimo_mantenimiento',
+      'fecha_proximo_mantenimiento', 'fecha_ultima_calibracion',
+      'fecha_proxima_calibracion', 'fecha_garantia_hasta',
+    ]
     fechas.forEach(f => { if (!payload[f]) payload[f] = null })
 
     const { error } = await supabase.from('equipos').insert(payload)
     if (error) { toast.error('Error al guardar: ' + error.message); setGuardando(false); return }
-    toast.success(`Equipo "${form.nombre}" registrado correctamente`)
+    toast.success(`Equipo "${form.nombre}" registrado`)
     setForm(formInicial)
     setVista('lista')
     await cargarEquipos(perfil?.hospital_id)
@@ -215,19 +277,29 @@ export default function EquiposPage() {
   async function guardarEdicion() {
     if (!equipoSeleccionado) return
     setGuardando(true)
-    const payload: any = { ...equipoSeleccionado }
+    const catNombre = equipoSeleccionado.categoria_id
+      ? (categorias.find(c => c.id === equipoSeleccionado.categoria_id)?.nombre || equipoSeleccionado.categoria)
+      : equipoSeleccionado.categoria
+    const payload: any = {
+      ...equipoSeleccionado,
+      categoria: catNombre,
+    }
     delete payload.servicios
     delete payload.carros
-    delete payload._carros
-    const fechas = ['fecha_adquisicion','fecha_fabricacion','fecha_ultimo_mantenimiento','fecha_proximo_mantenimiento','fecha_ultima_calibracion','fecha_proxima_calibracion','fecha_garantia_hasta']
+    const fechas = [
+      'fecha_adquisicion', 'fecha_fabricacion', 'fecha_ultimo_mantenimiento',
+      'fecha_proximo_mantenimiento', 'fecha_ultima_calibracion',
+      'fecha_proxima_calibracion', 'fecha_garantia_hasta',
+    ]
     fechas.forEach(f => { if (!payload[f]) payload[f] = null })
     payload.servicio_id = payload.servicio_id || null
     payload.carro_id = payload.carro_id || null
+    payload.cajon_id = payload.cajon_id || null
 
     const { error } = await supabase.from('equipos').update(payload).eq('id', equipoSeleccionado.id)
     if (error) { toast.error('Error al guardar'); setGuardando(false); return }
     toast.success('Equipo actualizado')
-    setVista('lista')
+    setVista('detalle')
     await cargarEquipos(perfil?.hospital_id)
     setGuardando(false)
   }
@@ -237,8 +309,7 @@ export default function EquiposPage() {
     setGuardando(true)
     const { error } = await supabase.from('historial_mantenimientos').insert({
       equipo_id: equipoSeleccionado.id,
-      tipo: mant.tipo,
-      fecha: mant.fecha,
+      tipo: mant.tipo, fecha: mant.fecha,
       descripcion: mant.descripcion || null,
       empresa: mant.empresa || null,
       tecnico: mant.tecnico || null,
@@ -247,10 +318,7 @@ export default function EquiposPage() {
       creado_por: perfil?.id,
     })
     if (error) { toast.error('Error al registrar'); setGuardando(false); return }
-
-    // Actualizar fecha último mantenimiento en el equipo
     await supabase.from('equipos').update({ fecha_ultimo_mantenimiento: mant.fecha }).eq('id', equipoSeleccionado.id)
-
     toast.success('Mantenimiento registrado')
     setMant(formMant)
     await cargarHistorial(equipoSeleccionado.id)
@@ -263,7 +331,7 @@ export default function EquiposPage() {
     setSubiendoFoto(true)
     const ext = file.name.split('.').pop()
     const path = `equipos/${equipoId || 'nuevo'}/${Date.now()}.${ext}`
-    const { data, error } = await supabase.storage.from('evidencias').upload(path, file, { upsert: true })
+    const { error } = await supabase.storage.from('evidencias').upload(path, file, { upsert: true })
     if (error) { toast.error('Error al subir la foto'); setSubiendoFoto(false); return }
     const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
     if (equipoId) {
@@ -273,19 +341,33 @@ export default function EquiposPage() {
     } else {
       setForm(prev => ({ ...prev, foto_url: url.publicUrl }))
     }
-    toast.success('Foto subida correctamente')
+    toast.success('Foto subida')
     setSubiendoFoto(false)
+  }
+
+  function handleEscaneo(codigo: string) {
+    setEscaneando(false)
+    if (campoEscaneo === 'barras') {
+      equipoSeleccionado
+        ? setEquipoSeleccionado(prev => prev ? { ...prev, codigo_barras: codigo } : prev)
+        : setForm(prev => ({ ...prev, codigo_barras: codigo }))
+    } else {
+      equipoSeleccionado
+        ? setEquipoSeleccionado(prev => prev ? { ...prev, numero_censo: codigo } : prev)
+        : setForm(prev => ({ ...prev, numero_censo: codigo }))
+    }
+    toast.success('Código leído: ' + codigo)
   }
 
   const equiposFiltrados = equipos.filter(e => {
     const matchEstado = filtroEstado === 'todos' || e.estado === filtroEstado
-    const matchCategoria = filtroCategoria === 'todos' || e.categoria === filtroCategoria
+    const matchCat = filtroCategoriaId === 'todos' || e.categoria_id === filtroCategoriaId
     const matchBusqueda = !busqueda ||
       e.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       (e.numero_censo || '').toLowerCase().includes(busqueda.toLowerCase()) ||
       (e.numero_serie || '').toLowerCase().includes(busqueda.toLowerCase()) ||
       (e.marca || '').toLowerCase().includes(busqueda.toLowerCase())
-    return matchEstado && matchCategoria && matchBusqueda
+    return matchEstado && matchCat && matchBusqueda
   })
 
   const stats = {
@@ -298,42 +380,33 @@ export default function EquiposPage() {
     }).length,
   }
 
-  const colorPrimario = hospital?.color_primario || '#1d4ed8'
   useHospitalTheme(hospital?.color_primario)
+  const colorPrimario = hospital?.color_primario || '#1d4ed8'
 
-  function handleEscaneo(codigo: string) {
-    setEscaneando(false)
-    if (campoEscaneo === 'barras') {
-      if (vista === 'nuevo' && equipoSeleccionado) {
-        setEquipoSeleccionado(prev => prev ? {...prev, codigo_barras: codigo} : prev)
-      } else {
-        setForm(prev => ({...prev, codigo_barras: codigo}))
-      }
-    } else {
-      if (vista === 'nuevo' && equipoSeleccionado) {
-        setEquipoSeleccionado(prev => prev ? {...prev, numero_censo: codigo} : prev)
-      } else {
-        setForm(prev => ({...prev, numero_censo: codigo}))
-      }
-    }
-    toast.success('Código leído: ' + codigo)
-  }
+  // Agrupar categorías para selects y filtros
+  const catsFav    = categorias.filter(c => c.favorita)
+  const catsPropias = categorias.filter(c => !c.favorita && c.hospital_id !== null)
+  const catsGlobales = categorias.filter(c => !c.favorita && c.hospital_id === null)
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Cargando...</div>
+    </div>
+  )
 
-  // ============================================================
+  // ================================================================
   // VISTA DETALLE
-  // ============================================================
+  // ================================================================
   if (vista === 'detalle' && equipoSeleccionado) {
     const diasMant = diasHasta(equipoSeleccionado.fecha_proximo_mantenimiento)
-    const diasCal = diasHasta(equipoSeleccionado.fecha_proxima_calibracion)
+    const diasCal  = diasHasta(equipoSeleccionado.fecha_proxima_calibracion)
     return (
       <div className="page">
-        <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
+        <div className="topbar" style={{ borderBottom: `2px solid ${colorPrimario}20` }}>
           <button onClick={() => setVista('lista')} className="text-blue-700 text-sm font-medium">← Volver</button>
           <span className="font-semibold text-sm flex-1 text-center truncate">{equipoSeleccionado.nombre}</span>
           <button onClick={() => setVista('mantenimiento')}
-            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold flex-shrink-0">
+            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold">
             + Mantenimiento
           </button>
         </div>
@@ -342,18 +415,24 @@ export default function EquiposPage() {
           <div className="card">
             <div className="flex gap-3 mb-3">
               <div className="w-20 h-20 rounded-xl border border-gray-100 overflow-hidden flex-shrink-0 bg-gray-50 flex items-center justify-center">
-                {equipoSeleccionado.foto_url ? (
-                  <img src={equipoSeleccionado.foto_url} alt={equipoSeleccionado.nombre} className="w-full h-full object-cover"/>
-                ) : (
-                  <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2}/></svg>
-                )}
+                {equipoSeleccionado.foto_url
+                  ? <img src={equipoSeleccionado.foto_url} alt={equipoSeleccionado.nombre} className="w-full h-full object-cover" />
+                  : <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} /></svg>
+                }
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-base">{equipoSeleccionado.nombre}</div>
                 <div className="text-xs text-gray-400">{equipoSeleccionado.marca} {equipoSeleccionado.modelo}</div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <span className={`badge text-xs ${estadoBadge(equipoSeleccionado.estado)}`}>{estadoLabel(equipoSeleccionado.estado)}</span>
-                  <span className="badge bg-gray-100 text-gray-600 text-xs">{CATEGORIAS.find(c => c.value === equipoSeleccionado.categoria)?.label}</span>
+                  <span className={`badge text-xs ${estadoBadge(equipoSeleccionado.estado)}`}>
+                    {estadoLabel(equipoSeleccionado.estado)}
+                  </span>
+                  <span className="badge bg-gray-100 text-gray-600 text-xs">
+                    {nombreCategoria(equipoSeleccionado)}
+                  </span>
+                  {equipoSeleccionado.indispensable && (
+                    <span className="badge bg-red-100 text-red-700 text-xs font-semibold">★ Indispensable</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -376,6 +455,12 @@ export default function EquiposPage() {
               <div><span className="text-gray-400">Carro: </span><span className="font-semibold">{(equipoSeleccionado.carros as any)?.codigo || '—'}</span></div>
               <div><span className="text-gray-400">Adquisición: </span><span className="font-semibold">{equipoSeleccionado.fecha_adquisicion || '—'}</span></div>
               <div><span className="text-gray-400">Garantía hasta: </span><span className="font-semibold">{equipoSeleccionado.fecha_garantia_hasta || '—'}</span></div>
+              <div className="col-span-2">
+                <span className="text-gray-400">Indispensable en ubicación actual: </span>
+                <span className={`font-semibold ${equipoSeleccionado.indispensable ? 'text-red-700' : 'text-gray-500'}`}>
+                  {equipoSeleccionado.indispensable ? '★ Sí — si se mueve se genera alerta' : 'No'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -384,7 +469,7 @@ export default function EquiposPage() {
             <div className="section-title mb-3">Mantenimiento preventivo</div>
             <div className="grid grid-cols-2 gap-2 text-xs mb-3">
               <div><span className="text-gray-400">Empresa: </span><span className="font-semibold">{equipoSeleccionado.empresa_mantenimiento || '—'}</span></div>
-              <div><span className="text-gray-400">Frecuencia: </span><span className="font-semibold">{FRECUENCIAS.find(f => f.value === equipoSeleccionado.frecuencia_mantenimiento)?.label || '—'}</span></div>
+              <div><span className="text-gray-400">Frecuencia: </span><span className="font-semibold">{equipoSeleccionado.frecuencia_mantenimiento || '—'}</span></div>
               <div><span className="text-gray-400">Contrato: </span><span className="font-semibold">{equipoSeleccionado.numero_contrato || '—'}</span></div>
               <div><span className="text-gray-400">Contacto: </span><span className="font-semibold">{equipoSeleccionado.contacto_mantenimiento || '—'}</span></div>
               <div><span className="text-gray-400">Último: </span><span className="font-semibold">{equipoSeleccionado.fecha_ultimo_mantenimiento || '—'}</span></div>
@@ -427,7 +512,6 @@ export default function EquiposPage() {
             </div>
           )}
 
-          {/* Observaciones */}
           {equipoSeleccionado.observaciones && (
             <div className="card">
               <div className="section-title mb-2">Observaciones</div>
@@ -442,13 +526,15 @@ export default function EquiposPage() {
               <span className="badge bg-gray-100 text-gray-600">{historial.length}</span>
             </div>
             {historial.length === 0 && (
-              <div className="text-xs text-gray-400 text-center py-4">Sin registros de mantenimiento aún</div>
+              <div className="text-xs text-gray-400 text-center py-4">Sin registros aún</div>
             )}
             {historial.map(h => (
               <div key={h.id} className="py-3 border-b border-gray-50 last:border-0">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="text-xs font-semibold">{new Date(h.fecha).toLocaleDateString('es-ES')} — {TIPOS_MANTENIMIENTO.find(t => t.value === h.tipo)?.label}</div>
+                    <div className="text-xs font-semibold">
+                      {new Date(h.fecha).toLocaleDateString('es-ES')} — {TIPOS_MANTENIMIENTO.find(t => t.value === h.tipo)?.label}
+                    </div>
                     {h.descripcion && <div className="text-xs text-gray-500 mt-0.5">{h.descripcion}</div>}
                     <div className="text-xs text-gray-400 mt-0.5">
                       {h.empresa && <span>{h.empresa}</span>}
@@ -456,7 +542,10 @@ export default function EquiposPage() {
                       {h.coste && <span> · {h.coste}€</span>}
                     </div>
                   </div>
-                  <span className={`badge text-xs flex-shrink-0 ${h.resultado === 'correcto' ? 'bg-green-100 text-green-700' : h.resultado === 'con_incidencias' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                  <span className={`badge text-xs flex-shrink-0 ${
+                    h.resultado === 'correcto' ? 'bg-green-100 text-green-700' :
+                    h.resultado === 'con_incidencias' ? 'bg-amber-100 text-amber-700' :
+                    'bg-red-100 text-red-700'}`}>
                     {h.resultado === 'correcto' ? 'Correcto' : h.resultado === 'con_incidencias' ? 'Con incidencias' : 'Retirado'}
                   </span>
                 </div>
@@ -465,7 +554,7 @@ export default function EquiposPage() {
           </div>
 
           <button className="btn-secondary"
-            onClick={() => { setEquipoSeleccionado(prev => ({...prev!})); setVista('nuevo') }}>
+            onClick={() => setVista('nuevo')}>
             ✏️ Editar equipo
           </button>
         </div>
@@ -473,60 +562,58 @@ export default function EquiposPage() {
     )
   }
 
-  // ============================================================
-  // VISTA REGISTRAR MANTENIMIENTO
-  // ============================================================
+  // ================================================================
+  // VISTA MANTENIMIENTO
+  // ================================================================
   if (vista === 'mantenimiento' && equipoSeleccionado) {
     return (
       <div className="page">
-        <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
+        <div className="topbar" style={{ borderBottom: `2px solid ${colorPrimario}20` }}>
           <button onClick={() => setVista('detalle')} className="text-blue-700 text-sm font-medium">← Volver</button>
           <span className="font-semibold text-sm flex-1 text-center">Registrar mantenimiento</span>
         </div>
         <div className="content">
           <div className="card bg-blue-50 border-blue-100">
             <div className="text-xs font-semibold text-blue-800">{equipoSeleccionado.nombre}</div>
-            <div className="text-xs text-blue-600">{equipoSeleccionado.marca} {equipoSeleccionado.modelo} · {equipoSeleccionado.numero_censo || equipoSeleccionado.numero_serie || ''}</div>
+            <div className="text-xs text-blue-600">
+              {equipoSeleccionado.marca} {equipoSeleccionado.modelo} · {equipoSeleccionado.numero_censo || equipoSeleccionado.numero_serie || ''}
+            </div>
           </div>
-
           <div className="card">
             <div className="flex flex-col gap-3">
               <div>
-                <label className="label">Tipo de mantenimiento *</label>
-                <select className="input" value={mant.tipo} onChange={e => setMant({...mant, tipo: e.target.value})}>
+                <label className="label">Tipo *</label>
+                <select className="input" value={mant.tipo} onChange={e => setMant({ ...mant, tipo: e.target.value })}>
                   {TIPOS_MANTENIMIENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Fecha *</label>
-                <input className="input" type="date" value={mant.fecha} onChange={e => setMant({...mant, fecha: e.target.value})} />
+                <input className="input" type="date" value={mant.fecha} onChange={e => setMant({ ...mant, fecha: e.target.value })} />
               </div>
               <div>
                 <label className="label">Descripción</label>
-                <textarea className="input resize-none" rows={3} placeholder="Describe las tareas realizadas..."
-                  value={mant.descripcion} onChange={e => setMant({...mant, descripcion: e.target.value})} />
+                <textarea className="input resize-none" rows={3} value={mant.descripcion}
+                  onChange={e => setMant({ ...mant, descripcion: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Empresa</label>
-                  <input className="input" placeholder="Empresa de mantenimiento"
-                    value={mant.empresa} onChange={e => setMant({...mant, empresa: e.target.value})} />
+                  <input className="input" value={mant.empresa} onChange={e => setMant({ ...mant, empresa: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">Técnico</label>
-                  <input className="input" placeholder="Nombre del técnico"
-                    value={mant.tecnico} onChange={e => setMant({...mant, tecnico: e.target.value})} />
+                  <input className="input" value={mant.tecnico} onChange={e => setMant({ ...mant, tecnico: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Coste (€)</label>
-                  <input className="input" type="number" placeholder="0.00"
-                    value={mant.coste} onChange={e => setMant({...mant, coste: e.target.value})} />
+                  <input className="input" type="number" value={mant.coste} onChange={e => setMant({ ...mant, coste: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">Resultado *</label>
-                  <select className="input" value={mant.resultado} onChange={e => setMant({...mant, resultado: e.target.value})}>
+                  <select className="input" value={mant.resultado} onChange={e => setMant({ ...mant, resultado: e.target.value })}>
                     <option value="correcto">Correcto</option>
                     <option value="con_incidencias">Con incidencias</option>
                     <option value="equipo_retirado">Equipo retirado</option>
@@ -535,7 +622,7 @@ export default function EquiposPage() {
               </div>
               <div className="flex gap-2 pt-1">
                 <button className="btn-primary flex-1" onClick={guardarMantenimiento} disabled={guardando}>
-                  {guardando ? 'Guardando...' : 'Registrar mantenimiento'}
+                  {guardando ? 'Guardando...' : 'Registrar'}
                 </button>
                 <button className="btn-secondary" onClick={() => setVista('detalle')}>Cancelar</button>
               </div>
@@ -546,11 +633,11 @@ export default function EquiposPage() {
     )
   }
 
-  // ============================================================
-  // VISTA NUEVO / EDITAR EQUIPO
-  // ============================================================
+  // ================================================================
+  // VISTA NUEVO / EDITAR
+  // ================================================================
   if (vista === 'nuevo') {
-    const isEditing = !!equipoSeleccionado && vista === 'nuevo'
+    const isEditing = !!equipoSeleccionado
     const f = isEditing ? equipoSeleccionado : form
     const setF = isEditing
       ? (v: any) => setEquipoSeleccionado(v)
@@ -559,12 +646,9 @@ export default function EquiposPage() {
     return (
       <div className="page">
         {escaneando && (
-          <EscanerCodigoBarras
-            onResult={handleEscaneo}
-            onClose={() => setEscaneando(false)}
-          />
+          <EscanerCodigoBarras onResult={handleEscaneo} onClose={() => setEscaneando(false)} />
         )}
-        <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
+        <div className="topbar" style={{ borderBottom: `2px solid ${colorPrimario}20` }}>
           <button onClick={() => { setVista(isEditing ? 'detalle' : 'lista'); if (!isEditing) setForm(formInicial) }}
             className="text-blue-700 text-sm font-medium">← Volver</button>
           <span className="font-semibold text-sm flex-1 text-center">
@@ -580,18 +664,18 @@ export default function EquiposPage() {
               <div>
                 <label className="label">Nombre del equipo *</label>
                 <input className="input" placeholder="Ej: Monitor/Desfibrilador UCI-01"
-                  value={f.nombre} onChange={e => setF({...f, nombre: e.target.value})} />
+                  value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Marca</label>
-                  <input className="input" placeholder="Ej: Zoll, Philips..."
-                    value={f.marca || ''} onChange={e => setF({...f, marca: e.target.value})} />
+                  <input className="input" placeholder="Ej: Zoll"
+                    value={f.marca || ''} onChange={e => setF({ ...f, marca: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">Modelo</label>
                   <input className="input" placeholder="Ej: X Series"
-                    value={f.modelo || ''} onChange={e => setF({...f, modelo: e.target.value})} />
+                    value={f.modelo || ''} onChange={e => setF({ ...f, modelo: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -599,10 +683,11 @@ export default function EquiposPage() {
                   <label className="label">N° de censo</label>
                   <div className="flex gap-1.5">
                     <input className="input flex-1" placeholder="CEN-2024-0001"
-                      value={f.numero_censo || ''} onChange={e => setF({...f, numero_censo: e.target.value})} />
+                      value={f.numero_censo || ''}
+                      onChange={e => setF({ ...f, numero_censo: e.target.value })} />
                     <button type="button"
                       onClick={() => { setCampoEscaneo('censo'); setEscaneando(true) }}
-                      className="flex-shrink-0 px-2 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:bg-gray-700">
+                      className="flex-shrink-0 px-2 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold">
                       📷
                     </button>
                   </div>
@@ -610,35 +695,70 @@ export default function EquiposPage() {
                 <div>
                   <label className="label">N° de serie</label>
                   <input className="input" placeholder="SN-00000"
-                    value={f.numero_serie || ''} onChange={e => setF({...f, numero_serie: e.target.value})} />
+                    value={f.numero_serie || ''} onChange={e => setF({ ...f, numero_serie: e.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="label">Código de barras</label>
                 <div className="flex gap-2">
                   <input className="input flex-1" placeholder="Escanea o escribe el código"
-                    value={f.codigo_barras || ''} onChange={e => setF({...f, codigo_barras: e.target.value})} />
+                    value={f.codigo_barras || ''}
+                    onChange={e => setF({ ...f, codigo_barras: e.target.value })} />
                   <button type="button"
                     onClick={() => { setCampoEscaneo('barras'); setEscaneando(true) }}
-                    className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:bg-gray-700">
+                    className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold">
                     📷
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Categoría</label>
-                  <select className="input" value={f.categoria} onChange={e => setF({...f, categoria: e.target.value})}>
-                    {CATEGORIAS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Estado</label>
-                  <select className="input" value={f.estado} onChange={e => setF({...f, estado: e.target.value})}>
-                    {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-                  </select>
-                </div>
+
+              {/* Categoría dinámica con optgroups */}
+              <div>
+                <label className="label">Categoría *</label>
+                <select className="input"
+                  value={(f as any).categoria_id || ''}
+                  onChange={e => {
+                    const cat = categorias.find(c => c.id === e.target.value)
+                    setF({ ...f, categoria_id: e.target.value, categoria: cat?.nombre || '' })
+                  }}>
+                  <option value="">Seleccionar…</option>
+                  {catsFav.length > 0 && (
+                    <optgroup label="⭐ Favoritas">
+                      {catsFav.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </optgroup>
+                  )}
+                  {catsPropias.length > 0 && (
+                    <optgroup label="🏥 De este hospital">
+                      {catsPropias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </optgroup>
+                  )}
+                  {catsGlobales.length > 0 && (
+                    <optgroup label="🌐 Globales del sistema">
+                      {catsGlobales.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </optgroup>
+                  )}
+                </select>
               </div>
+
+              <div>
+                <label className="label">Estado</label>
+                <select className="input" value={f.estado}
+                  onChange={e => setF({ ...f, estado: e.target.value })}>
+                  {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                </select>
+              </div>
+
+              {/* Indispensable — siempre visible */}
+              <label className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl cursor-pointer">
+                <input type="checkbox"
+                  checked={(f as any).indispensable || false}
+                  onChange={e => setF({ ...f, indispensable: e.target.checked })}
+                  className="w-4 h-4" />
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-red-700">Equipo indispensable en su ubicación actual</div>
+                  <div className="text-xs text-red-600">Al moverlo a otra ubicación se generará una alerta crítica automática.</div>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -648,14 +768,16 @@ export default function EquiposPage() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="label">Servicio / Unidad</label>
-                <select className="input" value={f.servicio_id || ''} onChange={e => setF({...f, servicio_id: e.target.value})}>
+                <select className="input" value={(f as any).servicio_id || ''}
+                  onChange={e => setF({ ...f, servicio_id: e.target.value })}>
                   <option value="">Sin servicio asignado</option>
                   {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Carro asociado <span className="text-gray-400">(opcional)</span></label>
-                <select className="input" value={f.carro_id || ''} onChange={e => setF({...f, carro_id: e.target.value})}>
+                <select className="input" value={(f as any).carro_id || ''}
+                  onChange={e => setF({ ...f, carro_id: e.target.value })}>
                   <option value="">Sin carro asignado</option>
                   {carros.map(c => <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>)}
                 </select>
@@ -669,15 +791,18 @@ export default function EquiposPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Fecha adquisición</label>
-                <input className="input" type="date" value={f.fecha_adquisicion || ''} onChange={e => setF({...f, fecha_adquisicion: e.target.value})} />
+                <input className="input" type="date" value={(f as any).fecha_adquisicion || ''}
+                  onChange={e => setF({ ...f, fecha_adquisicion: e.target.value })} />
               </div>
               <div>
                 <label className="label">Fecha fabricación</label>
-                <input className="input" type="date" value={f.fecha_fabricacion || ''} onChange={e => setF({...f, fecha_fabricacion: e.target.value})} />
+                <input className="input" type="date" value={(f as any).fecha_fabricacion || ''}
+                  onChange={e => setF({ ...f, fecha_fabricacion: e.target.value })} />
               </div>
               <div>
                 <label className="label">Garantía hasta</label>
-                <input className="input" type="date" value={f.fecha_garantia_hasta || ''} onChange={e => setF({...f, fecha_garantia_hasta: e.target.value})} />
+                <input className="input" type="date" value={(f as any).fecha_garantia_hasta || ''}
+                  onChange={e => setF({ ...f, fecha_garantia_hasta: e.target.value })} />
               </div>
             </div>
           </div>
@@ -688,35 +813,42 @@ export default function EquiposPage() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="label">Empresa de mantenimiento</label>
-                <input className="input" placeholder="Ej: Zoll Medical Iberia"
-                  value={f.empresa_mantenimiento || ''} onChange={e => setF({...f, empresa_mantenimiento: e.target.value})} />
+                <input className="input" value={(f as any).empresa_mantenimiento || ''}
+                  onChange={e => setF({ ...f, empresa_mantenimiento: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Contacto</label>
-                  <input className="input" placeholder="Teléfono o email"
-                    value={f.contacto_mantenimiento || ''} onChange={e => setF({...f, contacto_mantenimiento: e.target.value})} />
+                  <input className="input" value={(f as any).contacto_mantenimiento || ''}
+                    onChange={e => setF({ ...f, contacto_mantenimiento: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">N° contrato</label>
-                  <input className="input" placeholder="CONT-2024-001"
-                    value={f.numero_contrato || ''} onChange={e => setF({...f, numero_contrato: e.target.value})} />
+                  <input className="input" value={(f as any).numero_contrato || ''}
+                    onChange={e => setF({ ...f, numero_contrato: e.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="label">Frecuencia de mantenimiento</label>
-                <select className="input" value={f.frecuencia_mantenimiento} onChange={e => setF({...f, frecuencia_mantenimiento: e.target.value})}>
-                  {FRECUENCIAS.map(fr => <option key={fr.value} value={fr.value}>{fr.label}</option>)}
-                </select>
+                {/* Texto libre con sugerencias autocomplete */}
+                <input className="input" list="frecuencias-list"
+                  placeholder="Ej: Anual, Semestral, Cada 6 meses..."
+                  value={(f as any).frecuencia_mantenimiento || ''}
+                  onChange={e => setF({ ...f, frecuencia_mantenimiento: e.target.value })} />
+                <datalist id="frecuencias-list">
+                  {SUGERENCIAS_FRECUENCIA.map(s => <option key={s} value={s} />)}
+                </datalist>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Último mantenimiento</label>
-                  <input className="input" type="date" value={f.fecha_ultimo_mantenimiento || ''} onChange={e => setF({...f, fecha_ultimo_mantenimiento: e.target.value})} />
+                  <input className="input" type="date" value={(f as any).fecha_ultimo_mantenimiento || ''}
+                    onChange={e => setF({ ...f, fecha_ultimo_mantenimiento: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">Próximo mantenimiento</label>
-                  <input className="input" type="date" value={f.fecha_proximo_mantenimiento || ''} onChange={e => setF({...f, fecha_proximo_mantenimiento: e.target.value})} />
+                  <input className="input" type="date" value={(f as any).fecha_proximo_mantenimiento || ''}
+                    onChange={e => setF({ ...f, fecha_proximo_mantenimiento: e.target.value })} />
                 </div>
               </div>
             </div>
@@ -728,11 +860,13 @@ export default function EquiposPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Última calibración</label>
-                <input className="input" type="date" value={f.fecha_ultima_calibracion || ''} onChange={e => setF({...f, fecha_ultima_calibracion: e.target.value})} />
+                <input className="input" type="date" value={(f as any).fecha_ultima_calibracion || ''}
+                  onChange={e => setF({ ...f, fecha_ultima_calibracion: e.target.value })} />
               </div>
               <div>
                 <label className="label">Próxima calibración</label>
-                <input className="input" type="date" value={f.fecha_proxima_calibracion || ''} onChange={e => setF({...f, fecha_proxima_calibracion: e.target.value})} />
+                <input className="input" type="date" value={(f as any).fecha_proxima_calibracion || ''}
+                  onChange={e => setF({ ...f, fecha_proxima_calibracion: e.target.value })} />
               </div>
             </div>
           </div>
@@ -741,8 +875,8 @@ export default function EquiposPage() {
           <div className="card">
             <div className="section-title mb-3">Observaciones</div>
             <textarea className="input resize-none" rows={3}
-              placeholder="Notas adicionales sobre el equipo..."
-              value={f.observaciones || ''} onChange={e => setF({...f, observaciones: e.target.value})} />
+              value={(f as any).observaciones || ''}
+              onChange={e => setF({ ...f, observaciones: e.target.value })} />
           </div>
 
           <div className="flex gap-2">
@@ -761,20 +895,21 @@ export default function EquiposPage() {
     )
   }
 
-  // ============================================================
+  // ================================================================
   // VISTA LISTA
-  // ============================================================
+  // ================================================================
   return (
     <div className="page">
-      <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
+      <div className="topbar" style={{ borderBottom: `2px solid ${colorPrimario}20` }}>
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
         <div className="flex-1 min-w-0 text-center">
           <div className="text-xs text-gray-400 leading-none">{hospital?.nombre}</div>
           <div className="font-semibold text-sm">Inventario de Equipos</div>
         </div>
-        <button onClick={() => { setEquipoSeleccionado(null); setForm(formInicial); setVista('nuevo') }}
-          style={{background: colorPrimario}}
-          className="text-xs text-white px-3 py-1.5 rounded-lg font-semibold flex-shrink-0 active:opacity-80">
+        <button
+          onClick={() => { setEquipoSeleccionado(null); setForm(formInicial); setVista('nuevo') }}
+          style={{ background: colorPrimario }}
+          className="text-xs text-white px-3 py-1.5 rounded-lg font-semibold flex-shrink-0">
           + Nuevo
         </button>
       </div>
@@ -806,7 +941,7 @@ export default function EquiposPage() {
 
         {/* Filtros estado */}
         <div className="flex gap-1.5 flex-wrap">
-          {[['todos','Todos'], ...ESTADOS.map(e => [e.value, e.label])].map(([val, label]) => (
+          {[['todos', 'Todos'], ...ESTADOS.map(e => [e.value, e.label])].map(([val, label]) => (
             <button key={val} onClick={() => setFiltroEstado(val)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroEstado === val ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-400 border-gray-200'}`}>
               {label}
@@ -814,12 +949,16 @@ export default function EquiposPage() {
           ))}
         </div>
 
-        {/* Filtros categoría */}
+        {/* Filtros categoría — dinámicos desde BD */}
         <div className="flex gap-1.5 flex-wrap">
-          {[['todos','Todas'], ...CATEGORIAS.map(c => [c.value, c.label])].map(([val, label]) => (
-            <button key={val} onClick={() => setFiltroCategoria(val)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroCategoria === val ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-white text-gray-400 border-gray-200'}`}>
-              {label}
+          <button onClick={() => setFiltroCategoriaId('todos')}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroCategoriaId === 'todos' ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-white text-gray-400 border-gray-200'}`}>
+            Todas
+          </button>
+          {categorias.map(c => (
+            <button key={c.id} onClick={() => setFiltroCategoriaId(c.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filtroCategoriaId === c.id ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-white text-gray-400 border-gray-200'}`}>
+              {c.nombre}
             </button>
           ))}
         </div>
@@ -855,13 +994,15 @@ export default function EquiposPage() {
                   setVista('detalle')
                 }}>
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                  e.estado === 'operativo' ? 'bg-green-500'
-                  : e.estado === 'en_mantenimiento' ? 'bg-amber-500'
-                  : e.estado === 'fuera_de_servicio' ? 'bg-red-500'
-                  : 'bg-gray-300'
+                  e.estado === 'operativo' ? 'bg-green-500' :
+                  e.estado === 'en_mantenimiento' ? 'bg-amber-500' :
+                  e.estado === 'fuera_de_servicio' ? 'bg-red-500' : 'bg-gray-300'
                 }`}></div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate">{e.nombre}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold truncate">{e.nombre}</span>
+                    {e.indispensable && <span className="text-red-500 text-xs flex-shrink-0">★</span>}
+                  </div>
                   <div className="text-xs text-gray-400 flex items-center gap-1 flex-wrap">
                     <span>{e.marca} {e.modelo}</span>
                     {e.numero_censo && <span>· {e.numero_censo}</span>}
@@ -872,7 +1013,7 @@ export default function EquiposPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className={`badge text-xs ${estadoBadge(e.estado)}`}>{estadoLabel(e.estado)}</span>
-                  <span className="badge bg-gray-100 text-gray-500 text-xs">{CATEGORIAS.find(c => c.value === e.categoria)?.label}</span>
+                  <span className="badge bg-gray-100 text-gray-500 text-xs">{nombreCategoria(e)}</span>
                 </div>
               </div>
             )
