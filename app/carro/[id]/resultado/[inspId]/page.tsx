@@ -9,7 +9,10 @@ export default function ResultadoPage() {
   const [insp, setInsp] = useState<Inspeccion | null>(null)
   const [items, setItems] = useState<ItemInspeccion[]>([])
   const [perfil, setPerfil] = useState<any>(null)
+  const [auditorNombre, setAuditorNombre] = useState<string>('')
+  const [carroData, setCarroData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
   const inspId = params.inspId as string
@@ -19,26 +22,69 @@ export default function ResultadoPage() {
   useEffect(() => { cargarDatos() }, [inspId])
 
   async function cargarDatos() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-      setPerfil(p)
+    try {
+      // 1) Usuario autenticado
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: p } = await supabase
+          .from('perfiles').select('*').eq('id', user.id).single()
+        setPerfil(p)
+      }
+
+      // 2) Inspección — sin joins para evitar fallos silenciosos
+      const { data: ins, error: insError } = await supabase
+        .from('inspecciones')
+        .select('*')
+        .eq('id', inspId)
+        .single()
+
+      if (insError) {
+        setError('Error al cargar la inspección: ' + insError.message)
+        setLoading(false)
+        return
+      }
+      if (!ins) {
+        setError('No se encontró la inspección con ID: ' + inspId)
+        setLoading(false)
+        return
+      }
+      setInsp(ins)
+
+      // 3) Nombre del auditor — query separada
+      if (ins.auditor_id) {
+        const { data: aud } = await supabase
+          .from('perfiles')
+          .select('nombre')
+          .eq('id', ins.auditor_id)
+          .single()
+        setAuditorNombre(aud?.nombre || '—')
+      }
+
+      // 4) Datos del carro — query separada
+      const { data: carro } = await supabase
+        .from('carros')
+        .select('codigo, nombre, proximo_control, frecuencia_control, servicios(nombre)')
+        .eq('id', carroId)
+        .single()
+      setCarroData(carro)
+
+      // 5) Items con falla — usando .is() para booleanos
+      const { data: its, error: itsError } = await supabase
+        .from('items_inspeccion')
+        .select('*, materiales(nombre, tipo_falla)')
+        .eq('inspeccion_id', inspId)
+        .is('tiene_falla', true)
+
+      if (itsError) {
+        console.warn('[resultado] Error al cargar items:', itsError.message)
+      }
+      setItems(its || [])
+
+    } catch (err: any) {
+      setError('Error inesperado: ' + (err?.message || String(err)))
+    } finally {
+      setLoading(false)
     }
-
-    const { data: ins } = await supabase.from('inspecciones')
-      .select('*, carros(codigo,nombre,proximo_control,frecuencia_control), perfiles(nombre)')
-      .eq('id', inspId)
-      .single()
-    setInsp(ins)
-
-    // FIX: usar .is() para booleanos en vez de .eq() para evitar el error 406
-    const { data: its } = await supabase.from('items_inspeccion')
-      .select('*, materiales(nombre,tipo_falla)')
-      .eq('inspeccion_id', inspId)
-      .is('tiene_falla', true)
-    setItems(its || [])
-
-    setLoading(false)
   }
 
   function irAlInicio() {
@@ -50,16 +96,36 @@ export default function ResultadoPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400 text-sm">Cargando...</div>
+      <div className="text-gray-400 text-sm">Cargando resultado...</div>
     </div>
   )
-  if (!insp) return null
 
+  // Mostrar error en vez de pantalla en blanco
+  if (error) return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="card max-w-sm w-full text-center">
+        <div className="text-2xl mb-2">⚠️</div>
+        <div className="text-sm font-semibold text-red-700 mb-1">Error al cargar</div>
+        <div className="text-xs text-gray-500 mb-4">{error}</div>
+        <button onClick={() => router.back()} className="btn-secondary text-sm">← Volver</button>
+      </div>
+    </div>
+  )
+
+  if (!insp) return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="card max-w-sm w-full text-center">
+        <div className="text-2xl mb-2">🔍</div>
+        <div className="text-sm font-semibold text-gray-700 mb-1">Inspección no encontrada</div>
+        <div className="text-xs text-gray-400 mb-4">ID: {inspId}</div>
+        <button onClick={() => router.back()} className="btn-secondary text-sm">← Volver</button>
+      </div>
+    </div>
+  )
+
+  const inspAny = insp as any
   const fallosGraves  = items.filter(i => i.tipo_falla === 'grave')
   const fallosMenores = items.filter(i => i.tipo_falla === 'menor')
-  const carro   = insp.carros as any
-  const auditor = insp.perfiles as any
-  const inspAny = insp as any   // para acceder a los campos de firma (nuevos)
 
   const config = {
     operativo: {
@@ -110,20 +176,20 @@ export default function ResultadoPage() {
         <div className="card">
           <div className="section-title mb-3">Resumen del control</div>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><div className="label">Carro</div><div className="font-semibold">{carro?.codigo}</div></div>
-            <div><div className="label">Fecha y hora</div><div className="font-semibold">{formatFechaHora((insp as any).fecha)}</div></div>
-            <div><div className="label">Auditor</div><div className="font-semibold">{auditor?.nombre}</div></div>
+            <div><div className="label">Carro</div><div className="font-semibold">{carroData?.codigo || '—'}</div></div>
+            <div><div className="label">Fecha y hora</div><div className="font-semibold">{formatFechaHora(inspAny.fecha)}</div></div>
+            <div><div className="label">Auditor</div><div className="font-semibold">{auditorNombre}</div></div>
             <div><div className="label">Tipo</div><div className="font-semibold">{insp.tipo?.replace('_', ' ')}</div></div>
-            {insp.tipo !== 'post_uso' && (
+            {insp.tipo !== 'post_uso' && carroData?.proximo_control && (
               <div className="col-span-2">
                 <div className="label">Próximo control programado</div>
-                <div className="font-semibold">{formatFecha(carro?.proximo_control)}</div>
+                <div className="font-semibold">{formatFecha(carroData.proximo_control)}</div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Firma digital — si existe */}
+        {/* Firma digital */}
         {inspAny.firma_url && (
           <div className="card">
             <div className="section-title mb-3">Firma digital</div>
@@ -138,7 +204,7 @@ export default function ResultadoPage() {
               </div>
               <div className="flex-shrink-0 text-right">
                 <div className="text-xs font-semibold text-gray-800">
-                  {inspAny.firmante_nombre || auditor?.nombre}
+                  {inspAny.firmante_nombre || auditorNombre}
                 </div>
                 {inspAny.firmante_cargo && (
                   <div className="text-xs text-gray-500 mt-0.5">{inspAny.firmante_cargo}</div>
@@ -172,13 +238,8 @@ export default function ResultadoPage() {
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 flex-shrink-0"></div>
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{(f.materiales as any)?.nombre}</div>
-                    {f.descripcion_falla && (
-                      <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>
-                    )}
-                    {f.foto_url && (
-                      <img src={f.foto_url} alt="evidencia"
-                        className="mt-2 w-full h-24 object-cover rounded-lg" />
-                    )}
+                    {f.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>}
+                    {f.foto_url && <img src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg" />}
                   </div>
                 </div>
               </div>
@@ -196,13 +257,8 @@ export default function ResultadoPage() {
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0"></div>
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{(f.materiales as any)?.nombre}</div>
-                    {f.descripcion_falla && (
-                      <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>
-                    )}
-                    {f.foto_url && (
-                      <img src={f.foto_url} alt="evidencia"
-                        className="mt-2 w-full h-24 object-cover rounded-lg" />
-                    )}
+                    {f.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>}
+                    {f.foto_url && <img src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg" />}
                   </div>
                 </div>
               </div>
@@ -218,7 +274,7 @@ export default function ResultadoPage() {
           <div className="text-xs text-green-700">
             Registrado con fecha, hora, auditor y trazabilidad completa.
             {inspAny.firma_url && ' Firma digital incluida.'}
-            {insp.tipo !== 'post_uso' && ` Próximo control: ${formatFecha(carro?.proximo_control)}.`}
+            {insp.tipo !== 'post_uso' && carroData?.proximo_control && ` Próximo control: ${formatFecha(carroData.proximo_control)}.`}
           </div>
         </div>
 
