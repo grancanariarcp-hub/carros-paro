@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { colorVencimiento, classBadgeVto, formatFecha, proximoControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+import FirmaDigital, { type DatosFirma } from '@/components/FirmaDigital'
 import type { Carro, Cajon, Material, Perfil, Desfibrilador } from '@/lib/types'
 
 interface ItemState {
@@ -27,10 +28,10 @@ interface PrecintoState {
 }
 
 export default function ControlPage() {
-  const [carro, setCarro] = useState<Carro|null>(null)
+  const [carro, setCarro] = useState<Carro | null>(null)
   const [cajones, setCajones] = useState<Cajon[]>([])
-  const [desf, setDesf] = useState<Desfibrilador|null>(null)
-  const [perfil, setPerfil] = useState<Perfil|null>(null)
+  const [desf, setDesf] = useState<Desfibrilador | null>(null)
+  const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [items, setItems] = useState<Record<string, ItemState>>({})
   const [desfForm, setDesfForm] = useState({
     numero_censo: '', modelo: '', marca: '',
@@ -40,7 +41,8 @@ export default function ControlPage() {
   const [precintoColocado, setPrecintoColocado] = useState<PrecintoState>({ numero: '', foto_url: '' })
   const [guardando, setGuardando] = useState(false)
   const [escaneando, setEscaneando] = useState(false)
-  const [campoEscaneo, setCampoEscaneo] = useState<'precinto_retirado'|'precinto_colocado'|'desf_censo'>('precinto_retirado')
+  const [mostrarFirma, setMostrarFirma] = useState(false)
+  const [campoEscaneo, setCampoEscaneo] = useState<'precinto_retirado' | 'precinto_colocado' | 'desf_censo'>('precinto_retirado')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const params = useParams()
@@ -49,8 +51,8 @@ export default function ControlPage() {
   const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const filePrecintoRef = useRef<HTMLInputElement>(null)
-  const [fotoTarget, setFotoTarget] = useState<string|null>(null)
-  const [fotoPrecintoTarget, setFotoPrecintoTarget] = useState<'retirado'|'colocado'|null>(null)
+  const [fotoTarget, setFotoTarget] = useState<string | null>(null)
+  const [fotoPrecintoTarget, setFotoPrecintoTarget] = useState<'retirado' | 'colocado' | null>(null)
 
   useEffect(() => { cargarDatos() }, [carroId])
 
@@ -177,16 +179,21 @@ export default function ControlPage() {
     })
   }
 
-  async function guardar() {
+  // Paso 1: validar y abrir pantalla de firma
+  function solicitarFirma() {
     if (!desfForm.numero_censo || !desfForm.modelo || !desfForm.fecha_mantenimiento) {
       toast.error('Completá todos los datos del desfibrilador')
       return
     }
     if (hayVtosBloqueantes()) {
-      toast.error('Hay materiales con vencimiento menor a 7 días. Actualizá las fechas antes de guardar.')
+      toast.error('Hay materiales con vencimiento menor a 7 días. Actualizá las fechas antes de continuar.')
       return
     }
+    setMostrarFirma(true)
+  }
 
+  // Paso 2: recibir firma y guardar todo
+  async function guardarConFirma(datosFirma: DatosFirma) {
     setGuardando(true)
     const resultado = calcularResultado()
 
@@ -200,7 +207,6 @@ export default function ControlPage() {
             .from('fotos-fallos').upload(path, item.foto_file)
           if (up) {
             const { data: url } = supabase.storage.from('fotos-fallos').getPublicUrl(path)
-            updateItem(matId, 'foto_url', url.publicUrl)
             items[matId].foto_url = url.publicUrl
           }
         }
@@ -209,7 +215,6 @@ export default function ControlPage() {
       // Subir fotos de precintos
       let urlFotoPrecintoRetirado: string | null = null
       let urlFotoPrecintoColocado: string | null = null
-
       if (precintoRetirado.foto_file) {
         urlFotoPrecintoRetirado = await subirFotoPrecinto('retirado', precintoRetirado.foto_file)
       }
@@ -217,7 +222,23 @@ export default function ControlPage() {
         urlFotoPrecintoColocado = await subirFotoPrecinto('colocado', precintoColocado.foto_file)
       }
 
-      // Guardar inspección con precintos
+      // Subir PNG de la firma
+      let firmaUrl: string | null = null
+      const firmaPath = `firmas/${carroId}/${Date.now()}_firma.png`
+      const { data: firmaUp, error: firmaErr } = await supabase.storage
+        .from('evidencias')
+        .upload(firmaPath, datosFirma.blob, { contentType: 'image/png', upsert: false })
+      if (firmaUp && !firmaErr) {
+        const { data: firmaPublic } = supabase.storage
+          .from('evidencias')
+          .getPublicUrl(firmaPath)
+        firmaUrl = firmaPublic.publicUrl
+      } else {
+        console.warn('[firma] Error al subir PNG:', firmaErr?.message)
+        // No bloqueamos el guardado si falla la subida de la firma
+      }
+
+      // Guardar inspección con firma
       const { data: insp, error: inspError } = await supabase.from('inspecciones').insert({
         carro_id: carroId,
         tipo,
@@ -230,6 +251,12 @@ export default function ControlPage() {
         precinto_colocado: precintoColocado.numero || null,
         foto_precinto_retirado: urlFotoPrecintoRetirado,
         foto_precinto_colocado: urlFotoPrecintoColocado,
+        // Datos de firma
+        firma_url: firmaUrl,
+        firmante_nombre: datosFirma.nombre,
+        firmante_cargo: datosFirma.cargo || null,
+        firmado_en: datosFirma.firmadoEn.toISOString(),
+        firmante_usuario_id: perfil?.id || null,
       }).select().single()
 
       if (inspError) throw inspError
@@ -252,7 +279,6 @@ export default function ControlPage() {
       const proximo = tipo !== 'post_uso'
         ? proximoControl(carro?.frecuencia_control || 'mensual')
         : carro?.proximo_control
-
       await supabase.from('carros').update({
         estado: resultado,
         ultimo_control: new Date().toISOString(),
@@ -278,8 +304,8 @@ export default function ControlPage() {
       if (resultado === 'no_operativo') {
         await supabase.from('alertas').insert({
           carro_id: carroId,
-          tipo: 'no_operativo',
-          mensaje: `Carro ${carro?.codigo} declarado NO OPERATIVO en control del ${new Date().toLocaleDateString('es')}`
+          tipo: 'carro_no_operativo',
+          mensaje: `Carro ${carro?.codigo} declarado NO OPERATIVO en control del ${new Date().toLocaleDateString('es')}`,
         })
       }
 
@@ -291,15 +317,18 @@ export default function ControlPage() {
         registro_id: insp.id,
         detalle: {
           tipo, resultado, carro_codigo: carro?.codigo,
+          firmante: datosFirma.nombre,
+          firmante_cargo: datosFirma.cargo || null,
+          firma_capturada: !!firmaUrl,
           precinto_retirado: precintoRetirado.numero || null,
           precinto_colocado: precintoColocado.numero || null,
         }
       })
 
+      setMostrarFirma(false)
       router.push(`/carro/${carroId}/resultado/${insp.id}`)
     } catch (err: any) {
       toast.error('Error al guardar: ' + err.message)
-    } finally {
       setGuardando(false)
     }
   }
@@ -318,7 +347,11 @@ export default function ControlPage() {
     }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Cargando...</div>
+    </div>
+  )
 
   const tipoLabel = tipo === 'mensual' ? 'Control mensual'
     : tipo === 'post_uso' ? 'Control post-utilización'
@@ -332,16 +365,25 @@ export default function ControlPage() {
           onClose={() => setEscaneando(false)}
         />
       )}
+
+      {/* Pantalla de firma — se superpone al finalizar */}
+      {mostrarFirma && (
+        <FirmaDigital
+          nombreSugerido={perfil?.nombre || ''}
+          cargoSugerido={perfil?.rol || ''}
+          onConfirmar={guardarConFirma}
+          onCancelar={() => setMostrarFirma(false)}
+          guardando={guardando}
+        />
+      )}
+
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">{tipoLabel}</span>
       </div>
 
-      {/* Input oculto para fotos de fallos */}
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
         className="hidden" onChange={handleFotoChange} />
-
-      {/* Input oculto para fotos de precintos */}
       <input ref={filePrecintoRef} type="file" accept="image/*" capture="environment"
         className="hidden" onChange={handleFotoPrecintoChange} />
 
@@ -355,7 +397,7 @@ export default function ControlPage() {
             <div><div className="label">Servicio</div><div className="font-semibold">{(carro?.servicios as any)?.nombre || '—'}</div></div>
             <div><div className="label">Auditor</div><div className="font-semibold">{perfil?.nombre}</div></div>
             <div><div className="label">Último control</div><div className="font-semibold">{formatFecha(carro?.ultimo_control) || '—'}</div></div>
-            <div><div className="label">Tipo anterior</div><div className="font-semibold">{carro?.ultimo_tipo_control?.replace('_',' ') || '—'}</div></div>
+            <div><div className="label">Tipo anterior</div><div className="font-semibold">{carro?.ultimo_tipo_control?.replace('_', ' ') || '—'}</div></div>
           </div>
           <div className="pt-2 border-t border-gray-50">
             <div className="section-title mb-2">Semáforo de vencimientos</div>
@@ -367,14 +409,12 @@ export default function ControlPage() {
           </div>
         </div>
 
-        {/* ============================================================
-            PRECINTO RETIRADO — al inicio del control
-        ============================================================ */}
+        {/* Precinto retirado */}
         <div className="card border-amber-100 bg-amber-50">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
             </div>
             <div>
@@ -382,17 +422,13 @@ export default function ControlPage() {
               <div className="text-xs text-amber-600">Registra el número del precinto que rompes para iniciar el control</div>
             </div>
           </div>
-
           <div className="flex flex-col gap-3">
             <div>
               <label className="label">Número de precinto retirado</label>
               <div className="flex gap-2">
-                <input
-                  className="input flex-1"
-                  placeholder="Ej: PR-2024-00312"
+                <input className="input flex-1" placeholder="Ej: PR-2024-00312"
                   value={precintoRetirado.numero}
-                  onChange={e => setPrecintoRetirado(prev => ({ ...prev, numero: e.target.value }))}
-                />
+                  onChange={e => setPrecintoRetirado(prev => ({ ...prev, numero: e.target.value }))} />
                 <button type="button"
                   onClick={() => { setCampoEscaneo('precinto_retirado'); setEscaneando(true) }}
                   className="flex-shrink-0 px-3 py-2 bg-amber-700 text-white rounded-xl text-xs font-semibold active:opacity-80">
@@ -400,25 +436,20 @@ export default function ControlPage() {
                 </button>
               </div>
             </div>
-
             <div>
               <label className="label">Foto del precinto retirado <span className="text-gray-400">(opcional)</span></label>
               {precintoRetirado.foto_url ? (
                 <div className="relative">
                   <img src={precintoRetirado.foto_url} alt="precinto retirado"
                     className="w-full h-28 object-cover rounded-xl border border-amber-200" />
-                  <button
-                    onClick={() => setPrecintoRetirado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
-                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center"
-                  >✕</button>
+                  <button onClick={() => setPrecintoRetirado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
+                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center">✕</button>
                   <div className="text-xs text-green-700 mt-1 font-medium">✓ Foto adjunta</div>
                 </div>
               ) : (
-                <button
-                  className="w-full py-2.5 border border-dashed border-amber-300 rounded-xl text-xs text-amber-700 font-medium flex items-center justify-center gap-2 bg-white active:bg-amber-50"
-                  onClick={() => abrirFotoPrecinto('retirado')}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2}/><circle cx="12" cy="13" r="4" strokeWidth={2}/></svg>
+                <button className="w-full py-2.5 border border-dashed border-amber-300 rounded-xl text-xs text-amber-700 font-medium flex items-center justify-center gap-2 bg-white active:bg-amber-50"
+                  onClick={() => abrirFotoPrecinto('retirado')}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2} /><circle cx="12" cy="13" r="4" strokeWidth={2} /></svg>
                   Fotografiar precinto retirado
                 </button>
               )}
@@ -453,17 +484,12 @@ export default function ControlPage() {
                 const item = items[mat.id]
                 if (!item) return null
                 const vtoColor = item.tiene_vencimiento && item.fecha_vencimiento
-                  ? colorVencimiento(item.fecha_vencimiento)
-                  : null
-
+                  ? colorVencimiento(item.fecha_vencimiento) : null
                 const vtoInputClass = !item.tiene_vencimiento
                   ? 'bg-gray-50 border-gray-200 text-gray-300'
-                  : !item.fecha_vencimiento
-                    ? 'bg-gray-50 border-gray-300 text-gray-400'
-                    : vtoColor === 'rojo'
-                      ? 'bg-red-100 border-red-400 text-red-700'
-                      : vtoColor === 'amarillo'
-                        ? 'bg-amber-100 border-amber-400 text-amber-700'
+                  : !item.fecha_vencimiento ? 'bg-gray-50 border-gray-300 text-gray-400'
+                    : vtoColor === 'rojo' ? 'bg-red-100 border-red-400 text-red-700'
+                      : vtoColor === 'amarillo' ? 'bg-amber-100 border-amber-400 text-amber-700'
                         : 'bg-green-100 border-green-400 text-green-700'
 
                 return (
@@ -473,37 +499,24 @@ export default function ControlPage() {
                         <div className="text-xs font-medium leading-tight">{mat.nombre}</div>
                         <div className="text-xs text-gray-400">×{mat.cantidad_requerida}</div>
                       </div>
-
                       {item.tiene_vencimiento ? (
-                        <input
-                          type="date"
-                          value={item.fecha_vencimiento || ''}
+                        <input type="date" value={item.fecha_vencimiento || ''}
                           onChange={e => actualizarFechaVto(mat.id, e.target.value)}
-                          className={`text-xs py-1 px-1 rounded-lg border text-center w-full font-medium ${vtoInputClass}`}
-                        />
+                          className={`text-xs py-1 px-1 rounded-lg border text-center w-full font-medium ${vtoInputClass}`} />
                       ) : (
                         <div className="text-xs text-gray-300 text-center">—</div>
                       )}
-
-                      <div
-                        className={`chk-box mx-auto ${item.cantidad_ok ? 'checked-ok' : ''}`}
-                        onClick={() => updateItem(mat.id, 'cantidad_ok', !item.cantidad_ok)}
-                      >
-                        {item.cantidad_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3}/></svg>}
+                      <div className={`chk-box mx-auto ${item.cantidad_ok ? 'checked-ok' : ''}`}
+                        onClick={() => updateItem(mat.id, 'cantidad_ok', !item.cantidad_ok)}>
+                        {item.cantidad_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3} /></svg>}
                       </div>
-
-                      <div
-                        className={`chk-box mx-auto ${item.estado_ok ? 'checked-ok' : ''}`}
-                        onClick={() => updateItem(mat.id, 'estado_ok', !item.estado_ok)}
-                      >
-                        {item.estado_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3}/></svg>}
+                      <div className={`chk-box mx-auto ${item.estado_ok ? 'checked-ok' : ''}`}
+                        onClick={() => updateItem(mat.id, 'estado_ok', !item.estado_ok)}>
+                        {item.estado_ok && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" strokeWidth={3} /></svg>}
                       </div>
-
-                      <div
-                        className={`chk-box mx-auto border-red-300 ${item.tiene_falla ? 'checked-falla' : ''}`}
-                        onClick={() => toggleFalla(mat.id)}
-                      >
-                        {item.tiene_falla && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" strokeWidth={3}/><line x1="6" y1="6" x2="18" y2="18" strokeWidth={3}/></svg>}
+                      <div className={`chk-box mx-auto border-red-300 ${item.tiene_falla ? 'checked-falla' : ''}`}
+                        onClick={() => toggleFalla(mat.id)}>
+                        {item.tiene_falla && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" strokeWidth={3} /><line x1="6" y1="6" x2="18" y2="18" strokeWidth={3} /></svg>}
                       </div>
                     </div>
 
@@ -516,22 +529,20 @@ export default function ControlPage() {
                     {item.tiene_falla && (
                       <div className="falla-drawer mb-2">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeWidth={2}/><line x1="12" y1="9" x2="12" y2="13" strokeWidth={2}/><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth={2}/></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeWidth={2} /><line x1="12" y1="9" x2="12" y2="13" strokeWidth={2} /><line x1="12" y1="17" x2="12.01" y2="17" strokeWidth={2} /></svg>
                           Falla — {mat.nombre}
                         </div>
                         <div>
                           <div className="label mb-1">Tipo de falla</div>
                           <div className="flex gap-2">
-                            {(['menor','grave'] as const).map(tf => (
+                            {(['menor', 'grave'] as const).map(tf => (
                               <button key={tf}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                                   item.tipo_falla === tf
-                                    ? tf === 'menor' ? 'bg-amber-600 text-white border-amber-600'
-                                      : 'bg-red-700 text-white border-red-700'
+                                    ? tf === 'menor' ? 'bg-amber-600 text-white border-amber-600' : 'bg-red-700 text-white border-red-700'
                                     : 'bg-white text-gray-700 border-gray-200'
                                 }`}
-                                onClick={() => updateItem(mat.id, 'tipo_falla', tf)}
-                              >
+                                onClick={() => updateItem(mat.id, 'tipo_falla', tf)}>
                                 Fallo {tf}
                               </button>
                             ))}
@@ -539,13 +550,10 @@ export default function ControlPage() {
                         </div>
                         <div>
                           <div className="label mb-1">Descripción</div>
-                          <textarea
-                            className="input resize-none"
-                            rows={2}
+                          <textarea className="input resize-none" rows={2}
                             placeholder="Describí la falla en detalle..."
                             value={item.descripcion_falla}
-                            onChange={e => updateItem(mat.id, 'descripcion_falla', e.target.value)}
-                          />
+                            onChange={e => updateItem(mat.id, 'descripcion_falla', e.target.value)} />
                         </div>
                         <div>
                           <div className="label mb-1">Fotografía de evidencia</div>
@@ -553,26 +561,20 @@ export default function ControlPage() {
                             <div className="relative">
                               <img src={item.foto_url} alt="evidencia"
                                 className="w-full h-28 object-cover rounded-xl border border-red-200" />
-                              <button
-                                onClick={() => { updateItem(mat.id, 'foto_url', ''); updateItem(mat.id, 'foto_file', undefined) }}
-                                className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center"
-                              >✕</button>
+                              <button onClick={() => { updateItem(mat.id, 'foto_url', ''); updateItem(mat.id, 'foto_file', undefined) }}
+                                className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center">✕</button>
                               <div className="text-xs text-green-700 mt-1 font-medium">✓ Foto adjunta</div>
                             </div>
                           ) : (
                             <div className="flex gap-2">
-                              <button
-                                className="flex-1 py-2.5 border border-dashed border-red-300 rounded-xl text-xs text-red-600 font-medium flex items-center justify-center gap-2 bg-white active:bg-red-50"
-                                onClick={() => abrirFoto(mat.id)}
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2}/><circle cx="12" cy="13" r="4" strokeWidth={2}/></svg>
+                              <button className="flex-1 py-2.5 border border-dashed border-red-300 rounded-xl text-xs text-red-600 font-medium flex items-center justify-center gap-2 bg-white active:bg-red-50"
+                                onClick={() => abrirFoto(mat.id)}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2} /><circle cx="12" cy="13" r="4" strokeWidth={2} /></svg>
                                 Tomar foto
                               </button>
-                              <button
-                                className="flex-1 py-2.5 border border-dashed border-red-300 rounded-xl text-xs text-red-600 font-medium flex items-center justify-center gap-2 bg-white active:bg-red-50"
-                                onClick={() => abrirFoto(mat.id)}
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2}/><circle cx="8.5" cy="8.5" r="1.5" strokeWidth={2}/><polyline points="21 15 16 10 5 21" strokeWidth={2}/></svg>
+                              <button className="flex-1 py-2.5 border border-dashed border-red-300 rounded-xl text-xs text-red-600 font-medium flex items-center justify-center gap-2 bg-white active:bg-red-50"
+                                onClick={() => abrirFoto(mat.id)}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2} /><circle cx="8.5" cy="8.5" r="1.5" strokeWidth={2} /><polyline points="21 15 16 10 5 21" strokeWidth={2} /></svg>
                                 Galería
                               </button>
                             </div>
@@ -595,19 +597,19 @@ export default function ControlPage() {
               <div>
                 <label className="label">Marca</label>
                 <input className="input" placeholder="Ej: Zoll" value={desfForm.marca}
-                  onChange={e => setDesfForm({...desfForm, marca: e.target.value})} />
+                  onChange={e => setDesfForm({ ...desfForm, marca: e.target.value })} />
               </div>
               <div>
                 <label className="label">Modelo *</label>
                 <input className="input" placeholder="Ej: AED Plus" value={desfForm.modelo}
-                  onChange={e => setDesfForm({...desfForm, modelo: e.target.value})} />
+                  onChange={e => setDesfForm({ ...desfForm, modelo: e.target.value })} />
               </div>
             </div>
             <div>
               <label className="label">N° censo *</label>
               <div className="flex gap-2">
                 <input className="input flex-1" placeholder="Ej: DEF-2024-0312" value={desfForm.numero_censo}
-                  onChange={e => setDesfForm({...desfForm, numero_censo: e.target.value})} />
+                  onChange={e => setDesfForm({ ...desfForm, numero_censo: e.target.value })} />
                 <button type="button"
                   onClick={() => { setCampoEscaneo('desf_censo'); setEscaneando(true) }}
                   className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold active:opacity-80">
@@ -619,26 +621,24 @@ export default function ControlPage() {
               <div>
                 <label className="label">Último mantenimiento</label>
                 <input className="input" type="date" value={desfForm.fecha_ultimo_mantenimiento}
-                  onChange={e => setDesfForm({...desfForm, fecha_ultimo_mantenimiento: e.target.value})} />
+                  onChange={e => setDesfForm({ ...desfForm, fecha_ultimo_mantenimiento: e.target.value })} />
               </div>
               <div>
                 <label className="label">Próximo mantenimiento *</label>
                 <input className="input" type="date" value={desfForm.fecha_mantenimiento}
-                  onChange={e => setDesfForm({...desfForm, fecha_mantenimiento: e.target.value})} />
+                  onChange={e => setDesfForm({ ...desfForm, fecha_mantenimiento: e.target.value })} />
               </div>
             </div>
           </div>
         </div>
 
-        {/* ============================================================
-            PRECINTO COLOCADO — al finalizar el control
-        ============================================================ */}
+        {/* Precinto colocado */}
         <div className="card border-blue-100 bg-blue-50">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0110 0v4"/>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0110 0v4" />
               </svg>
             </div>
             <div>
@@ -646,17 +646,13 @@ export default function ControlPage() {
               <div className="text-xs text-blue-600">Registra el número del nuevo precinto con el que sellas el carro</div>
             </div>
           </div>
-
           <div className="flex flex-col gap-3">
             <div>
               <label className="label">Número de precinto colocado</label>
               <div className="flex gap-2">
-                <input
-                  className="input flex-1"
-                  placeholder="Ej: PR-2024-00313"
+                <input className="input flex-1" placeholder="Ej: PR-2024-00313"
                   value={precintoColocado.numero}
-                  onChange={e => setPrecintoColocado(prev => ({ ...prev, numero: e.target.value }))}
-                />
+                  onChange={e => setPrecintoColocado(prev => ({ ...prev, numero: e.target.value }))} />
                 <button type="button"
                   onClick={() => { setCampoEscaneo('precinto_colocado'); setEscaneando(true) }}
                   className="flex-shrink-0 px-3 py-2 bg-blue-700 text-white rounded-xl text-xs font-semibold active:opacity-80">
@@ -664,25 +660,20 @@ export default function ControlPage() {
                 </button>
               </div>
             </div>
-
             <div>
               <label className="label">Foto del precinto colocado <span className="text-gray-400">(opcional)</span></label>
               {precintoColocado.foto_url ? (
                 <div className="relative">
                   <img src={precintoColocado.foto_url} alt="precinto colocado"
                     className="w-full h-28 object-cover rounded-xl border border-blue-200" />
-                  <button
-                    onClick={() => setPrecintoColocado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
-                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center"
-                  >✕</button>
+                  <button onClick={() => setPrecintoColocado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
+                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center">✕</button>
                   <div className="text-xs text-green-700 mt-1 font-medium">✓ Foto adjunta</div>
                 </div>
               ) : (
-                <button
-                  className="w-full py-2.5 border border-dashed border-blue-300 rounded-xl text-xs text-blue-700 font-medium flex items-center justify-center gap-2 bg-white active:bg-blue-50"
-                  onClick={() => abrirFotoPrecinto('colocado')}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2}/><circle cx="12" cy="13" r="4" strokeWidth={2}/></svg>
+                <button className="w-full py-2.5 border border-dashed border-blue-300 rounded-xl text-xs text-blue-700 font-medium flex items-center justify-center gap-2 bg-white active:bg-blue-50"
+                  onClick={() => abrirFotoPrecinto('colocado')}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeWidth={2} /><circle cx="12" cy="13" r="4" strokeWidth={2} /></svg>
                   Fotografiar precinto colocado
                 </button>
               )}
@@ -690,9 +681,11 @@ export default function ControlPage() {
           </div>
         </div>
 
-        <button className="btn-primary" onClick={guardar} disabled={guardando}>
-          {guardando ? 'Guardando...' : 'Finalizar y guardar control'}
+        {/* Botón finalizar — ahora abre la firma */}
+        <button className="btn-primary" onClick={solicitarFirma} disabled={guardando}>
+          {guardando ? 'Guardando...' : '✍️ Finalizar y firmar control'}
         </button>
+
       </div>
     </div>
   )
