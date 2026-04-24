@@ -640,7 +640,6 @@ function ModalAgregarEquipo({
     form.modelo.trim().length > 0 &&
     form.numero_censo.trim().length > 0
 
-  // Escáner: prop correcta = onResult
   async function onCodigoEscaneado(codigo: string) {
     setEscanerAbierto(false)
     const codigoLimpio = codigo.trim()
@@ -704,8 +703,7 @@ function ModalAgregarEquipo({
       })
 
       if (eraIndispensable && (origenCarroId || origenServicioId)) {
-        // Llamada a función SQL centralizada (la crearemos en el siguiente paso).
-        // Si aún no existe, caemos al insert directo como fallback.
+        // Llamada a la función SQL centralizada
         const { error: errRpc } = await supabase.rpc('crear_alerta_con_notificaciones', {
           p_hospital_id: hospitalId,
           p_tipo: 'equipo_indispensable_movido',
@@ -720,14 +718,14 @@ function ModalAgregarEquipo({
           p_servicio_id: origenServicioId,
         })
         if (errRpc) {
-          // Fallback silencioso: la función SQL aún no está creada
           // eslint-disable-next-line no-console
           console.warn('[reasignar] RPC no disponible, la alerta no se creó:', errRpc.message)
+          toast('Equipo movido, pero no se pudo crear alerta automática', { icon: '⚠️' })
         }
       }
 
       toast.success(eraIndispensable
-        ? '✓ Equipo reasignado. Alerta creada por ser indispensable.'
+        ? '✓ Equipo reasignado. Alerta enviada a responsables.'
         : '✓ Equipo reasignado a este carro')
       onCreado()
     } catch (err: any) {
