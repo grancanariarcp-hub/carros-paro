@@ -55,7 +55,6 @@ export default function SupervisorPage() {
     init()
   }, [])
 
-  // Auto-refresco cada 60 segundos
   useEffect(() => {
     if (!perfil?.hospital_id) return
     const interval = setInterval(() => {
@@ -88,7 +87,6 @@ export default function SupervisorPage() {
   }
 
   const pctOperativos = stats.total > 0 ? Math.round((stats.operativos / stats.total) * 100) : 0
-
   const colorPrimario = hospital?.color_primario || '#1d4ed8'
   useHospitalTheme(hospital?.color_primario)
 
@@ -100,6 +98,7 @@ export default function SupervisorPage() {
 
   return (
     <div className="page">
+
       {/* TOPBAR */}
       <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -139,7 +138,10 @@ export default function SupervisorPage() {
       <div className="content">
 
         {/* SEMÁFORO GENERAL */}
-        <div className="card" style={{background: pctOperativos === 100 ? '#f0fdf4' : pctOperativos >= 75 ? '#fffbeb' : '#fef2f2', borderColor: pctOperativos === 100 ? '#bbf7d0' : pctOperativos >= 75 ? '#fde68a' : '#fecaca'}}>
+        <div className="card" style={{
+          background: pctOperativos === 100 ? '#f0fdf4' : pctOperativos >= 75 ? '#fffbeb' : '#fef2f2',
+          borderColor: pctOperativos === 100 ? '#bbf7d0' : pctOperativos >= 75 ? '#fde68a' : '#fecaca'
+        }}>
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="text-xs text-gray-500 mb-0.5">Estado general del hospital</div>
@@ -152,7 +154,6 @@ export default function SupervisorPage() {
               <div className="text-xs text-gray-400">operativos</div>
             </div>
           </div>
-          {/* Barra de progreso */}
           <div className="w-full bg-gray-100 rounded-full h-2.5">
             <div className="h-2.5 rounded-full transition-all" style={{
               width: `${pctOperativos}%`,
@@ -165,7 +166,7 @@ export default function SupervisorPage() {
           </div>
         </div>
 
-        {/* KPIs 2x3 */}
+        {/* KPIs */}
         <div className="grid grid-cols-3 gap-2">
           <div className="card text-center p-3 cursor-pointer" onClick={() => setFiltroEstado('operativo')}>
             <div className="text-2xl font-bold text-green-700">{stats.operativos}</div>
@@ -219,7 +220,58 @@ export default function SupervisorPage() {
           </div>
         )}
 
-        {/* FILTROS */}
+        {/* ACCESOS RÁPIDOS */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
+            onClick={() => router.push('/admin/equipos')}>
+            <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Equipos</span>
+          </button>
+          <button
+            className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
+            onClick={() => router.push('/admin/informes')}>
+            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2}/>
+                <polyline points="14 2 14 8 20 8" strokeWidth={2}/>
+                <line x1="16" y1="13" x2="8" y2="13" strokeWidth={2}/>
+                <line x1="16" y1="17" x2="8" y2="17" strokeWidth={2}/>
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Informes</span>
+          </button>
+          <button
+            className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
+            onClick={() => router.push('/supervisor/usuarios')}>
+            <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" strokeWidth={2}/>
+                <circle cx="9" cy="7" r="4" strokeWidth={2}/>
+                <path d="M23 21v-2a4 4 0 00-3-3.87" strokeWidth={2}/>
+                <path d="M16 3.13a4 4 0 010 7.75" strokeWidth={2}/>
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Usuarios</span>
+          </button>
+          <button
+            className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
+            onClick={() => router.push('/buscar')}>
+            <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" strokeWidth={2}/>
+                <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round"/>
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Buscar</span>
+          </button>
+        </div>
+
+        {/* FILTROS ESTADO */}
         <div className="flex gap-1.5 flex-wrap">
           {([['todos','Todos'],['operativo','Operativos'],['condicional','Condicionales'],['no_operativo','No operativos']] as const).map(([val, label]) => (
             <button key={val} onClick={() => setFiltroEstado(val)}
@@ -249,7 +301,7 @@ export default function SupervisorPage() {
           </div>
         )}
 
-        {/* LISTA DE CARROS CON SEMÁFORO */}
+        {/* LISTA DE CARROS */}
         <div className="card">
           <div className="flex items-center justify-between mb-3">
             <div className="section-title">
@@ -267,7 +319,6 @@ export default function SupervisorPage() {
             const controlProximo = dias !== null && dias >= 0 && dias <= 7
             return (
               <div key={c.id} className="row-item cursor-pointer" onClick={() => router.push(`/carro/${c.id}`)}>
-                {/* Semáforo */}
                 <div className="flex flex-col gap-1 flex-shrink-0">
                   <div className={`w-3 h-3 rounded-full ${c.estado === 'operativo' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
                   <div className={`w-3 h-3 rounded-full ${c.estado === 'condicional' ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
@@ -291,26 +342,6 @@ export default function SupervisorPage() {
           {carrosFiltrados.length === 0 && (
             <div className="text-xs text-gray-400 text-center py-6">No hay carros que coincidan con los filtros</div>
           )}
-        </div>
-
-        {/* ACCESOS RÁPIDOS A INFORMES */}
-        <div className="card">
-          <div className="section-title mb-3">Informes rápidos</div>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { ruta: '/informes/situacion_general', label: 'Situación general', icon: '📊' },
-              { ruta: '/informes/controles_vencidos', label: 'Controles vencidos', icon: '📅' },
-              { ruta: '/informes/no_operativos', label: 'No operativos', icon: '🚨' },
-              { ruta: '/informes/vencimientos', label: 'Vencimientos', icon: '⏰' },
-            ].map(inf => (
-              <button key={inf.ruta}
-                className="flex items-center gap-2 p-3 border border-gray-200 rounded-xl text-left active:bg-gray-50"
-                onClick={() => router.push(inf.ruta)}>
-                <span className="text-lg">{inf.icon}</span>
-                <span className="text-xs font-semibold text-gray-700 leading-tight">{inf.label}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* BOTÓN REFRESCAR */}
