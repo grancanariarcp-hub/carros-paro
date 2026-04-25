@@ -563,12 +563,19 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
       <div className="topbar">
         <button onClick={volver} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center truncate">{equipo.nombre}</span>
-        {puedeEditar && (
-          <button onClick={() => setEditando(true)}
-            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold">
-            ✏️ Editar
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => router.push(`/admin/equipos/${equipoId}/pdf`)}
+            className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg font-semibold border border-gray-200 active:bg-gray-200">
+            🖨️ PDF
           </button>
-        )}
+          {puedeEditar && (
+            <button onClick={() => setEditando(true)}
+              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold">
+              ✏️ Editar
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="content">
