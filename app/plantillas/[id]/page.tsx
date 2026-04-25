@@ -356,14 +356,14 @@ export default function EditorPlantillaPage() {
             totalSecciones={secciones.length}
             onToggleExpand={() => setSecciones(prev => prev.map(s => s.id === seccion.id ? { ...s, _expandida: !s._expandida } : s))}
             onToggleEditar={() => setSecciones(prev => prev.map(s => s.id === seccion.id ? { ...s, _editando: !s._editando } : s))}
-            onActualizar={(campos) => actualizarSeccion(seccion.id, campos)}
+            onActualizar={(campos: Partial<Seccion>) => actualizarSeccion(seccion.id, campos)}
             onEliminar={() => eliminarSeccion(seccion.id)}
-            onMover={(dir) => moverSeccion(seccion.id, dir)}
+            onMover={(dir: 'arriba' | 'abajo') => moverSeccion(seccion.id, dir)}
             onCrearItem={() => crearItem(seccion.id)}
-            onActualizarItem={(itemId, campos) => actualizarItem(seccion.id, itemId, campos)}
-            onEliminarItem={(itemId) => eliminarItem(seccion.id, itemId)}
-            onMoverItem={(itemId, dir) => moverItem(seccion.id, itemId, dir)}
-            onToggleEditarItem={(itemId) => setSecciones(prev => prev.map(s =>
+            onActualizarItem={(itemId: string, campos: Partial<Item>) => actualizarItem(seccion.id, itemId, campos)}
+            onEliminarItem={(itemId: string) => eliminarItem(seccion.id, itemId)}
+            onMoverItem={(itemId: string, dir: 'arriba' | 'abajo') => moverItem(seccion.id, itemId, dir)}
+            onToggleEditarItem={(itemId: string) => setSecciones(prev => prev.map(s =>
               s.id === seccion.id
                 ? { ...s, items: s.items.map(i => i.id === itemId ? { ...i, _editando: !i._editando } : i) }
                 : s
