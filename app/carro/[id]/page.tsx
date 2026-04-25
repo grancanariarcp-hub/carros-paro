@@ -18,6 +18,11 @@ export default function MenuCarroPage() {
   const [numeroCenso, setNumeroCenso] = useState('')
   const [guardandoCenso, setGuardandoCenso] = useState(false)
   const [escaneando, setEscaneando] = useState(false)
+  // Plantillas
+  const [plantillas, setPlantillas] = useState<any[]>([])
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState<string>('')
+  const [guardandoPlantilla, setGuardandoPlantilla] = useState(false)
+
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
@@ -36,6 +41,7 @@ export default function MenuCarroPage() {
     if (!c) { router.back(); return }
     setCarro(c)
     setNumeroCenso((c as any).numero_censo || '')
+    setPlantillaSeleccionada((c as any).plantilla_id || '')
 
     const { data: ins } = await supabase.from('inspecciones')
       .select('*, perfiles(nombre)')
@@ -51,6 +57,7 @@ export default function MenuCarroPage() {
       .eq('activo', true)
     setTotalEquipos(count || 0)
 
+    // Vencimientos
     const { data: cajs } = await supabase.from('cajones')
       .select('materiales(*)')
       .eq('carro_id', id)
@@ -65,6 +72,18 @@ export default function MenuCarroPage() {
       }
     }
     setVencimientosAlert(alertas)
+
+    // Cargar plantillas del hospital
+    if (p?.hospital_id) {
+      const { data: pl } = await supabase.from('plantillas')
+        .select('id, nombre, es_base, tipo_carro')
+        .eq('hospital_id', p.hospital_id)
+        .eq('activo', true)
+        .order('es_base', { ascending: false })
+        .order('nombre')
+      setPlantillas(pl || [])
+    }
+
     setLoading(false)
   }
 
@@ -79,6 +98,18 @@ export default function MenuCarroPage() {
     setCarro(prev => prev ? { ...prev, numero_censo: numeroCenso } as any : prev)
     setEditandoCenso(false)
     setGuardandoCenso(false)
+  }
+
+  async function guardarPlantilla(plantillaId: string) {
+    setGuardandoPlantilla(true)
+    const { error } = await supabase.from('carros').update({
+      plantilla_id: plantillaId || null,
+    }).eq('id', id)
+    if (error) { toast.error('Error al asignar plantilla'); setGuardandoPlantilla(false); return }
+    setPlantillaSeleccionada(plantillaId)
+    const nombrePlantilla = plantillas.find(p => p.id === plantillaId)?.nombre
+    toast.success(plantillaId ? `Plantilla "${nombrePlantilla}" asignada` : 'Plantilla eliminada — usará la plantilla base')
+    setGuardandoPlantilla(false)
   }
 
   function handleEscaneo(codigo: string) {
@@ -98,8 +129,9 @@ export default function MenuCarroPage() {
   const e = estadoColor(carro.estado)
   const rol = perfil?.rol || ''
   const puedeEditar = ['administrador', 'supervisor', 'superadmin'].includes(rol)
-  const esAuditor = rol === 'auditor'
-  const esTecnico = rol === 'tecnico'
+
+  const plantillaActual = plantillas.find(p => p.id === plantillaSeleccionada)
+  const plantillaBase = plantillas.find(p => p.es_base)
 
   return (
     <div className="page">
@@ -208,9 +240,55 @@ export default function MenuCarroPage() {
           </div>
         )}
 
+        {/* Plantilla de control — solo admin y supervisor */}
+        {puedeEditar && plantillas.length > 0 && (
+          <div className="card">
+            <div className="section-title mb-2">Plantilla de control</div>
+            <div className="text-xs text-gray-400 mb-3">
+              Define qué se comprueba en cada control de este carro.
+              {!plantillaSeleccionada && plantillaBase && (
+                <span className="text-blue-600"> Usando plantilla base: <strong>{plantillaBase.nombre}</strong></span>
+              )}
+            </div>
+            <select
+              className="input mb-3"
+              value={plantillaSeleccionada}
+              onChange={e => setPlantillaSeleccionada(e.target.value)}>
+              <option value="">Usar plantilla base del hospital</option>
+              {plantillas.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}{p.es_base ? ' ⭐ (base)' : ''}{p.tipo_carro ? ` · ${p.tipo_carro}` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                onClick={() => guardarPlantilla(plantillaSeleccionada)}
+                disabled={guardandoPlantilla}
+                className="btn-primary flex-1 text-xs py-2">
+                {guardandoPlantilla ? 'Guardando...' : 'Guardar plantilla'}
+              </button>
+              {plantillaSeleccionada && (
+                <button
+                  onClick={() => router.push(`/admin/plantillas/${plantillaSeleccionada}`)}
+                  className="btn-secondary text-xs py-2 px-3">
+                  Ver →
+                </button>
+              )}
+            </div>
+            {plantillaActual && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <div className="text-xs text-gray-400">
+                  Plantilla asignada: <span className="font-semibold text-gray-700">{plantillaActual.nombre}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="section-title">Tipo de control</div>
 
-        {/* Control mensual — todos los roles que realizan auditorías */}
+        {/* Control mensual */}
         <button className="btn-secondary text-left flex items-center gap-3"
           onClick={() => router.push(`/carro/${id}/control/mensual`)}>
           <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -268,7 +346,7 @@ export default function MenuCarroPage() {
           </button>
         )}
 
-        {/* Equipos del carro — visible para TODOS los roles */}
+        {/* Equipos del carro */}
         <button className="btn-secondary text-left flex items-center gap-3"
           onClick={() => router.push(`/admin/equipos?carro=${id}`)}>
           <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
@@ -338,7 +416,7 @@ export default function MenuCarroPage() {
           </svg>
         </button>
 
-        {/* QR — todos los roles */}
+        {/* QR */}
         <button className="btn-secondary text-left flex items-center gap-3"
           onClick={() => router.push(`/carro/${id}/qr`)}>
           <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
