@@ -160,7 +160,7 @@ export default function AuditorPage() {
           <div className="min-w-0">
             <div className="text-xs text-gray-400 leading-none truncate">{hospital?.nombre || 'Hospital'}</div>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="font-semibold text-sm truncate">{perfil?.nombre}</span>
+              <button onClick={() => router.push('/perfil')} className="font-semibold text-sm truncate hover:underline text-left">{perfil?.nombre}</button>
               <span className="badge bg-blue-100 text-blue-800 text-xs flex-shrink-0">{perfil?.rol}</span>
             </div>
           </div>
