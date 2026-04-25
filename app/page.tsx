@@ -70,19 +70,23 @@ export default function LoginPage() {
         return
       }
 
-      // Iniciar sesión usando la función RPC que autentica por código
-      const { data: tokenData, error: tokenError } = await supabase
-        .rpc('login_por_codigo_empleado', { p_codigo: codigoLimpio })
+      // Llamar a la Edge Function que autentica por código de empleado
+      const res = await fetch('https://agpawdoibqdptgdkcktv.supabase.co/functions/v1/login-por-codigo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: codigoLimpio }),
+      })
 
-      if (tokenError || !tokenData) {
-        // Fallback: si la RPC no existe aún, mostrar mensaje claro
-        toast.error(`Bienvenido ${perfil.nombre}. Configura la RPC de login para activar este método.`)
+      const tokenData = await res.json()
+
+      if (!res.ok || !tokenData.access_token) {
+        toast.error(tokenData.error || 'Código no reconocido. Usa usuario y contraseña.')
         setBuscandoCodigo(false)
         setCodigoFisico('')
         return
       }
 
-      // Establecer sesión con el token devuelto por la RPC
+      // Establecer sesión con los tokens devueltos
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
