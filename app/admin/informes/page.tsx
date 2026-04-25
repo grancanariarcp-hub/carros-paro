@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
@@ -86,7 +86,7 @@ function colorMant(dias: number | null): string {
 // Componente principal
 // =====================================================================
 
-export default function AdminInformesPage() {
+function AdminInformesInner() {
   const searchParams = useSearchParams()
   const seccionInicial = searchParams.get('seccion') === 'controles' ? 'controles' : 'equipos'
 
@@ -614,5 +614,17 @@ export default function AdminInformesPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function AdminInformesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Cargando...</div>
+      </div>
+    }>
+      <AdminInformesInner />
+    </Suspense>
   )
 }
