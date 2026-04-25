@@ -184,7 +184,7 @@ export default function SuperAdminPage() {
 
       toast.success(`Usuario "${formUsuario.nombre}" creado. Se enviará un email para que establezca su contraseña.`)
       setModalUsuario(null)
-      setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true })
+      setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '' })
       await cargarUsuarios()
     } catch (err: any) {
       toast.error(err.message || 'Error al crear usuario')
