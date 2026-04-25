@@ -1,20 +1,24 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
-import { estadoColor, formatFecha, formatFechaHora } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { formatFechaHora, formatFecha } from '@/lib/utils'
 
 export default function InformeControlPage() {
   const [insp, setInsp] = useState<any>(null)
   const [items, setItems] = useState<any[]>([])
-  const [desf, setDesf] = useState<any>(null)
+  const [itemsTodos, setItemsTodos] = useState<any[]>([])
+  const [carro, setCarro] = useState<any>(null)
+  const [hospital, setHospital] = useState<any>(null)
+  const [auditorNombre, setAuditorNombre] = useState('')
   const [perfil, setPerfil] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [codigo, setCodigo] = useState('')
+  const [generando, setGenerando] = useState(false)
+  const informeRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const params = useParams()
   const inspId = params.inspId as string
+  const carroId = params.id as string
   const supabase = createClient()
 
   useEffect(() => { cargarDatos() }, [inspId])
@@ -22,246 +26,304 @@ export default function InformeControlPage() {
   async function cargarDatos() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
-    const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
+    const { data: p } = await supabase.from('perfiles').select('*, hospitales(*)').eq('id', user.id).single()
     setPerfil(p)
+    setHospital((p as any)?.hospitales)
 
-    const { data: ins } = await supabase.from('inspecciones')
-      .select('*, carros(codigo,nombre,ubicacion,responsable,frecuencia_control,proximo_control,servicios(nombre)), perfiles(nombre)')
-      .eq('id', inspId).single()
+    const { data: ins } = await supabase.from('inspecciones').select('*').eq('id', inspId).single()
     setInsp(ins)
 
-    const { data: its } = await supabase.from('items_inspeccion')
-      .select('*, materiales(nombre,cantidad_requerida,cajones(nombre))')
-      .eq('inspeccion_id', inspId)
-      .order('id')
-    setItems(its || [])
-
-    if (ins?.carro_id) {
-      const { data: d } = await supabase.from('desfibriladores')
-        .select('*').eq('carro_id', ins.carro_id).eq('activo', true).single()
-      setDesf(d)
+    if (ins?.auditor_id) {
+      const { data: aud } = await supabase.from('perfiles').select('nombre').eq('id', ins.auditor_id).single()
+      setAuditorNombre(aud?.nombre || '—')
     }
 
-    const { data: cod } = await supabase.rpc('generar_codigo_informe', { tipo_inf: 'control_realizado' })
-    setCodigo(cod || '')
+    const { data: c } = await supabase.from('carros')
+      .select('*, servicios(nombre)').eq('id', carroId).single()
+    setCarro(c)
+
+    // Items con falla
+    const { data: fallos } = await supabase.from('items_inspeccion')
+      .select('*, materiales(nombre, tipo_falla, cantidad_requerida)')
+      .eq('inspeccion_id', inspId)
+      .is('tiene_falla', true)
+    setItems(fallos || [])
+
+    // Todos los items para el listado completo
+    const { data: todos } = await supabase.from('items_inspeccion')
+      .select('*, materiales(nombre, tipo_falla, cantidad_requerida)')
+      .eq('inspeccion_id', inspId)
+      .order('material_id')
+    setItemsTodos(todos || [])
+
     setLoading(false)
   }
 
-  function generarPDF() {
-    if (!insp) return
-    const carro = insp.carros
-    const auditor = insp.perfiles
-    const e = estadoColor(insp.resultado)
-    const fallosGraves = items.filter(i => i.tiene_falla && i.tipo_falla === 'grave')
-    const fallosMenores = items.filter(i => i.tiene_falla && i.tipo_falla === 'menor')
-    const fecha = new Date().toLocaleDateString('es-ES')
+  async function descargarPDF() {
+    if (!informeRef.current) return
+    setGenerando(true)
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const { default: html2canvas } = await import('html2canvas')
 
-    const colorEstado = insp.resultado === 'operativo' ? '#16a34a' : insp.resultado === 'condicional' ? '#d97706' : '#dc2626'
-    const bgEstado = insp.resultado === 'operativo' ? '#f0fdf4' : insp.resultado === 'condicional' ? '#fffbeb' : '#fef2f2'
-    const labelEstado = insp.resultado === 'operativo' ? 'CARRO OPERATIVO' : insp.resultado === 'condicional' ? 'CARRO OPERATIVO CONDICIONAL' : 'CARRO NO OPERATIVO'
+      const canvas = await html2canvas(informeRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      })
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-  body { font-family: Arial, sans-serif; margin: 2cm; color: #1e293b; font-size: 11px; }
-  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 16px; }
-  .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
-  .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
-  .codigo { font-size: 10px; color: #64748b; }
-  .resultado-banner { background: ${bgEstado}; border: 2px solid ${colorEstado}; border-radius: 8px; padding: 14px; text-align: center; margin: 16px 0; }
-  .resultado-titulo { font-size: 20px; font-weight: bold; color: ${colorEstado}; }
-  .section { font-weight: bold; font-size: 12px; margin: 16px 0 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-  .meta-item { font-size: 10px; }
-  .meta-label { color: #64748b; }
-  table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  th { background: #f1f5f9; padding: 6px 8px; text-align: left; font-weight: bold; }
-  td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; }
-  .fallo-grave { background: #fee2e2; border-left: 3px solid #dc2626; padding: 8px 10px; margin-bottom: 8px; border-radius: 0 6px 6px 0; }
-  .fallo-menor { background: #fef9c3; border-left: 3px solid #d97706; padding: 8px 10px; margin-bottom: 8px; border-radius: 0 6px 6px 0; }
-  .foto { max-width: 180px; max-height: 130px; border-radius: 6px; margin-top: 6px; }
-  .vto-red { background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:8px; }
-  .vto-amber { background:#fef9c3; color:#854d0e; padding:1px 6px; border-radius:8px; }
-  .vto-green { background:#dcfce7; color:#166534; padding:1px 6px; border-radius:8px; }
-  .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-  @media print { @page { margin: 1.5cm; } }
-</style></head><body>
-<div class="header">
-  <div class="hospital">Hospital Universitario de Gran Canaria Doctor Negrín</div>
-  <div class="titulo">Informe de Control Realizado</div>
-  <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
-</div>
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width
 
-<div class="resultado-banner">
-  <div class="resultado-titulo">${labelEstado}</div>
-  ${fallosGraves.length > 0 ? `<div style="font-size:11px;color:${colorEstado};margin-top:4px">${fallosGraves.length} fallo${fallosGraves.length !== 1 ? 's' : ''} grave${fallosGraves.length !== 1 ? 's' : ''} detectado${fallosGraves.length !== 1 ? 's' : ''}</div>` : ''}
-  ${fallosMenores.length > 0 ? `<div style="font-size:11px;color:${colorEstado};margin-top:2px">${fallosMenores.length} fallo${fallosMenores.length !== 1 ? 's' : ''} menor${fallosMenores.length !== 1 ? 'es' : ''} detectado${fallosMenores.length !== 1 ? 's' : ''}</div>` : ''}
-</div>
+      let heightLeft = imgHeight
+      let position = 0
 
-<div class="section">Datos del control</div>
-<div class="meta-grid">
-  <div class="meta-item"><span class="meta-label">Carro: </span><strong>${carro?.codigo}</strong></div>
-  <div class="meta-item"><span class="meta-label">Nombre: </span>${carro?.nombre}</div>
-  <div class="meta-item"><span class="meta-label">Servicio: </span>${carro?.servicios?.nombre || '—'}</div>
-  <div class="meta-item"><span class="meta-label">Ubicación: </span>${carro?.ubicacion || '—'}</div>
-  <div class="meta-item"><span class="meta-label">Responsable: </span>${carro?.responsable || '—'}</div>
-  <div class="meta-item"><span class="meta-label">Auditor: </span>${auditor?.nombre || '—'}</div>
-  <div class="meta-item"><span class="meta-label">Fecha y hora: </span>${new Date(insp.fecha).toLocaleString('es-ES')}</div>
-  <div class="meta-item"><span class="meta-label">Tipo control: </span>${insp.tipo?.replace('_', ' ')}</div>
-  ${insp.tipo !== 'post_uso' ? `<div class="meta-item"><span class="meta-label">Próximo control: </span>${formatFecha(carro?.proximo_control)}</div>` : ''}
-</div>
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pdfHeight
 
-${desf ? `
-<div class="section">Desfibrilador</div>
-<div class="meta-grid">
-  <div class="meta-item"><span class="meta-label">Marca: </span>${desf.marca || '—'}</div>
-  <div class="meta-item"><span class="meta-label">Modelo: </span>${desf.modelo || '—'}</div>
-  <div class="meta-item"><span class="meta-label">N° censo: </span>${desf.numero_censo || '—'}</div>
-  <div class="meta-item"><span class="meta-label">Último mantenimiento: </span>${formatFecha(desf.fecha_ultimo_mantenimiento)}</div>
-  <div class="meta-item"><span class="meta-label">Próximo mantenimiento: </span>${formatFecha(desf.fecha_mantenimiento)}</div>
-</div>` : ''}
-
-${fallosGraves.length > 0 ? `
-<div class="section" style="color:#dc2626">Fallos graves detectados</div>
-${fallosGraves.map(i => `
-<div class="fallo-grave">
-  <strong>${i.materiales?.nombre || '—'}</strong>
-  ${i.descripcion_falla ? `<br><span style="color:#64748b">${i.descripcion_falla}</span>` : ''}
-  ${i.foto_url ? `<br><img class="foto" src="${i.foto_url}" alt="evidencia"/>` : ''}
-</div>`).join('')}` : ''}
-
-${fallosMenores.length > 0 ? `
-<div class="section" style="color:#d97706">Fallos menores detectados</div>
-${fallosMenores.map(i => `
-<div class="fallo-menor">
-  <strong>${i.materiales?.nombre || '—'}</strong>
-  ${i.descripcion_falla ? `<br><span style="color:#64748b">${i.descripcion_falla}</span>` : ''}
-  ${i.foto_url ? `<br><img class="foto" src="${i.foto_url}" alt="evidencia"/>` : ''}
-</div>`).join('')}` : ''}
-
-<div class="section">Detalle completo del control</div>
-<table>
-  <thead><tr><th>Material</th><th>Cant. OK</th><th>Estado OK</th><th>Vencimiento</th><th>Falla</th></tr></thead>
-  <tbody>
-    ${items.map(i => {
-      let vtoClass = ''
-      let vtoLabel = '—'
-      if (i.fecha_vencimiento) {
-        const dias = Math.ceil((new Date(i.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-        vtoClass = dias <= 7 ? 'vto-red' : dias <= 30 ? 'vto-amber' : 'vto-green'
-        vtoLabel = `<span class="${vtoClass}">${new Date(i.fecha_vencimiento).toLocaleDateString('es-ES')}</span>`
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pdfHeight
       }
-      return `<tr>
-        <td>${i.materiales?.nombre || '—'}</td>
-        <td>${i.cantidad_ok ? '✓' : '✗'}</td>
-        <td>${i.estado_ok ? '✓' : '✗'}</td>
-        <td>${vtoLabel}</td>
-        <td>${i.tiene_falla ? `<strong style="color:${i.tipo_falla === 'grave' ? '#dc2626' : '#d97706'}">${i.tipo_falla}</strong>` : '—'}</td>
-      </tr>`
-    }).join('')}
-  </tbody>
-</table>
 
-<div class="footer">
-  Informe generado automáticamente · Hospital Universitario de Gran Canaria Doctor Negrín<br>
-  Sistema Auditor Carros de Parada · GranCanariaRCP · Dr. Lübbe
-</div>
-</body></html>`
-
-    const v = window.open('', '_blank')
-    if (v) { v.document.write(html); v.document.close(); v.onload = () => v.print() }
-  }
-
-  async function compartir() {
-    const carro = insp?.carros
-    const labelEstado = insp?.resultado === 'operativo' ? '✅ OPERATIVO' : insp?.resultado === 'condicional' ? '⚠️ CONDICIONAL' : '🚨 NO OPERATIVO'
-    const texto = `*Informe Control - ${codigo}*\nH.U. Gran Canaria Doctor Negrín\n\n*${carro?.codigo}* - ${carro?.nombre}\n${labelEstado}\nFecha: ${new Date(insp?.fecha).toLocaleString('es-ES')}\nAuditor: ${insp?.perfiles?.nombre}\nTipo: ${insp?.tipo?.replace('_', ' ')}`
-    if (navigator.share) {
-      await navigator.share({ title: `Informe ${codigo}`, text: texto })
-    } else {
-      await navigator.clipboard.writeText(texto)
-      toast.success('Copiado al portapapeles')
+      const fecha = new Date().toISOString().split('T')[0]
+      pdf.save(`control_${carro?.codigo}_${fecha}.pdf`)
+    } catch (err: any) {
+      console.error('Error generando PDF:', err)
+    } finally {
+      setGenerando(false)
     }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400 text-sm">Cargando...</div></div>
-  if (!insp) return null
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Cargando informe...</div>
+    </div>
+  )
+  if (!insp || !carro) return null
 
-  const carro = insp.carros
-  const e = estadoColor(insp.resultado)
-  const fallosGraves = items.filter(i => i.tiene_falla && i.tipo_falla === 'grave')
-  const fallosMenores = items.filter(i => i.tiene_falla && i.tipo_falla === 'menor')
+  const fallosGraves = items.filter(i => i.tipo_falla === 'grave')
+  const fallosMenores = items.filter(i => i.tipo_falla === 'menor')
+  const itemsOk = itemsTodos.filter(i => !i.tiene_falla)
+  const colorResultado = insp.resultado === 'operativo' ? '#16a34a'
+    : insp.resultado === 'condicional' ? '#d97706' : '#dc2626'
+  const labelResultado = insp.resultado === 'operativo' ? 'OPERATIVO'
+    : insp.resultado === 'condicional' ? 'CONDICIONAL' : 'NO OPERATIVO'
 
   return (
     <div className="page">
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
-        <span className="font-semibold text-sm flex-1 text-right">Informe de control</span>
+        <span className="font-semibold text-sm flex-1 text-center">Informe del control</span>
+        <button
+          onClick={descargarPDF}
+          disabled={generando}
+          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1">
+          {generando ? '⏳' : '⬇️'} {generando ? 'Generando...' : 'Descargar PDF'}
+        </button>
       </div>
-      <div className="content">
-        <div className="card">
-          <label className="label">Código del informe (editable)</label>
-          <input className="input" value={codigo} onChange={e => setCodigo(e.target.value)} />
-        </div>
 
-        {/* Resultado */}
-        <div className={`rounded-2xl p-4 text-center border ${
-          insp.resultado === 'operativo' ? 'bg-green-50 border-green-200' :
-          insp.resultado === 'condicional' ? 'bg-amber-50 border-amber-200' :
-          'bg-red-50 border-red-200'
-        }`}>
-          <div className={`text-lg font-bold ${e.text}`}>
-            {insp.resultado === 'operativo' ? 'CARRO OPERATIVO' :
-             insp.resultado === 'condicional' ? 'CARRO OPERATIVO CONDICIONAL' : 'CARRO NO OPERATIVO'}
-          </div>
-          {fallosGraves.length > 0 && <div className={`text-xs mt-1 ${e.text}`}>{fallosGraves.length} fallo{fallosGraves.length !== 1 ? 's' : ''} grave{fallosGraves.length !== 1 ? 's' : ''}</div>}
-          {fallosMenores.length > 0 && <div className={`text-xs mt-0.5 ${e.text}`}>{fallosMenores.length} fallo{fallosMenores.length !== 1 ? 's' : ''} menor{fallosMenores.length !== 1 ? 'es' : ''}</div>}
-        </div>
+      <div className="content pb-8">
+        {/* Contenido del informe — este div se captura para el PDF */}
+        <div ref={informeRef} style={{ backgroundColor: '#ffffff', padding: '24px', fontFamily: 'sans-serif' }}>
 
-        {/* Datos */}
-        <div className="card">
-          <div className="section-title mb-3">Datos del control</div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div><div className="label">Carro</div><div className="val">{carro?.codigo}</div></div>
-            <div><div className="label">Servicio</div><div className="val">{carro?.servicios?.nombre || '—'}</div></div>
-            <div><div className="label">Auditor</div><div className="val">{insp.perfiles?.nombre}</div></div>
-            <div><div className="label">Fecha y hora</div><div className="val">{formatFechaHora(insp.fecha)}</div></div>
-            <div><div className="label">Tipo</div><div className="val">{insp.tipo?.replace('_', ' ')}</div></div>
-            {insp.tipo !== 'post_uso' && <div><div className="label">Próximo control</div><div className="val">{formatFecha(carro?.proximo_control)}</div></div>}
-          </div>
-        </div>
-
-        {/* Fallos */}
-        {fallosGraves.length > 0 && (
-          <div className="card border-red-200">
-            <div className="section-title text-red-700 mb-3">Fallos graves</div>
-            {fallosGraves.map(i => (
-              <div key={i.id} className="mb-3 p-2 bg-red-50 rounded-xl border border-red-100">
-                <div className="text-sm font-semibold">{i.materiales?.nombre}</div>
-                {i.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{i.descripcion_falla}</div>}
-                {i.foto_url && <img src={i.foto_url} alt="evidencia" className="mt-2 w-full h-28 object-cover rounded-xl"/>}
+          {/* Cabecera con logo y datos del hospital */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #1d4ed8', paddingBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {hospital?.logo_url ? (
+                <img src={hospital.logo_url} alt="Logo" style={{ height: '48px', objectFit: 'contain' }} crossOrigin="anonymous" />
+              ) : (
+                <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: hospital?.color_primario || '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>+</span>
+                </div>
+              )}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '16px', color: '#111827' }}>{hospital?.nombre || 'Hospital'}</div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>Informe de control de carro de parada</div>
               </div>
-            ))}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '11px', color: '#6b7280' }}>Fecha del control</div>
+              <div style={{ fontWeight: 600, fontSize: '13px' }}>{formatFecha(insp.fecha)}</div>
+              <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>Generado</div>
+              <div style={{ fontSize: '12px' }}>{new Date().toLocaleDateString('es-ES')}</div>
+            </div>
           </div>
-        )}
 
-        {fallosMenores.length > 0 && (
-          <div className="card border-amber-200">
-            <div className="section-title text-amber-700 mb-3">Fallos menores</div>
-            {fallosMenores.map(i => (
-              <div key={i.id} className="mb-3 p-2 bg-amber-50 rounded-xl border border-amber-100">
-                <div className="text-sm font-semibold">{i.materiales?.nombre}</div>
-                {i.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{i.descripcion_falla}</div>}
-                {i.foto_url && <img src={i.foto_url} alt="evidencia" className="mt-2 w-full h-28 object-cover rounded-xl"/>}
+          {/* Resultado destacado */}
+          <div style={{ background: colorResultado + '15', border: `2px solid ${colorResultado}`, borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: colorResultado, letterSpacing: '1px' }}>
+              {labelResultado}
+            </div>
+            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>
+              {insp.tipo?.replace('_', ' ').toUpperCase()} — {carro.codigo} · {carro.nombre}
+            </div>
+          </div>
+
+          {/* Datos del control */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Datos del carro</div>
+              <Fila label="Código" valor={carro.codigo} />
+              <Fila label="Nombre" valor={carro.nombre} />
+              <Fila label="Servicio" valor={carro.servicios?.nombre || '—'} />
+              <Fila label="Ubicación" valor={carro.ubicacion || '—'} />
+            </div>
+            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Datos del control</div>
+              <Fila label="Tipo" valor={insp.tipo?.replace('_', ' ')} />
+              <Fila label="Fecha y hora" valor={formatFechaHora(insp.fecha)} />
+              <Fila label="Auditor" valor={auditorNombre} />
+              <Fila label="Próximo control" valor={formatFecha(carro.proximo_control) || '—'} />
+            </div>
+          </div>
+
+          {/* Desfibrilador */}
+          {insp.numero_censo_desf && (
+            <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+              <div style={{ fontSize: '11px', color: '#1d4ed8', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase' }}>Desfibrilador</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <Fila label="N° censo" valor={insp.numero_censo_desf} />
+                <Fila label="Modelo" valor={insp.modelo_desf || '—'} />
+                <Fila label="Próx. mantenimiento" valor={formatFecha(insp.fecha_mantenimiento_desf) || '—'} />
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )}
 
-        <div className="grid grid-cols-2 gap-2">
-          <button className="btn-primary" onClick={generarPDF}>Imprimir PDF</button>
-          <button className="btn-secondary" onClick={compartir}>Compartir</button>
+          {/* Precintos */}
+          {(insp.precinto_retirado || insp.precinto_colocado) && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              {insp.precinto_retirado && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px' }}>
+                  <div style={{ fontSize: '11px', color: '#92400e', fontWeight: 600, marginBottom: '4px' }}>🔓 Precinto retirado</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{insp.precinto_retirado}</div>
+                </div>
+              )}
+              {insp.precinto_colocado && (
+                <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '8px', padding: '10px' }}>
+                  <div style={{ fontSize: '11px', color: '#1e40af', fontWeight: 600, marginBottom: '4px' }}>🔒 Precinto colocado</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{insp.precinto_colocado}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fallos graves */}
+          {fallosGraves.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#dc2626', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>⚠️</span> Fallos graves ({fallosGraves.length})
+              </div>
+              {fallosGraves.map((f: any, i: number) => (
+                <div key={i} style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{f.materiales?.nombre}</div>
+                  {f.descripcion_falla && <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{f.descripcion_falla}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Fallos menores */}
+          {fallosMenores.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#d97706', marginBottom: '8px' }}>
+                ⚠ Fallos menores ({fallosMenores.length})
+              </div>
+              {fallosMenores.map((f: any, i: number) => (
+                <div key={i} style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{f.materiales?.nombre}</div>
+                  {f.descripcion_falla && <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{f.descripcion_falla}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Listado completo de materiales */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>
+              Materiales revisados ({itemsTodos.length})
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ background: '#f3f4f6' }}>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Material</th>
+                  <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Cantidad</th>
+                  <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Vencimiento</th>
+                  <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemsTodos.map((item: any, i: number) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                    <td style={{ padding: '6px 8px' }}>{item.materiales?.nombre || '—'}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                      {item.cantidad_ok ? '✓' : '✗'}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: '11px' }}>
+                      {item.fecha_vencimiento ? formatFecha(item.fecha_vencimiento) : '—'}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                      {item.tiene_falla ? (
+                        <span style={{ color: item.tipo_falla === 'grave' ? '#dc2626' : '#d97706', fontWeight: 600 }}>
+                          {item.tipo_falla === 'grave' ? 'Fallo grave' : 'Fallo menor'}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#16a34a' }}>✓ OK</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Firma digital */}
+          {insp.firma_url && (
+            <div style={{ marginBottom: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginBottom: '12px' }}>Firma digital</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <img src={insp.firma_url} alt="Firma"
+                    style={{ maxHeight: '80px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white' }}
+                    crossOrigin="anonymous" />
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '12px' }}>
+                  <div style={{ fontWeight: 600 }}>{insp.firmante_nombre || auditorNombre}</div>
+                  {insp.firmante_cargo && <div style={{ color: '#6b7280' }}>{insp.firmante_cargo}</div>}
+                  <div style={{ color: '#9ca3af', marginTop: '4px' }}>
+                    {insp.firmado_en ? new Date(insp.firmado_en).toLocaleString('es-ES', {
+                      day: '2-digit', month: 'long', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit'
+                    }) : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pie de página */}
+          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af' }}>
+            <span>ÁSTOR by CRITIC SL — Sistema de gestión de carros de parada</span>
+            <span>Documento generado automáticamente con trazabilidad completa</span>
+          </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function Fila({ label, valor }: { label: string; valor: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+      <span style={{ color: '#6b7280' }}>{label}:</span>
+      <span style={{ fontWeight: 500, textAlign: 'right', maxWidth: '60%' }}>{valor}</span>
     </div>
   )
 }
