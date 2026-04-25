@@ -1,62 +1,154 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
-import { formatFechaHora, formatFecha } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { useHospitalTheme } from '@/lib/useHospitalTheme'
 
-export default function InformeControlPage() {
-  const [insp, setInsp] = useState<any>(null)
-  const [items, setItems] = useState<any[]>([])
-  const [itemsTodos, setItemsTodos] = useState<any[]>([])
-  const [carro, setCarro] = useState<any>(null)
-  const [hospital, setHospital] = useState<any>(null)
-  const [auditorNombre, setAuditorNombre] = useState('')
+interface Equipo {
+  id: string
+  nombre: string
+  marca: string | null
+  modelo: string | null
+  numero_censo: string | null
+  numero_serie: string | null
+  categoria: string | null
+  estado: string
+  indispensable: boolean
+  fecha_proximo_mantenimiento: string | null
+  fecha_proxima_calibracion: string | null
+  fecha_garantia_hasta: string | null
+  frecuencia_mantenimiento: string | null
+  empresa_mantenimiento: string | null
+  servicios?: { nombre: string } | null
+  carros?: { codigo: string; nombre: string } | null
+}
+
+interface Filtros {
+  servicio_id: string
+  categoria: string
+  estado: string
+  mantenimiento: 'todos' | 'vencido' | 'proximo_30' | 'proximo_90' | 'al_dia'
+  indispensable: 'todos' | 'si' | 'no'
+}
+
+const ESTADOS_LABEL: Record<string, string> = {
+  operativo: 'Operativo',
+  en_mantenimiento: 'En mantenimiento',
+  fuera_de_servicio: 'Fuera de servicio',
+  baja: 'Baja',
+}
+
+function diasHasta(fecha?: string | null): number | null {
+  if (!fecha) return null
+  return Math.ceil((new Date(fecha).getTime() - Date.now()) / 86400000)
+}
+
+function formatFecha(fecha?: string | null): string {
+  if (!fecha) return '—'
+  return new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+export default function InformesPage() {
+  const [equipos, setEquipos] = useState<Equipo[]>([])
+  const [servicios, setServicios] = useState<any[]>([])
+  const [categorias, setCategorias] = useState<string[]>([])
   const [perfil, setPerfil] = useState<any>(null)
+  const [hospital, setHospital] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [generando, setGenerando] = useState(false)
+  const [filtros, setFiltros] = useState<Filtros>({
+    servicio_id: 'todos',
+    categoria: 'todos',
+    estado: 'todos',
+    mantenimiento: 'todos',
+    indispensable: 'todos',
+  })
   const informeRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const params = useParams()
-  const inspId = params.inspId as string
-  const carroId = params.id as string
   const supabase = createClient()
 
-  useEffect(() => { cargarDatos() }, [inspId])
+  useHospitalTheme(hospital?.color_primario)
+
+  useEffect(() => { cargarDatos() }, [])
 
   async function cargarDatos() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
-    const { data: p } = await supabase.from('perfiles').select('*, hospitales(*)').eq('id', user.id).single()
+    const { data: p } = await supabase.from('perfiles')
+      .select('*, hospitales(*)').eq('id', user.id).single()
     setPerfil(p)
     setHospital((p as any)?.hospitales)
 
-    const { data: ins } = await supabase.from('inspecciones').select('*').eq('id', inspId).single()
-    setInsp(ins)
+    const hospitalId = p?.hospital_id
+    if (!hospitalId) { setLoading(false); return }
 
-    if (ins?.auditor_id) {
-      const { data: aud } = await supabase.from('perfiles').select('nombre').eq('id', ins.auditor_id).single()
-      setAuditorNombre(aud?.nombre || '—')
-    }
+    const [eqRes, svRes] = await Promise.all([
+      supabase.from('equipos')
+        .select('*, servicios(nombre), carros(codigo, nombre)')
+        .eq('hospital_id', hospitalId)
+        .eq('activo', true)
+        .order('nombre'),
+      supabase.from('servicios')
+        .select('id, nombre')
+        .eq('hospital_id', hospitalId)
+        .eq('activo', true)
+        .order('nombre'),
+    ])
 
-    const { data: c } = await supabase.from('carros')
-      .select('*, servicios(nombre)').eq('id', carroId).single()
-    setCarro(c)
+    const eqs = eqRes.data || []
+    setEquipos(eqs)
+    setServicios(svRes.data || [])
 
-    // Items con falla
-    const { data: fallos } = await supabase.from('items_inspeccion')
-      .select('*, materiales(nombre, tipo_falla, cantidad_requerida)')
-      .eq('inspeccion_id', inspId)
-      .is('tiene_falla', true)
-    setItems(fallos || [])
-
-    // Todos los items para el listado completo
-    const { data: todos } = await supabase.from('items_inspeccion')
-      .select('*, materiales(nombre, tipo_falla, cantidad_requerida)')
-      .eq('inspeccion_id', inspId)
-      .order('material_id')
-    setItemsTodos(todos || [])
+    // Extraer categorías únicas
+    const cats = Array.from(new Set(eqs.map((e: any) => e.categoria).filter(Boolean))).sort() as string[]
+    setCategorias(cats)
 
     setLoading(false)
+  }
+
+  // Aplicar filtros
+  const equiposFiltrados = equipos.filter(e => {
+    if (filtros.servicio_id !== 'todos' && (e.servicios as any)?.id !== filtros.servicio_id) {
+      // Filtrar por servicio usando el campo servicio_id — buscar en equipos directamente
+    }
+    if (filtros.categoria !== 'todos' && e.categoria !== filtros.categoria) return false
+    if (filtros.estado !== 'todos' && e.estado !== filtros.estado) return false
+    if (filtros.indispensable === 'si' && !e.indispensable) return false
+    if (filtros.indispensable === 'no' && e.indispensable) return false
+
+    const dias = diasHasta(e.fecha_proximo_mantenimiento)
+    if (filtros.mantenimiento === 'vencido' && (dias === null || dias >= 0)) return false
+    if (filtros.mantenimiento === 'proximo_30' && (dias === null || dias < 0 || dias > 30)) return false
+    if (filtros.mantenimiento === 'proximo_90' && (dias === null || dias < 0 || dias > 90)) return false
+    if (filtros.mantenimiento === 'al_dia' && dias !== null && dias < 0) return false
+
+    return true
+  })
+
+  // Agrupar por servicio para el informe
+  const porServicio = equiposFiltrados.reduce((acc, eq) => {
+    const sv = (eq.servicios as any)?.nombre || 'Sin servicio'
+    if (!acc[sv]) acc[sv] = []
+    acc[sv].push(eq)
+    return acc
+  }, {} as Record<string, Equipo[]>)
+
+  function colorMant(dias: number | null): string {
+    if (dias === null) return '#6b7280'
+    if (dias < 0) return '#dc2626'
+    if (dias <= 30) return '#d97706'
+    return '#16a34a'
+  }
+
+  function tituloInforme(): string {
+    const partes: string[] = []
+    if (filtros.mantenimiento === 'vencido') partes.push('Mantenimientos vencidos')
+    else if (filtros.mantenimiento === 'proximo_30') partes.push('Mantenimientos próximos 30d')
+    else if (filtros.mantenimiento === 'proximo_90') partes.push('Mantenimientos próximos 90d')
+    if (filtros.categoria !== 'todos') partes.push(filtros.categoria)
+    if (filtros.indispensable === 'si') partes.push('Indispensables')
+    if (filtros.estado !== 'todos') partes.push(ESTADOS_LABEL[filtros.estado] || filtros.estado)
+    return partes.length > 0 ? partes.join(' · ') : 'Inventario completo de equipos'
   }
 
   async function descargarPDF() {
@@ -77,25 +169,24 @@ export default function InformeControlPage() {
       const pdf = new jsPDF('p', 'mm', 'a4')
       const pdfWidth = pdf.internal.pageSize.getWidth()
       const pdfHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pdfWidth
       const imgHeight = (canvas.height * pdfWidth) / canvas.width
 
       let heightLeft = imgHeight
       let position = 0
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight)
       heightLeft -= pdfHeight
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight)
         heightLeft -= pdfHeight
       }
 
       const fecha = new Date().toISOString().split('T')[0]
-      pdf.save(`control_${carro?.codigo}_${fecha}.pdf`)
-    } catch (err: any) {
+      pdf.save(`inventario_equipos_${fecha}.pdf`)
+    } catch (err) {
       console.error('Error generando PDF:', err)
     } finally {
       setGenerando(false)
@@ -104,226 +195,194 @@ export default function InformeControlPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400 text-sm">Cargando informe...</div>
+      <div className="text-gray-400 text-sm">Cargando...</div>
     </div>
   )
-  if (!insp || !carro) return null
-
-  const fallosGraves = items.filter(i => i.tipo_falla === 'grave')
-  const fallosMenores = items.filter(i => i.tipo_falla === 'menor')
-  const itemsOk = itemsTodos.filter(i => !i.tiene_falla)
-  const colorResultado = insp.resultado === 'operativo' ? '#16a34a'
-    : insp.resultado === 'condicional' ? '#d97706' : '#dc2626'
-  const labelResultado = insp.resultado === 'operativo' ? 'OPERATIVO'
-    : insp.resultado === 'condicional' ? 'CONDICIONAL' : 'NO OPERATIVO'
 
   return (
     <div className="page">
       <div className="topbar">
         <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
-        <span className="font-semibold text-sm flex-1 text-center">Informe del control</span>
-        <button
-          onClick={descargarPDF}
-          disabled={generando}
-          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1">
-          {generando ? '⏳' : '⬇️'} {generando ? 'Generando...' : 'Descargar PDF'}
+        <span className="font-semibold text-sm flex-1 text-center">Informes de equipos</span>
+        <button onClick={descargarPDF} disabled={generando || equiposFiltrados.length === 0}
+          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40 flex items-center gap-1">
+          {generando ? '⏳' : '⬇️'} {generando ? 'Generando...' : `PDF (${equiposFiltrados.length})`}
         </button>
       </div>
 
-      <div className="content pb-8">
-        {/* Contenido del informe — este div se captura para el PDF */}
-        <div ref={informeRef} style={{ backgroundColor: '#ffffff', padding: '24px', fontFamily: 'sans-serif' }}>
-
-          {/* Cabecera con logo y datos del hospital */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #1d4ed8', paddingBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {hospital?.logo_url ? (
-                <img src={hospital.logo_url} alt="Logo" style={{ height: '48px', objectFit: 'contain' }} crossOrigin="anonymous" />
-              ) : (
-                <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: hospital?.color_primario || '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>+</span>
-                </div>
-              )}
+      <div className="content">
+        {/* Filtros */}
+        <div className="card">
+          <div className="section-title mb-3">Filtros del informe</div>
+          <div className="flex flex-col gap-2">
+            <div>
+              <label className="label">Servicio / Unidad</label>
+              <select className="input" value={filtros.servicio_id}
+                onChange={e => setFiltros(f => ({ ...f, servicio_id: e.target.value }))}>
+                <option value="todos">Todos los servicios</option>
+                {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <div style={{ fontWeight: 700, fontSize: '16px', color: '#111827' }}>{hospital?.nombre || 'Hospital'}</div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>Informe de control de carro de parada</div>
+                <label className="label">Categoría</label>
+                <select className="input" value={filtros.categoria}
+                  onChange={e => setFiltros(f => ({ ...f, categoria: e.target.value }))}>
+                  <option value="todos">Todas</option>
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Estado</label>
+                <select className="input" value={filtros.estado}
+                  onChange={e => setFiltros(f => ({ ...f, estado: e.target.value }))}>
+                  <option value="todos">Todos</option>
+                  {Object.entries(ESTADOS_LABEL).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '11px', color: '#6b7280' }}>Fecha del control</div>
-              <div style={{ fontWeight: 600, fontSize: '13px' }}>{formatFecha(insp.fecha)}</div>
-              <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>Generado</div>
-              <div style={{ fontSize: '12px' }}>{new Date().toLocaleDateString('es-ES')}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">Mantenimiento</label>
+                <select className="input" value={filtros.mantenimiento}
+                  onChange={e => setFiltros(f => ({ ...f, mantenimiento: e.target.value as any }))}>
+                  <option value="todos">Todos</option>
+                  <option value="vencido">Vencido</option>
+                  <option value="proximo_30">Próximos 30 días</option>
+                  <option value="proximo_90">Próximos 90 días</option>
+                  <option value="al_dia">Al día</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Indispensables</label>
+                <select className="input" value={filtros.indispensable}
+                  onChange={e => setFiltros(f => ({ ...f, indispensable: e.target.value as any }))}>
+                  <option value="todos">Todos</option>
+                  <option value="si">Solo indispensables</option>
+                  <option value="no">No indispensables</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Resultado destacado */}
-          <div style={{ background: colorResultado + '15', border: `2px solid ${colorResultado}`, borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: colorResultado, letterSpacing: '1px' }}>
-              {labelResultado}
-            </div>
-            <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>
-              {insp.tipo?.replace('_', ' ').toUpperCase()} — {carro.codigo} · {carro.nombre}
-            </div>
-          </div>
-
-          {/* Datos del control */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Datos del carro</div>
-              <Fila label="Código" valor={carro.codigo} />
-              <Fila label="Nombre" valor={carro.nombre} />
-              <Fila label="Servicio" valor={carro.servicios?.nombre || '—'} />
-              <Fila label="Ubicación" valor={carro.ubicacion || '—'} />
-            </div>
-            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Datos del control</div>
-              <Fila label="Tipo" valor={insp.tipo?.replace('_', ' ')} />
-              <Fila label="Fecha y hora" valor={formatFechaHora(insp.fecha)} />
-              <Fila label="Auditor" valor={auditorNombre} />
-              <Fila label="Próximo control" valor={formatFecha(carro.proximo_control) || '—'} />
-            </div>
-          </div>
-
-          {/* Desfibrilador */}
-          {insp.numero_censo_desf && (
-            <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
-              <div style={{ fontSize: '11px', color: '#1d4ed8', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase' }}>Desfibrilador</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                <Fila label="N° censo" valor={insp.numero_censo_desf} />
-                <Fila label="Modelo" valor={insp.modelo_desf || '—'} />
-                <Fila label="Próx. mantenimiento" valor={formatFecha(insp.fecha_mantenimiento_desf) || '—'} />
-              </div>
-            </div>
-          )}
-
-          {/* Precintos */}
-          {(insp.precinto_retirado || insp.precinto_colocado) && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-              {insp.precinto_retirado && (
-                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px' }}>
-                  <div style={{ fontSize: '11px', color: '#92400e', fontWeight: 600, marginBottom: '4px' }}>🔓 Precinto retirado</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{insp.precinto_retirado}</div>
-                </div>
-              )}
-              {insp.precinto_colocado && (
-                <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '8px', padding: '10px' }}>
-                  <div style={{ fontSize: '11px', color: '#1e40af', fontWeight: 600, marginBottom: '4px' }}>🔒 Precinto colocado</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{insp.precinto_colocado}</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Fallos graves */}
-          {fallosGraves.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#dc2626', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>⚠️</span> Fallos graves ({fallosGraves.length})
-              </div>
-              {fallosGraves.map((f: any, i: number) => (
-                <div key={i} style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
-                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{f.materiales?.nombre}</div>
-                  {f.descripcion_falla && <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{f.descripcion_falla}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Fallos menores */}
-          {fallosMenores.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#d97706', marginBottom: '8px' }}>
-                ⚠ Fallos menores ({fallosMenores.length})
-              </div>
-              {fallosMenores.map((f: any, i: number) => (
-                <div key={i} style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
-                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{f.materiales?.nombre}</div>
-                  {f.descripcion_falla && <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{f.descripcion_falla}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Listado completo de materiales */}
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>
-              Materiales revisados ({itemsTodos.length})
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ background: '#f3f4f6' }}>
-                  <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Material</th>
-                  <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Cantidad</th>
-                  <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Vencimiento</th>
-                  <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600, color: '#374151' }}>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itemsTodos.map((item: any, i: number) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                    <td style={{ padding: '6px 8px' }}>{item.materiales?.nombre || '—'}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                      {item.cantidad_ok ? '✓' : '✗'}
-                    </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: '11px' }}>
-                      {item.fecha_vencimiento ? formatFecha(item.fecha_vencimiento) : '—'}
-                    </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                      {item.tiene_falla ? (
-                        <span style={{ color: item.tipo_falla === 'grave' ? '#dc2626' : '#d97706', fontWeight: 600 }}>
-                          {item.tipo_falla === 'grave' ? 'Fallo grave' : 'Fallo menor'}
-                        </span>
-                      ) : (
-                        <span style={{ color: '#16a34a' }}>✓ OK</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Firma digital */}
-          {insp.firma_url && (
-            <div style={{ marginBottom: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginBottom: '12px' }}>Firma digital</div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px' }}>
-                <div style={{ flex: 1 }}>
-                  <img src={insp.firma_url} alt="Firma"
-                    style={{ maxHeight: '80px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white' }}
-                    crossOrigin="anonymous" />
-                </div>
-                <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                  <div style={{ fontWeight: 600 }}>{insp.firmante_nombre || auditorNombre}</div>
-                  {insp.firmante_cargo && <div style={{ color: '#6b7280' }}>{insp.firmante_cargo}</div>}
-                  <div style={{ color: '#9ca3af', marginTop: '4px' }}>
-                    {insp.firmado_en ? new Date(insp.firmado_en).toLocaleString('es-ES', {
-                      day: '2-digit', month: 'long', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    }) : '—'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Pie de página */}
-          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af' }}>
-            <span>ÁSTOR by CRITIC SL — Sistema de gestión de carros de parada</span>
-            <span>Documento generado automáticamente con trazabilidad completa</span>
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-gray-500">
+              {equiposFiltrados.length} equipo{equiposFiltrados.length !== 1 ? 's' : ''} encontrado{equiposFiltrados.length !== 1 ? 's' : ''}
+            </span>
+            <button onClick={() => setFiltros({ servicio_id: 'todos', categoria: 'todos', estado: 'todos', mantenimiento: 'todos', indispensable: 'todos' })}
+              className="text-xs text-blue-600 font-semibold">
+              Limpiar filtros
+            </button>
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
 
-function Fila({ label, valor }: { label: string; valor: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
-      <span style={{ color: '#6b7280' }}>{label}:</span>
-      <span style={{ fontWeight: 500, textAlign: 'right', maxWidth: '60%' }}>{valor}</span>
+        {/* Vista previa del informe */}
+        {equiposFiltrados.length === 0 ? (
+          <div className="card text-center py-8">
+            <div className="text-2xl mb-2">📋</div>
+            <div className="text-sm font-semibold text-gray-600">Sin resultados</div>
+            <div className="text-xs text-gray-400 mt-1">Ajusta los filtros para ver equipos</div>
+          </div>
+        ) : (
+          <div ref={informeRef} style={{ backgroundColor: '#ffffff', padding: '24px', fontFamily: 'sans-serif' }}>
+
+            {/* Cabecera */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #1d4ed8', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {hospital?.logo_url ? (
+                  <img src={hospital.logo_url} alt="Logo" style={{ height: '40px', objectFit: 'contain' }} crossOrigin="anonymous" />
+                ) : (
+                  <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: hospital?.color_primario || '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>+</span>
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '15px' }}>{hospital?.nombre}</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{tituloInforme()}</div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '11px', color: '#6b7280' }}>
+                <div>Generado: {new Date().toLocaleDateString('es-ES')}</div>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827', marginTop: '2px' }}>
+                  {equiposFiltrados.length} equipos
+                </div>
+              </div>
+            </div>
+
+            {/* Equipos agrupados por servicio */}
+            {Object.entries(porServicio).map(([servicio, eqs]) => (
+              <div key={servicio} style={{ marginBottom: '24px' }}>
+                <div style={{ background: '#1d4ed8', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  {servicio} ({eqs.length})
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead>
+                    <tr style={{ background: '#f3f4f6' }}>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>Equipo</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>Censo / Serie</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>Categoría</th>
+                      <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600 }}>Estado</th>
+                      <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600 }}>Próx. Mant.</th>
+                      <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600 }}>Próx. Calib.</th>
+                      <th style={{ textAlign: 'center', padding: '6px 8px', fontWeight: 600 }}>Garantía</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eqs.map((eq, i) => {
+                      const diasMant = diasHasta(eq.fecha_proximo_mantenimiento)
+                      return (
+                        <tr key={eq.id} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                          <td style={{ padding: '6px 8px' }}>
+                            <div style={{ fontWeight: 600 }}>{eq.nombre}</div>
+                            <div style={{ color: '#6b7280', fontSize: '10px' }}>{[eq.marca, eq.modelo].filter(Boolean).join(' ')}</div>
+                            {eq.indispensable && <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 600 }}>★ Indispensable</span>}
+                          </td>
+                          <td style={{ padding: '6px 8px', color: '#374151' }}>
+                            <div>{eq.numero_censo || '—'}</div>
+                            <div style={{ color: '#9ca3af', fontSize: '10px' }}>{eq.numero_serie || ''}</div>
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>{eq.categoria || '—'}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
+                              background: eq.estado === 'operativo' ? '#dcfce7' : eq.estado === 'en_mantenimiento' ? '#fef9c3' : '#fee2e2',
+                              color: eq.estado === 'operativo' ? '#16a34a' : eq.estado === 'en_mantenimiento' ? '#d97706' : '#dc2626',
+                            }}>
+                              {ESTADOS_LABEL[eq.estado] || eq.estado}
+                            </span>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center', color: colorMant(diasMant), fontWeight: diasMant !== null && diasMant < 0 ? 700 : 400 }}>
+                            {eq.fecha_proximo_mantenimiento ? (
+                              <>
+                                <div>{formatFecha(eq.fecha_proximo_mantenimiento)}</div>
+                                {diasMant !== null && <div style={{ fontSize: '10px' }}>{diasMant < 0 ? `Vencido ${Math.abs(diasMant)}d` : `En ${diasMant}d`}</div>}
+                              </>
+                            ) : '—'}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: '10px' }}>
+                            {formatFecha(eq.fecha_proxima_calibracion)}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: '10px' }}>
+                            {formatFecha(eq.fecha_garantia_hasta)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+
+            {/* Pie */}
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af', marginTop: '8px' }}>
+              <span>ÁSTOR by CRITIC SL — Sistema de gestión de material crítico hospitalario</span>
+              <span>Generado el {new Date().toLocaleString('es-ES')}</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
