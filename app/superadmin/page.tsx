@@ -58,7 +58,7 @@ export default function SuperAdminPage() {
   const [busquedaUsuario, setBusquedaUsuario] = useState('')
   const [modalUsuario, setModalUsuario] = useState<any>(null)  // null | 'nuevo' | usuario existente
   const [formUsuario, setFormUsuario] = useState({
-    nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true,
+    nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '',
   })
   const [formHospital, setFormHospital] = useState({
     nombre: '', slug: '', email_admin: '', telefono: '',
@@ -178,6 +178,7 @@ export default function SuperAdminPage() {
         hospital_id: formUsuario.hospital_id,
         servicio_id: formUsuario.servicio_id || null,
         activo: formUsuario.activo,
+        codigo_empleado: formUsuario.codigo_empleado?.trim() || null,
       })
       if (perfilError) throw perfilError
 
@@ -201,6 +202,7 @@ export default function SuperAdminPage() {
       hospital_id: formUsuario.hospital_id,
       servicio_id: formUsuario.servicio_id || null,
       activo: formUsuario.activo,
+      codigo_empleado: formUsuario.codigo_empleado?.trim() || null,
     }).eq('id', modalUsuario.id)
     if (error) { toast.error('Error al actualizar'); setGuardando(false); return }
     toast.success('Usuario actualizado')
@@ -404,7 +406,7 @@ export default function SuperAdminPage() {
                 <option value="todos">Todos los hospitales</option>
                 {hospitales.map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
               </select>
-              <button onClick={() => { setModalUsuario('nuevo'); setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: filtroHospital !== 'todos' ? filtroHospital : '', servicio_id: '', activo: true }) }} style={S.btnPri}>
+              <button onClick={() => { setModalUsuario('nuevo'); setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: filtroHospital !== 'todos' ? filtroHospital : '', servicio_id: '', activo: true, codigo_empleado: '' }) }} style={S.btnPri}>
                 + Nuevo usuario
               </button>
               <span style={{ fontSize: '0.78rem', color: '#9ca3af' }}>{usuariosFiltrados.length} usuarios</span>
@@ -427,13 +429,14 @@ export default function SuperAdminPage() {
                       <td style={{ padding: '0.75rem', color: '#6b7280' }}>{(u.hospitales as any)?.nombre || '—'}</td>
                       <td style={{ padding: '0.75rem' }}>
                         <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '4px', background: '#f3f4f6', color: '#374151' }}>{u.rol}</span>
+                        {u.codigo_empleado && <span style={{ marginLeft: '4px', fontSize: '0.65rem', color: '#6366f1' }} title={`Código QR: ${u.codigo_empleado}`}>🆔</span>}
                       </td>
                       <td style={{ padding: '0.75rem' }}>
                         <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '4px', background: u.activo ? '#dcfce7' : '#fee2e2', color: u.activo ? '#16a34a' : '#dc2626' }}>{u.activo ? 'Activo' : 'Inactivo'}</span>
                       </td>
                       <td style={{ padding: '0.75rem' }}>
                         <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <button onClick={() => { setModalUsuario(u); setFormUsuario({ nombre: u.nombre, email: u.email, rol: u.rol, hospital_id: u.hospital_id || '', servicio_id: u.servicio_id || '', activo: u.activo }) }}
+                          <button onClick={() => { setModalUsuario(u); setFormUsuario({ nombre: u.nombre, email: u.email, rol: u.rol, hospital_id: u.hospital_id || '', servicio_id: u.servicio_id || '', activo: u.activo, codigo_empleado: u.codigo_empleado || '' }) }}
                             style={{ ...S.btnSec, padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}>Editar</button>
                           <button onClick={() => toggleUsuarioActivo(u)}
                             style={{ ...S.btnSec, padding: '0.3rem 0.6rem', fontSize: '0.7rem', color: u.activo ? '#dc2626' : '#16a34a' }}>
@@ -514,6 +517,13 @@ export default function SuperAdminPage() {
                 <select value={formUsuario.rol} onChange={e => setFormUsuario(f => ({ ...f, rol: e.target.value }))} style={{ ...S.input, background: 'white' }}>
                   {ROLES_SUPERADMIN.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
+              </div>
+              <div>
+                <label style={S.label}>Código de empleado <span style={{ color: '#9ca3af', fontWeight: 400 }}>(QR / código de barras)</span></label>
+                <input style={S.input} placeholder="Código asignado por RRHH"
+                  value={formUsuario.codigo_empleado || ''}
+                  onChange={e => setFormUsuario(f => ({ ...f, codigo_empleado: e.target.value }))} />
+                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '4px' }}>Permite al usuario acceder escaneando su tarjeta de empleado</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px' }}>
                 <input type="checkbox" checked={formUsuario.activo} onChange={e => setFormUsuario(f => ({ ...f, activo: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
