@@ -308,7 +308,7 @@ export default function LoginPage() {
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <p className="login-hospital-name">ÁSTOR by CRITIC SL</p>
-                    <p className="login-hospital-sub">Gestión y auditoría de material hospitalario</p>
+                    <p className="login-hospital-sub" style={{ textAlign: 'center' }}>Gestión y auditoría de material hospitalario</p>
                   </div>
                 </div>
               </>
