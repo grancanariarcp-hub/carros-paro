@@ -35,7 +35,6 @@ export default function AdminPage() {
     if (!p || p.rol !== 'administrador') { router.push('/'); return }
     setPerfil(p)
 
-    // Cargar hospital
     if (p.hospital_id) {
       const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
       setHospital(h)
@@ -140,7 +139,8 @@ export default function AdminPage() {
           onClose={() => setEscaneando(false)}
         />
       )}
-      {/* TOPBAR con identidad del hospital */}
+
+      {/* TOPBAR */}
       <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {hospital?.logo_url ? (
@@ -205,7 +205,6 @@ export default function AdminPage() {
 
         {/* ============ TAB RESUMEN ============ */}
         {tab === 'resumen' && <>
-          {/* Buscador rápido */}
           <div className="card">
             <div className="flex gap-2">
               <input
@@ -228,7 +227,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Accesos rápidos */}
           <div className="grid grid-cols-2 gap-2">
             <button className="card flex items-center gap-2 cursor-pointer active:bg-gray-50"
               onClick={() => router.push('/admin/nuevo-carro')}>
@@ -260,7 +258,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* KPIs */}
           <div className="grid grid-cols-2 gap-2">
             <div className="card text-center">
               <div className="text-2xl font-bold text-green-700">{stats.operativos}</div>
@@ -280,7 +277,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Alertas urgentes en resumen */}
           {alertas.length > 0 && (
             <div className="card border-red-200 bg-red-50">
               <div className="flex items-center justify-between mb-2">
@@ -303,7 +299,6 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Solicitudes pendientes */}
           {pendientes.length > 0 && (
             <div className="card border-blue-100">
               <div className="flex items-center justify-between mb-3">
@@ -328,7 +323,6 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Últimos controles */}
           <div className="card">
             <div className="section-title mb-3">Últimos controles</div>
             {inspecciones.length === 0 && (
@@ -357,7 +351,6 @@ export default function AdminPage() {
 
         {/* ============ TAB ALERTAS ============ */}
         {tab === 'alertas' && <>
-          {/* Filtros */}
           <div className="card">
             <div className="section-title mb-2">Filtrar por tipo</div>
             <div className="flex gap-1.5 flex-wrap">
@@ -425,7 +418,6 @@ export default function AdminPage() {
             + Crear nuevo carro
           </button>
 
-          {/* Filtro por tipo de carro */}
           {tiposCarro.length > 1 && (
             <div className="flex gap-1.5 flex-wrap">
               <button
@@ -541,35 +533,67 @@ export default function AdminPage() {
           <div className="flex flex-col gap-3">
             <div className="card bg-blue-50 border-blue-100">
               <p className="text-xs text-blue-700 leading-relaxed">
-                Informes generados con los datos de <strong>{hospital?.nombre}</strong>. Cada informe incluye el membrete y logo de tu centro.
+                Informes generados con los datos de <strong>{hospital?.nombre}</strong>.
+                Los filtros se aplican en tiempo real y puedes descargar cualquier vista como PDF.
               </p>
             </div>
 
-            {[
-              { ruta: '/informes/controles_vencidos', titulo: 'Controles vencidos', desc: 'Carros sin auditar con días de retraso', color: 'red' },
-              { ruta: '/informes/no_operativos', titulo: 'Carros no operativos', desc: 'Con fallos graves y fotos de evidencia', color: 'amber' },
-              { ruta: '/informes/vencimientos', titulo: 'Vencimientos de material', desc: 'Filtrado por rango de fechas y servicio', color: 'orange' },
-              { ruta: '/informes/historial_auditorias', titulo: 'Historial de auditorías', desc: 'Con filtros por carro, auditor y resultado', color: 'blue' },
-              { ruta: '/informes/situacion_general', titulo: 'Situación general del hospital', desc: 'Estado de todos los carros con filtros por tipo', color: 'green' },
-            ].map(inf => (
-              <button key={inf.ruta}
-                className="btn-secondary text-left flex items-center gap-3"
-                onClick={() => router.push(inf.ruta)}>
-                <div className={`w-9 h-9 rounded-xl bg-${inf.color}-100 flex items-center justify-center flex-shrink-0`}>
-                  <svg className={`w-5 h-5 text-${inf.color}-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2}/>
-                    <polyline points="14 2 14 8 20 8" strokeWidth={2}/>
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-sm">{inf.titulo}</div>
-                  <div className="text-xs text-gray-400">{inf.desc}</div>
-                </div>
-                <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <polyline points="9 18 15 12 9 6" strokeWidth={2}/>
+            <button
+              className="btn-secondary text-left flex items-center gap-3"
+              onClick={() => router.push('/admin/informes')}>
+              <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={2}/>
+                  <polyline points="14 2 14 8 20 8" strokeWidth={2}/>
+                  <line x1="16" y1="13" x2="8" y2="13" strokeWidth={2}/>
+                  <line x1="16" y1="17" x2="8" y2="17" strokeWidth={2}/>
                 </svg>
-              </button>
-            ))}
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-sm">Inventario de equipos</div>
+                <div className="text-xs text-gray-400">Filtrar por servicio, categoría, estado, mantenimiento · PDF</div>
+              </div>
+              <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <polyline points="9 18 15 12 9 6" strokeWidth={2}/>
+              </svg>
+            </button>
+
+            <button
+              className="btn-secondary text-left flex items-center gap-3"
+              onClick={() => router.push('/admin/informes?seccion=controles')}>
+              <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth={2}/>
+                  <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/>
+                  <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/>
+                  <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-sm">Historial de controles</div>
+                <div className="text-xs text-gray-400">Filtrar por fecha, servicio, resultado, firma · PDF</div>
+              </div>
+              <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <polyline points="9 18 15 12 9 6" strokeWidth={2}/>
+              </svg>
+            </button>
+
+            <button
+              className="btn-secondary text-left flex items-center gap-3"
+              onClick={() => router.push('/admin/equipos')}>
+              <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-sm">Inventario de equipos (lista)</div>
+                <div className="text-xs text-gray-400">Ver y gestionar todos los equipos del hospital</div>
+              </div>
+              <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <polyline points="9 18 15 12 9 6" strokeWidth={2}/>
+              </svg>
+            </button>
           </div>
         )}
 
