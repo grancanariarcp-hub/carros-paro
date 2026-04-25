@@ -14,7 +14,9 @@
     "@supabase/supabase-js": "^2.49.1",
     "@supabase/ssr": "^0.5.2",
     "react-hot-toast": "^2.4.1",
-    "date-fns": "^3.6.0"
+    "date-fns": "^3.6.0",
+    "jspdf": "^2.5.1",
+    "html2canvas": "^1.4.1"
   },
   "devDependencies": {
     "typescript": "^5",
