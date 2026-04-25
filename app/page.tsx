@@ -156,23 +156,35 @@ export default function LoginPage() {
             </svg>
           </div>
           <h2 className="login-panel-title">Auditor de<br/>Equipamiento Médico</h2>
-          <p className="login-panel-sub">Sistema de gestión y auditoría<br/>de material crítico hospitalario</p>
+          <p className="login-panel-sub">Sistema de gestión y auditoría<br/>de material hospitalario</p>
           <div className="login-panel-features">
             <div className="login-feature">
               <span className="login-feature-dot"></span>
-              Control mensual y post-utilización
+              Controles personalizables por centro
             </div>
             <div className="login-feature">
               <span className="login-feature-dot"></span>
-              Alertas automáticas de vencimientos
+              Alertas automáticas de vencimientos y mantenimientos
             </div>
             <div className="login-feature">
               <span className="login-feature-dot"></span>
-              Informes PDF con trazabilidad ISO
+              Informes PDF con trazabilidad ISO personalizables
             </div>
             <div className="login-feature">
               <span className="login-feature-dot"></span>
               Acceso por QR y NFC
+            </div>
+            <div className="login-feature">
+              <span className="login-feature-dot"></span>
+              Firma digital en cada control
+            </div>
+            <div className="login-feature">
+              <span className="login-feature-dot"></span>
+              Inventario de equipos con historial de mantenimientos
+            </div>
+            <div className="login-feature">
+              <span className="login-feature-dot"></span>
+              Multi-hospital con identidad visual propia
             </div>
           </div>
         </div>
@@ -197,7 +209,7 @@ export default function LoginPage() {
               </svg>
             </div>
             <h1 className="login-mobile-title">ÁSTOR</h1>
-            <p className="login-mobile-sub">Gestión y auditoría de material crítico hospitalario</p>
+            <p className="login-mobile-sub">Gestión y auditoría de material hospitalario</p>
           </div>
 
           <div className="login-form-inner">
