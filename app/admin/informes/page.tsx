@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 
 // =====================================================================
@@ -87,9 +87,11 @@ function colorMant(dias: number | null): string {
 // =====================================================================
 
 export default function AdminInformesPage() {
-  const [seccion, setSeccion] = useState<'equipos' | 'controles'>('equipos')
+  const searchParams = useSearchParams()
+  const seccionInicial = searchParams.get('seccion') === 'controles' ? 'controles' : 'equipos'
+
+  const [seccion, setSeccion] = useState<'equipos' | 'controles'>(seccionInicial)
   const [hospital, setHospital] = useState<any>(null)
-  const [perfil, setPerfil] = useState<any>(null)
   const [servicios, setServicios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [generando, setGenerando] = useState(false)
@@ -98,15 +100,24 @@ export default function AdminInformesPage() {
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [categorias, setCategorias] = useState<string[]>([])
   const [filtrosEq, setFiltrosEq] = useState({
-    servicio_id: 'todos', categoria: 'todos', estado: 'todos',
-    mantenimiento: 'todos', indispensable: 'todos',
+    servicio_id: 'todos',
+    categoria: 'todos',
+    estado: 'todos',
+    mantenimiento: 'todos',
+    indispensable: 'todos',
+    mant_desde: '',
+    mant_hasta: '',
   })
 
   // Estado historial controles
   const [controles, setControles] = useState<Control[]>([])
   const [filtrosCtrl, setFiltrosCtrl] = useState({
-    servicio_id: 'todos', resultado: 'todos', tipo: 'todos',
-    fecha_desde: '', fecha_hasta: '', firmado: 'todos',
+    servicio_id: 'todos',
+    resultado: 'todos',
+    tipo: 'todos',
+    fecha_desde: '',
+    fecha_hasta: '',
+    firmado: 'todos',
   })
 
   const informeEqRef = useRef<HTMLDivElement>(null)
@@ -126,7 +137,6 @@ export default function AdminInformesPage() {
     if (!p || !['administrador', 'supervisor', 'auditor', 'superadmin'].includes(p.rol)) {
       router.push('/'); return
     }
-    setPerfil(p)
     setHospital((p as any)?.hospitales)
 
     const hospitalId = p?.hospital_id
@@ -141,13 +151,14 @@ export default function AdminInformesPage() {
       supabase.from('inspecciones')
         .select('id, carro_id, tipo, resultado, fecha, firmante_nombre, firma_url, carros(codigo, nombre, servicios(nombre)), perfiles(nombre)')
         .order('fecha', { ascending: false })
-        .limit(200),
+        .limit(500),
     ])
 
-    const eqs = (eqRes.data || []) as Equipo[]
+    // Fix TypeScript: cast explícito a unknown primero para evitar error de tipos
+    const eqs = (eqRes.data || []) as unknown as Equipo[]
     setEquipos(eqs)
     setServicios(svRes.data || [])
-    setControles((ctrlRes.data || []) as Control[])
+    setControles((ctrlRes.data || []) as unknown as Control[])
     setCategorias(Array.from(new Set(eqs.map(e => e.categoria).filter(Boolean))).sort() as string[])
     setLoading(false)
   }
@@ -166,6 +177,8 @@ export default function AdminInformesPage() {
     if (filtrosEq.mantenimiento === 'proximo_30' && (dias === null || dias < 0 || dias > 30)) return false
     if (filtrosEq.mantenimiento === 'proximo_90' && (dias === null || dias < 0 || dias > 90)) return false
     if (filtrosEq.mantenimiento === 'al_dia' && dias !== null && dias < 0) return false
+    if (filtrosEq.mant_desde && e.fecha_proximo_mantenimiento && e.fecha_proximo_mantenimiento < filtrosEq.mant_desde) return false
+    if (filtrosEq.mant_hasta && e.fecha_proximo_mantenimiento && e.fecha_proximo_mantenimiento > filtrosEq.mant_hasta) return false
     return true
   })
 
@@ -195,7 +208,7 @@ export default function AdminInformesPage() {
   })
 
   // ================================================================
-  // Títulos de informe
+  // Título informe equipos
   // ================================================================
   function tituloInformeEq(): string {
     const partes: string[] = []
@@ -206,6 +219,9 @@ export default function AdminInformesPage() {
     if (filtrosEq.mantenimiento === 'vencido') partes.push('Mantenimientos vencidos')
     else if (filtrosEq.mantenimiento === 'proximo_30') partes.push('Próximos 30 días')
     else if (filtrosEq.mantenimiento === 'proximo_90') partes.push('Próximos 90 días')
+    if (filtrosEq.mant_desde || filtrosEq.mant_hasta) {
+      partes.push(`Mant. ${filtrosEq.mant_desde || '...'} → ${filtrosEq.mant_hasta || '...'}`)
+    }
     if (filtrosEq.categoria !== 'todos') partes.push(filtrosEq.categoria)
     if (filtrosEq.indispensable === 'si') partes.push('Indispensables')
     if (filtrosEq.estado !== 'todos') partes.push(ESTADOS_LABEL[filtrosEq.estado] || filtrosEq.estado)
@@ -247,13 +263,15 @@ export default function AdminInformesPage() {
     }
   }
 
+  const hayFiltrosEq = Object.values(filtrosEq).some(v => v !== 'todos' && v !== '')
+  const hayFiltrosCtrl = Object.values(filtrosCtrl).some(v => v !== 'todos' && v !== '')
+  const colorPrimario = hospital?.color_primario || '#1d4ed8'
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-gray-400 text-sm">Cargando...</div>
     </div>
   )
-
-  const colorPrimario = hospital?.color_primario || '#1d4ed8'
 
   return (
     <div className="page">
@@ -266,7 +284,7 @@ export default function AdminInformesPage() {
             seccion === 'equipos' ? 'inventario_equipos' : 'historial_controles'
           )}
           disabled={generando || (seccion === 'equipos' ? equiposFiltrados.length === 0 : controlesFiltrados.length === 0)}
-          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40">
+          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40 flex items-center gap-1">
           {generando ? '⏳' : '⬇️'} PDF ({seccion === 'equipos' ? equiposFiltrados.length : controlesFiltrados.length})
         </button>
       </div>
@@ -295,8 +313,8 @@ export default function AdminInformesPage() {
             <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <div className="section-title">Filtros</div>
-                {Object.values(filtrosEq).some(v => v !== 'todos' && v !== '') && (
-                  <button onClick={() => setFiltrosEq({ servicio_id: 'todos', categoria: 'todos', estado: 'todos', mantenimiento: 'todos', indispensable: 'todos' })}
+                {hayFiltrosEq && (
+                  <button onClick={() => setFiltrosEq({ servicio_id: 'todos', categoria: 'todos', estado: 'todos', mantenimiento: 'todos', indispensable: 'todos', mant_desde: '', mant_hasta: '' })}
                     className="text-xs text-blue-600 font-semibold">Limpiar</button>
                 )}
               </div>
@@ -331,27 +349,42 @@ export default function AdminInformesPage() {
                   <div>
                     <label className="label">Mantenimiento</label>
                     <select className="input" value={filtrosEq.mantenimiento}
-                      onChange={e => setFiltrosEq(f => ({ ...f, mantenimiento: e.target.value as any }))}>
+                      onChange={e => setFiltrosEq(f => ({ ...f, mantenimiento: e.target.value, mant_desde: '', mant_hasta: '' }))}>
                       <option value="todos">Todos</option>
                       <option value="vencido">Vencido</option>
                       <option value="proximo_30">Próximos 30d</option>
                       <option value="proximo_90">Próximos 90d</option>
                       <option value="al_dia">Al día</option>
+                      <option value="rango">Por rango de fechas</option>
                     </select>
                   </div>
                   <div>
                     <label className="label">Indispensables</label>
                     <select className="input" value={filtrosEq.indispensable}
-                      onChange={e => setFiltrosEq(f => ({ ...f, indispensable: e.target.value as any }))}>
+                      onChange={e => setFiltrosEq(f => ({ ...f, indispensable: e.target.value }))}>
                       <option value="todos">Todos</option>
                       <option value="si">Solo indispensables</option>
                       <option value="no">No indispensables</option>
                     </select>
                   </div>
                 </div>
+                {filtrosEq.mantenimiento === 'rango' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label">Mant. desde</label>
+                      <input type="date" className="input" value={filtrosEq.mant_desde}
+                        onChange={e => setFiltrosEq(f => ({ ...f, mant_desde: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="label">Mant. hasta</label>
+                      <input type="date" className="input" value={filtrosEq.mant_hasta}
+                        onChange={e => setFiltrosEq(f => ({ ...f, mant_hasta: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-gray-500">
-                {equiposFiltrados.length} equipo{equiposFiltrados.length !== 1 ? 's' : ''} encontrado{equiposFiltrados.length !== 1 ? 's' : ''} de {equipos.length}
+                {equiposFiltrados.length} equipo{equiposFiltrados.length !== 1 ? 's' : ''} de {equipos.length}
               </div>
             </div>
 
@@ -362,7 +395,6 @@ export default function AdminInformesPage() {
               </div>
             ) : (
               <div ref={informeEqRef} style={{ backgroundColor: '#fff', padding: '24px', fontFamily: 'sans-serif' }}>
-                {/* Cabecera */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${colorPrimario}`, paddingBottom: '14px', marginBottom: '18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {hospital?.logo_url
@@ -381,7 +413,6 @@ export default function AdminInformesPage() {
                   </div>
                 </div>
 
-                {/* Tabla por servicio */}
                 {Object.entries(porServicio).map(([sv, eqs]) => (
                   <div key={sv} style={{ marginBottom: '20px' }}>
                     <div style={{ background: colorPrimario, color: '#fff', padding: '5px 10px', borderRadius: '5px', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>
@@ -445,7 +476,7 @@ export default function AdminInformesPage() {
             <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <div className="section-title">Filtros</div>
-                {Object.values(filtrosCtrl).some(v => v !== 'todos' && v !== '') && (
+                {hayFiltrosCtrl && (
                   <button onClick={() => setFiltrosCtrl({ servicio_id: 'todos', resultado: 'todos', tipo: 'todos', fecha_desde: '', fecha_hasta: '', firmado: 'todos' })}
                     className="text-xs text-blue-600 font-semibold">Limpiar</button>
                 )}
@@ -493,7 +524,7 @@ export default function AdminInformesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="label">Firmado</label>
+                    <label className="label">Firma</label>
                     <select className="input" value={filtrosCtrl.firmado}
                       onChange={e => setFiltrosCtrl(f => ({ ...f, firmado: e.target.value }))}>
                       <option value="todos">Todos</option>
@@ -504,7 +535,7 @@ export default function AdminInformesPage() {
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-gray-500">
-                {controlesFiltrados.length} control{controlesFiltrados.length !== 1 ? 'es' : ''} encontrado{controlesFiltrados.length !== 1 ? 's' : ''} de {controles.length}
+                {controlesFiltrados.length} control{controlesFiltrados.length !== 1 ? 'es' : ''} de {controles.length}
               </div>
             </div>
 
@@ -515,7 +546,6 @@ export default function AdminInformesPage() {
               </div>
             ) : (
               <div ref={informeCtrlRef} style={{ backgroundColor: '#fff', padding: '24px', fontFamily: 'sans-serif' }}>
-                {/* Cabecera */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${colorPrimario}`, paddingBottom: '14px', marginBottom: '18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {hospital?.logo_url
@@ -525,7 +555,11 @@ export default function AdminInformesPage() {
                         </div>}
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px' }}>{hospital?.nombre}</div>
-                      <div style={{ fontSize: '11px', color: '#6b7280' }}>Historial de controles de carros de parada</div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                        Historial de controles
+                        {filtrosCtrl.fecha_desde && ` · Desde ${formatFecha(filtrosCtrl.fecha_desde)}`}
+                        {filtrosCtrl.fecha_hasta && ` hasta ${formatFecha(filtrosCtrl.fecha_hasta)}`}
+                      </div>
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '11px', color: '#6b7280' }}>
@@ -534,7 +568,6 @@ export default function AdminInformesPage() {
                   </div>
                 </div>
 
-                {/* Tabla de controles */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                   <thead>
                     <tr style={{ background: '#f3f4f6' }}>
@@ -548,16 +581,18 @@ export default function AdminInformesPage() {
                       const carro = c.carros as any
                       const colorResult = c.resultado === 'operativo' ? '#16a34a' : c.resultado === 'condicional' ? '#d97706' : '#dc2626'
                       return (
-                        <tr key={c.id} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? '#fff' : '#f9fafb', cursor: 'pointer' }}
+                        <tr key={c.id}
+                          style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? '#fff' : '#f9fafb', cursor: 'pointer' }}
                           onClick={() => router.push(`/carro/${c.carro_id}/resultado/${c.id}`)}>
                           <td style={{ padding: '5px 6px' }}>{formatFechaHora(c.fecha)}</td>
-                          <td style={{ padding: '5px 6px', fontWeight: 600 }}>{carro?.codigo}<br /><span style={{ fontWeight: 400, color: '#6b7280' }}>{carro?.nombre}</span></td>
+                          <td style={{ padding: '5px 6px', fontWeight: 600 }}>
+                            {carro?.codigo}<br />
+                            <span style={{ fontWeight: 400, color: '#6b7280' }}>{carro?.nombre}</span>
+                          </td>
                           <td style={{ padding: '5px 6px' }}>{carro?.servicios?.nombre || '—'}</td>
                           <td style={{ padding: '5px 6px' }}>{c.tipo?.replace('_', ' ')}</td>
-                          <td style={{ padding: '5px 6px' }}>
-                            <span style={{ fontWeight: 700, color: colorResult }}>
-                              {RESULTADO_LABEL[c.resultado] || c.resultado}
-                            </span>
+                          <td style={{ padding: '5px 6px', fontWeight: 700, color: colorResult }}>
+                            {RESULTADO_LABEL[c.resultado] || c.resultado}
                           </td>
                           <td style={{ padding: '5px 6px' }}>{(c.perfiles as any)?.nombre || '—'}</td>
                           <td style={{ padding: '5px 6px', textAlign: 'center' }}>
