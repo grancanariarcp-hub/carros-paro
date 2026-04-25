@@ -36,22 +36,28 @@ interface Control {
   perfiles?: { nombre: string } | null
 }
 
+type AgrupacionEq = 'servicio_categoria' | 'categoria' | 'servicio' | 'alertas_mant' | 'alertas_cal'
+type SeccionInformes = 'equipos' | 'controles'
+
 // =====================================================================
 // Constantes
 // =====================================================================
 
 const ESTADOS_LABEL: Record<string, string> = {
-  operativo: 'Operativo',
-  en_mantenimiento: 'En mantenimiento',
-  fuera_de_servicio: 'Fuera de servicio',
-  baja: 'Baja',
+  operativo: 'Operativo', en_mantenimiento: 'En mantenimiento',
+  fuera_de_servicio: 'Fuera de servicio', baja: 'Baja',
+}
+const RESULTADO_LABEL: Record<string, string> = {
+  operativo: 'Operativo', condicional: 'Condicional', no_operativo: 'No operativo',
 }
 
-const RESULTADO_LABEL: Record<string, string> = {
-  operativo: 'Operativo',
-  condicional: 'Condicional',
-  no_operativo: 'No operativo',
-}
+const AGRUPACIONES: { value: AgrupacionEq; label: string; desc: string }[] = [
+  { value: 'servicio_categoria', label: 'Por servicio → categoría', desc: 'Agrupa por unidad, luego por tipo de equipo' },
+  { value: 'servicio',          label: 'Por servicio',             desc: 'Solo agrupa por unidad / servicio' },
+  { value: 'categoria',         label: 'Por categoría',            desc: 'Solo agrupa por tipo de equipo' },
+  { value: 'alertas_mant',      label: 'Alertas de mantenimiento', desc: 'Vencidos y próximos 90 días' },
+  { value: 'alertas_cal',       label: 'Alertas de calibración',   desc: 'Calibraciones vencidas o próximas' },
+]
 
 // =====================================================================
 // Utilidades
@@ -69,10 +75,7 @@ function formatFecha(fecha?: string | null): string {
 
 function formatFechaHora(fecha?: string | null): string {
   if (!fecha) return '—'
-  return new Date(fecha).toLocaleString('es-ES', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  return new Date(fecha).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function colorMant(dias: number | null): string {
@@ -83,41 +86,103 @@ function colorMant(dias: number | null): string {
 }
 
 // =====================================================================
-// Componente principal
+// Lógica de agrupación
+// =====================================================================
+
+function agruparEquipos(equipos: Equipo[], agrupacion: AgrupacionEq): Record<string, Equipo[]> {
+  switch (agrupacion) {
+    case 'servicio_categoria': {
+      const result: Record<string, Equipo[]> = {}
+      const porServicio: Record<string, Equipo[]> = {}
+      equipos.forEach(e => {
+        const sv = (e.servicios as any)?.nombre || 'Sin servicio'
+        if (!porServicio[sv]) porServicio[sv] = []
+        porServicio[sv].push(e)
+      })
+      Object.entries(porServicio).sort(([a], [b]) => a.localeCompare(b)).forEach(([sv, eqs]) => {
+        const porCat: Record<string, Equipo[]> = {}
+        eqs.forEach(e => {
+          const cat = e.categoria || 'Sin categoría'
+          if (!porCat[cat]) porCat[cat] = []
+          porCat[cat].push(e)
+        })
+        Object.entries(porCat).sort(([a], [b]) => a.localeCompare(b)).forEach(([cat, ceqs]) => {
+          result[`${sv} › ${cat}`] = ceqs
+        })
+      })
+      return result
+    }
+    case 'servicio': {
+      const result: Record<string, Equipo[]> = {}
+      equipos.forEach(e => {
+        const sv = (e.servicios as any)?.nombre || 'Sin servicio'
+        if (!result[sv]) result[sv] = []
+        result[sv].push(e)
+      })
+      return Object.fromEntries(Object.entries(result).sort(([a], [b]) => a.localeCompare(b)))
+    }
+    case 'categoria': {
+      const result: Record<string, Equipo[]> = {}
+      equipos.forEach(e => {
+        const cat = e.categoria || 'Sin categoría'
+        if (!result[cat]) result[cat] = []
+        result[cat].push(e)
+      })
+      return Object.fromEntries(Object.entries(result).sort(([a], [b]) => a.localeCompare(b)))
+    }
+    case 'alertas_mant': {
+      const vencidos = equipos.filter(e => { const d = diasHasta(e.fecha_proximo_mantenimiento); return d !== null && d < 0 })
+      const proximo30 = equipos.filter(e => { const d = diasHasta(e.fecha_proximo_mantenimiento); return d !== null && d >= 0 && d <= 30 })
+      const proximo90 = equipos.filter(e => { const d = diasHasta(e.fecha_proximo_mantenimiento); return d !== null && d > 30 && d <= 90 })
+      const result: Record<string, Equipo[]> = {}
+      if (vencidos.length) result['⛔ Mantenimiento vencido'] = vencidos
+      if (proximo30.length) result['🔴 Vence en menos de 30 días'] = proximo30
+      if (proximo90.length) result['🟡 Vence en 30-90 días'] = proximo90
+      return result
+    }
+    case 'alertas_cal': {
+      const vencidos = equipos.filter(e => { const d = diasHasta(e.fecha_proxima_calibracion); return d !== null && d < 0 })
+      const proximo = equipos.filter(e => { const d = diasHasta(e.fecha_proxima_calibracion); return d !== null && d >= 0 && d <= 90 })
+      const result: Record<string, Equipo[]> = {}
+      if (vencidos.length) result['⛔ Calibración vencida'] = vencidos
+      if (proximo.length) result['🟡 Calibración próxima (90d)'] = proximo
+      return result
+    }
+    default:
+      return {}
+  }
+}
+
+// =====================================================================
+// Componente interno (necesita Suspense por useSearchParams)
 // =====================================================================
 
 function AdminInformesInner() {
   const searchParams = useSearchParams()
-  const seccionInicial = searchParams.get('seccion') === 'controles' ? 'controles' : 'equipos'
+  const seccionInicial: SeccionInformes = searchParams.get('seccion') === 'controles' ? 'controles' : 'equipos'
 
-  const [seccion, setSeccion] = useState<'equipos' | 'controles'>(seccionInicial)
+  const [seccion, setSeccion] = useState<SeccionInformes>(seccionInicial)
   const [hospital, setHospital] = useState<any>(null)
+  const [perfil, setPerfil] = useState<any>(null)
   const [servicios, setServicios] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [generando, setGenerando] = useState(false)
 
-  // Estado inventario equipos
+  // Inventario equipos
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [categorias, setCategorias] = useState<string[]>([])
+  const [agrupacion, setAgrupacion] = useState<AgrupacionEq>('servicio_categoria')
   const [filtrosEq, setFiltrosEq] = useState({
-    servicio_id: 'todos',
-    categoria: 'todos',
-    estado: 'todos',
-    mantenimiento: 'todos',
-    indispensable: 'todos',
-    mant_desde: '',
-    mant_hasta: '',
+    servicio_id: 'todos', categoria: 'todos', estado: 'todos',
+    mantenimiento: 'todos', indispensable: 'todos',
+    mant_desde: '', mant_hasta: '',
   })
 
-  // Estado historial controles
+  // Historial controles
   const [controles, setControles] = useState<Control[]>([])
   const [filtrosCtrl, setFiltrosCtrl] = useState({
-    servicio_id: 'todos',
-    resultado: 'todos',
-    tipo: 'todos',
-    fecha_desde: '',
-    fecha_hasta: '',
-    firmado: 'todos',
+    servicio_id: 'todos', resultado: 'todos', tipo: 'todos',
+    fecha_desde: '', fecha_hasta: '', firmado: 'todos',
   })
 
   const informeEqRef = useRef<HTMLDivElement>(null)
@@ -137,24 +202,30 @@ function AdminInformesInner() {
     if (!p || !['administrador', 'supervisor', 'auditor', 'superadmin'].includes(p.rol)) {
       router.push('/'); return
     }
+    setPerfil(p)
     setHospital((p as any)?.hospitales)
 
     const hospitalId = p?.hospital_id
     if (!hospitalId) { setLoading(false); return }
 
-    const [eqRes, svRes, ctrlRes] = await Promise.all([
-      supabase.from('equipos')
-        .select('id, nombre, marca, modelo, numero_censo, categoria, estado, indispensable, servicio_id, fecha_proximo_mantenimiento, fecha_proxima_calibracion, fecha_garantia_hasta, servicios(nombre)')
-        .eq('hospital_id', hospitalId).eq('activo', true).order('nombre'),
-      supabase.from('servicios')
-        .select('id, nombre').eq('hospital_id', hospitalId).eq('activo', true).order('nombre'),
-      supabase.from('inspecciones')
-        .select('id, carro_id, tipo, resultado, fecha, firmante_nombre, firma_url, carros(codigo, nombre, servicios(nombre)), perfiles(nombre)')
-        .order('fecha', { ascending: false })
-        .limit(500),
-    ])
+    // Supervisores solo ven su servicio
+    const eqQuery = supabase.from('equipos')
+      .select('id, nombre, marca, modelo, numero_censo, categoria, estado, indispensable, servicio_id, fecha_proximo_mantenimiento, fecha_proxima_calibracion, fecha_garantia_hasta, servicios(nombre)')
+      .eq('hospital_id', hospitalId).eq('activo', true).order('nombre')
 
-    // Fix TypeScript: cast explícito a unknown primero para evitar error de tipos
+    if (p.rol === 'supervisor' && p.servicio_id) {
+      eqQuery.eq('servicio_id', p.servicio_id)
+    }
+
+    const ctrlQuery = supabase.from('inspecciones')
+      .select('id, carro_id, tipo, resultado, fecha, firmante_nombre, firma_url, carros(codigo, nombre, servicios(nombre)), perfiles(nombre)')
+      .order('fecha', { ascending: false }).limit(500)
+
+    const svQuery = supabase.from('servicios')
+      .select('id, nombre').eq('hospital_id', hospitalId).eq('activo', true).order('nombre')
+
+    const [eqRes, svRes, ctrlRes] = await Promise.all([eqQuery, svQuery, ctrlQuery])
+
     const eqs = (eqRes.data || []) as unknown as Equipo[]
     setEquipos(eqs)
     setServicios(svRes.data || [])
@@ -182,12 +253,7 @@ function AdminInformesInner() {
     return true
   })
 
-  const porServicio = equiposFiltrados.reduce((acc, eq) => {
-    const sv = (eq.servicios as any)?.nombre || 'Sin servicio'
-    if (!acc[sv]) acc[sv] = []
-    acc[sv].push(eq)
-    return acc
-  }, {} as Record<string, Equipo[]>)
+  const grupos = agruparEquipos(equiposFiltrados, agrupacion)
 
   // ================================================================
   // Filtros controles
@@ -208,28 +274,22 @@ function AdminInformesInner() {
   })
 
   // ================================================================
-  // Título informe equipos
+  // Título del informe
   // ================================================================
   function tituloInformeEq(): string {
-    const partes: string[] = []
+    const agr = AGRUPACIONES.find(a => a.value === agrupacion)?.label || ''
+    const partes = [agr]
     if (filtrosEq.servicio_id !== 'todos') {
       const sv = servicios.find(s => s.id === filtrosEq.servicio_id)
       if (sv) partes.push(sv.nombre)
     }
-    if (filtrosEq.mantenimiento === 'vencido') partes.push('Mantenimientos vencidos')
-    else if (filtrosEq.mantenimiento === 'proximo_30') partes.push('Próximos 30 días')
-    else if (filtrosEq.mantenimiento === 'proximo_90') partes.push('Próximos 90 días')
-    if (filtrosEq.mant_desde || filtrosEq.mant_hasta) {
-      partes.push(`Mant. ${filtrosEq.mant_desde || '...'} → ${filtrosEq.mant_hasta || '...'}`)
-    }
     if (filtrosEq.categoria !== 'todos') partes.push(filtrosEq.categoria)
-    if (filtrosEq.indispensable === 'si') partes.push('Indispensables')
-    if (filtrosEq.estado !== 'todos') partes.push(ESTADOS_LABEL[filtrosEq.estado] || filtrosEq.estado)
-    return partes.length > 0 ? partes.join(' · ') : 'Inventario completo de equipos'
+    if (filtrosEq.mantenimiento !== 'todos') partes.push(filtrosEq.mantenimiento.replace('_', ' '))
+    return partes.join(' · ')
   }
 
   // ================================================================
-  // Descarga PDF
+  // PDF
   // ================================================================
   async function descargarPDF(ref: React.RefObject<HTMLDivElement>, nombre: string) {
     if (!ref.current) return
@@ -237,9 +297,7 @@ function AdminInformesInner() {
     try {
       const { default: jsPDF } = await import('jspdf')
       const { default: html2canvas } = await import('html2canvas')
-      const canvas = await html2canvas(ref.current, {
-        scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
-      })
+      const canvas = await html2canvas(ref.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF('p', 'mm', 'a4')
       const pdfWidth = pdf.internal.pageSize.getWidth()
@@ -256,16 +314,14 @@ function AdminInformesInner() {
         heightLeft -= pdfHeight
       }
       pdf.save(`${nombre}_${new Date().toISOString().split('T')[0]}.pdf`)
-    } catch (err) {
-      console.error('Error generando PDF:', err)
-    } finally {
-      setGenerando(false)
-    }
+    } catch (err) { console.error(err) }
+    finally { setGenerando(false) }
   }
 
+  const colorPrimario = hospital?.color_primario || '#1d4ed8'
   const hayFiltrosEq = Object.values(filtrosEq).some(v => v !== 'todos' && v !== '')
   const hayFiltrosCtrl = Object.values(filtrosCtrl).some(v => v !== 'todos' && v !== '')
-  const colorPrimario = hospital?.color_primario || '#1d4ed8'
+  const esSupervisor = perfil?.rol === 'supervisor'
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -289,15 +345,13 @@ function AdminInformesInner() {
         </button>
       </div>
 
-      {/* Selector de sección */}
+      {/* Tabs de sección */}
       <div className="flex bg-white border-b border-gray-100">
-        <button
-          onClick={() => setSeccion('equipos')}
+        <button onClick={() => setSeccion('equipos')}
           className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${seccion === 'equipos' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-400'}`}>
           🔧 Inventario equipos
         </button>
-        <button
-          onClick={() => setSeccion('controles')}
+        <button onClick={() => setSeccion('controles')}
           className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${seccion === 'controles' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-400'}`}>
           📋 Historial controles
         </button>
@@ -306,27 +360,42 @@ function AdminInformesInner() {
       <div className="content pb-8">
 
         {/* ============================================================
-            SECCIÓN: INVENTARIO DE EQUIPOS
+            INVENTARIO EQUIPOS
         ============================================================ */}
         {seccion === 'equipos' && (
           <>
             <div className="card">
               <div className="flex items-center justify-between mb-3">
-                <div className="section-title">Filtros</div>
+                <div className="section-title">Filtros y agrupación</div>
                 {hayFiltrosEq && (
                   <button onClick={() => setFiltrosEq({ servicio_id: 'todos', categoria: 'todos', estado: 'todos', mantenimiento: 'todos', indispensable: 'todos', mant_desde: '', mant_hasta: '' })}
                     className="text-xs text-blue-600 font-semibold">Limpiar</button>
                 )}
               </div>
+
+              {/* Agrupación */}
+              <div className="mb-3">
+                <label className="label">Agrupar por</label>
+                <select className="input" value={agrupacion}
+                  onChange={e => setAgrupacion(e.target.value as AgrupacionEq)}>
+                  {AGRUPACIONES.map(a => (
+                    <option key={a.value} value={a.value}>{a.label} — {a.desc}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex flex-col gap-2">
-                <div>
-                  <label className="label">Servicio</label>
-                  <select className="input" value={filtrosEq.servicio_id}
-                    onChange={e => setFiltrosEq(f => ({ ...f, servicio_id: e.target.value }))}>
-                    <option value="todos">Todos los servicios</option>
-                    {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select>
-                </div>
+                {/* Supervisores solo ven su servicio, no pueden filtrar por otro */}
+                {!esSupervisor && (
+                  <div>
+                    <label className="label">Servicio</label>
+                    <select className="input" value={filtrosEq.servicio_id}
+                      onChange={e => setFiltrosEq(f => ({ ...f, servicio_id: e.target.value }))}>
+                      <option value="todos">Todos los servicios</option>
+                      {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="label">Categoría</label>
@@ -385,6 +454,7 @@ function AdminInformesInner() {
               </div>
               <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-gray-500">
                 {equiposFiltrados.length} equipo{equiposFiltrados.length !== 1 ? 's' : ''} de {equipos.length}
+                {' · '}{Object.keys(grupos).length} grupo{Object.keys(grupos).length !== 1 ? 's' : ''}
               </div>
             </div>
 
@@ -395,6 +465,7 @@ function AdminInformesInner() {
               </div>
             ) : (
               <div ref={informeEqRef} style={{ backgroundColor: '#fff', padding: '24px', fontFamily: 'sans-serif' }}>
+                {/* Cabecera */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${colorPrimario}`, paddingBottom: '14px', marginBottom: '18px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {hospital?.logo_url
@@ -413,10 +484,11 @@ function AdminInformesInner() {
                   </div>
                 </div>
 
-                {Object.entries(porServicio).map(([sv, eqs]) => (
-                  <div key={sv} style={{ marginBottom: '20px' }}>
+                {/* Grupos */}
+                {Object.entries(grupos).map(([grupo, eqs]) => (
+                  <div key={grupo} style={{ marginBottom: '20px' }}>
                     <div style={{ background: colorPrimario, color: '#fff', padding: '5px 10px', borderRadius: '5px', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>
-                      {sv} ({eqs.length})
+                      {grupo} ({eqs.length})
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                       <thead>
@@ -433,7 +505,7 @@ function AdminInformesInner() {
                             <tr key={eq.id} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                               <td style={{ padding: '5px 6px' }}>
                                 <div style={{ fontWeight: 600 }}>{eq.nombre}</div>
-                                {eq.indispensable && <span style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>★ Indispensable</span>}
+                                {eq.indispensable && <span style={{ fontSize: '9px', color: '#dc2626', fontWeight: 700 }}>★</span>}
                               </td>
                               <td style={{ padding: '5px 6px' }}>{eq.numero_censo || '—'}</td>
                               <td style={{ padding: '5px 6px' }}>{eq.categoria || '—'}</td>
@@ -469,7 +541,7 @@ function AdminInformesInner() {
         )}
 
         {/* ============================================================
-            SECCIÓN: HISTORIAL DE CONTROLES
+            HISTORIAL CONTROLES
         ============================================================ */}
         {seccion === 'controles' && (
           <>
@@ -494,14 +566,16 @@ function AdminInformesInner() {
                       onChange={e => setFiltrosCtrl(f => ({ ...f, fecha_hasta: e.target.value }))} />
                   </div>
                 </div>
-                <div>
-                  <label className="label">Servicio</label>
-                  <select className="input" value={filtrosCtrl.servicio_id}
-                    onChange={e => setFiltrosCtrl(f => ({ ...f, servicio_id: e.target.value }))}>
-                    <option value="todos">Todos los servicios</option>
-                    {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select>
-                </div>
+                {!esSupervisor && (
+                  <div>
+                    <label className="label">Servicio</label>
+                    <select className="input" value={filtrosCtrl.servicio_id}
+                      onChange={e => setFiltrosCtrl(f => ({ ...f, servicio_id: e.target.value }))}>
+                      <option value="todos">Todos los servicios</option>
+                      {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="label">Resultado</label>
@@ -586,8 +660,7 @@ function AdminInformesInner() {
                           onClick={() => router.push(`/carro/${c.carro_id}/resultado/${c.id}`)}>
                           <td style={{ padding: '5px 6px' }}>{formatFechaHora(c.fecha)}</td>
                           <td style={{ padding: '5px 6px', fontWeight: 600 }}>
-                            {carro?.codigo}<br />
-                            <span style={{ fontWeight: 400, color: '#6b7280' }}>{carro?.nombre}</span>
+                            {carro?.codigo}<br /><span style={{ fontWeight: 400, color: '#6b7280' }}>{carro?.nombre}</span>
                           </td>
                           <td style={{ padding: '5px 6px' }}>{carro?.servicios?.nombre || '—'}</td>
                           <td style={{ padding: '5px 6px' }}>{c.tipo?.replace('_', ' ')}</td>
@@ -617,6 +690,9 @@ function AdminInformesInner() {
   )
 }
 
+// =====================================================================
+// Export con Suspense (requerido por useSearchParams en Next.js 14)
+// =====================================================================
 export default function AdminInformesPage() {
   return (
     <Suspense fallback={
