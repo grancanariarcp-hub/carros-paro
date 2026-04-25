@@ -388,17 +388,37 @@ export default function AdminPage() {
                 <div key={a.id} className={`card ${colorTipo}`}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <div className="text-sm font-bold">{(a.carros as any)?.codigo} — {(a.carros as any)?.nombre}</div>
-                      <div className="text-xs text-gray-500">{(a.carros as any)?.ubicacion}</div>
+                      <div className="text-sm font-bold">
+                        {a.carro_id
+                          ? `${(a.carros as any)?.codigo} — ${(a.carros as any)?.nombre}`
+                          : (a.titulo || a.tipo?.replace(/_/g, ' '))}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {a.carro_id
+                          ? (a.carros as any)?.ubicacion
+                          : a.mensaje?.replace(/\[equipo:[^\]]+\]/, '').trim()}
+                      </div>
                     </div>
-                    <span className={`badge ${badgeTipo} flex-shrink-0`}>{a.tipo?.replace('_',' ')}</span>
+                    <span className={`badge ${badgeTipo} flex-shrink-0`}>{a.tipo?.replace(/_/g,' ')}</span>
                   </div>
-                  <div className="text-xs text-gray-600 mb-3">{a.mensaje}</div>
+                  {a.carro_id && (
+                    <div className="text-xs text-gray-600 mb-3">{a.mensaje}</div>
+                  )}
                   <div className="flex gap-2">
                     <button
                       className="flex-1 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700"
-                      onClick={() => router.push(`/carro/${a.carro_id}`)}>
-                      Ver carro
+                      onClick={() => {
+                        if (a.carro_id) {
+                          router.push(`/carro/${a.carro_id}`)
+                        } else {
+                          // Extraer UUID del equipo del mensaje: [equipo:uuid]
+                          const match = (a.mensaje || '').match(/\[equipo:([a-f0-9-]{36})\]/)
+                          if (match) {
+                            router.push(`/admin/equipos/${match[1]}`)
+                          }
+                        }
+                      }}>
+                      {a.carro_id ? 'Ver carro' : 'Ver equipo'}
                     </button>
                     <button
                       className="flex-1 py-2 text-xs font-semibold rounded-lg bg-green-600 text-white"
