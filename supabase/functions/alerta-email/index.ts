@@ -51,14 +51,14 @@ Deno.serve(async (req) => {
       return resp({ ok: true, mensaje: 'Alerta no urgente, no se envía email' })
     }
 
-    // Obtener destinatarios: admins y supervisores del hospital con alertas activadas
+    // Obtener destinatarios: admins y supervisores del hospital
+    // Para alertas críticas enviamos a todos los admins aunque no tengan recibir_alertas
     const { data: destinatarios } = await supabase
       .from('perfiles')
       .select('nombre, email, email_alertas, rol')
       .eq('hospital_id', alerta.hospital_id)
       .eq('activo', true)
-      .eq('recibir_alertas', true)
-      .in('rol', ['administrador', 'supervisor', 'superadmin'])
+      .in('rol', ['administrador', 'supervisor'])
 
     if (!destinatarios || destinatarios.length === 0) {
       return resp({ ok: true, mensaje: 'Sin destinatarios configurados' })
@@ -77,13 +77,12 @@ Deno.serve(async (req) => {
       enviados++
     }
 
-    // También enviar a superadmins
+    // También enviar a superadmins (no tienen hospital_id, query separada)
     const { data: superadmins } = await supabase
       .from('perfiles')
       .select('nombre, email, email_alertas')
       .eq('rol', 'superadmin')
       .eq('activo', true)
-      .eq('recibir_alertas', true)
 
     for (const sa of (superadmins || [])) {
       const to = sa.email_alertas || sa.email
