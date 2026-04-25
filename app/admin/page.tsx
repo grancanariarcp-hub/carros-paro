@@ -141,7 +141,7 @@ export default function AdminPage() {
           <div className="min-w-0">
             <div className="text-xs text-gray-400 leading-none truncate">{hospital?.nombre || 'Hospital'}</div>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="font-semibold text-sm truncate">{perfil?.nombre}</span>
+              <button onClick={() => router.push('/perfil')} className="font-semibold text-sm truncate hover:underline text-left">{perfil?.nombre}</button>
               <span className="badge bg-purple-100 text-purple-800 text-xs flex-shrink-0">Admin</span>
             </div>
           </div>
