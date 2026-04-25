@@ -20,7 +20,7 @@ export default function AdminUsuariosPage() {
   const [guardando, setGuardando] = useState(false)
   const [modal, setModal]         = useState<any>(null) // null | 'nuevo' | usuario
   const [form, setForm]           = useState({
-    nombre: '', email: '', rol: 'auditor', servicio_id: '', activo: true,
+    nombre: '', email: '', rol: 'auditor', servicio_id: '', activo: true, codigo_empleado: '',
   })
   const [busqueda, setBusqueda]   = useState('')
   const router = useRouter()
@@ -96,6 +96,7 @@ export default function AdminUsuariosPage() {
       rol: form.rol,
       servicio_id: form.servicio_id || null,
       activo: form.activo,
+      codigo_empleado: form.codigo_empleado?.trim() || null,
     }).eq('id', modal.id)
     if (error) { toast.error('Error al actualizar'); setGuardando(false); return }
     toast.success('Usuario actualizado')
@@ -111,7 +112,7 @@ export default function AdminUsuariosPage() {
   }
 
   function resetForm() {
-    setForm({ nombre: '', email: '', rol: 'auditor', servicio_id: '', activo: true })
+    setForm({ nombre: '', email: '', rol: 'auditor', servicio_id: '', activo: true, codigo_empleado: '' })
   }
 
   const usuariosFiltrados = usuarios.filter(u =>
@@ -176,7 +177,7 @@ export default function AdminUsuariosPage() {
                 <span className={`badge text-xs ${u.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {u.activo ? 'Activo' : 'Inactivo'}
                 </span>
-                <button onClick={() => { setModal(u); setForm({ nombre: u.nombre, email: u.email, rol: u.rol, servicio_id: u.servicio_id || '', activo: u.activo }) }}
+                <button onClick={() => { setModal(u); setForm({ nombre: u.nombre, email: u.email, rol: u.rol, servicio_id: u.servicio_id || '', activo: u.activo, codigo_empleado: u.codigo_empleado || '' }) }}
                   className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 bg-gray-50">
                   Editar
                 </button>
@@ -222,6 +223,13 @@ export default function AdminUsuariosPage() {
                   <option value="">Sin servicio asignado</option>
                   {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="label">Código de empleado <span className="text-gray-400">(QR / código de barras)</span></label>
+                <input className="input" placeholder="Código asignado por RRHH"
+                  value={form.codigo_empleado || ''}
+                  onChange={e => setForm(f => ({ ...f, codigo_empleado: e.target.value }))} />
+                <p className="text-xs text-gray-400 mt-1">Permite acceder escaneando la tarjeta de empleado</p>
               </div>
               <label className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl cursor-pointer">
                 <input type="checkbox" checked={form.activo} className="w-4 h-4"
