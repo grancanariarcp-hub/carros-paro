@@ -12,6 +12,7 @@
     "predeploy": "npm run typecheck && npm run test"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.51.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.1",
     "date-fns": "^3.6.0",
