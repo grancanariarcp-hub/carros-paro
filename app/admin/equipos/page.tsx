@@ -152,8 +152,10 @@ export default function EquiposPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || !['administrador', 'supervisor', 'tecnico', 'superadmin'].includes(p.rol)) {
-      router.push('/'); return
+    if (!p || !['administrador', 'calidad', 'supervisor', 'tecnico', 'superadmin'].includes(p.rol)) {
+      toast.error('No tienes permisos para acceder a equipos')
+      router.push(rutaPadre(pathname))
+      return
     }
     setPerfil(p)
     if (p.hospital_id) {

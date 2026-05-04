@@ -303,33 +303,40 @@ export default function AdminPage() {
           ) : alertasFiltradas.map(a => {
             const colorTipo = a.tipo === 'no_operativo' ? 'border-red-300 bg-red-50' : a.tipo === 'vencimiento' ? 'border-amber-300 bg-amber-50' : 'border-orange-300 bg-orange-50'
             const badgeTipo = a.tipo === 'no_operativo' ? 'bg-red-100 text-red-700' : a.tipo === 'vencimiento' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'
+            // Limpia los sufijos [equipo:UUID] / [material:UUID] que las funciones
+            // plpgsql ya no añaden, pero alertas pre-fix pueden tener.
+            const limpiarSufijos = (s?: string | null) =>
+              (s || '').replace(/\s*\[(equipo|material):[a-f0-9-]+\]/g, '').trim()
+            const carroNombre = (a.carros as any)?.codigo
+              ? `${(a.carros as any).codigo} — ${(a.carros as any).nombre || ''}`
+              : null
+            const tituloMostrar = limpiarSufijos(a.titulo) || carroNombre || (a.tipo || '').replace(/_/g, ' ')
+            const subtituloMostrar = a.carro_id
+              ? ((a.carros as any)?.ubicacion || '')
+              : limpiarSufijos(a.mensaje)
+            const mensajeLimpio = limpiarSufijos(a.mensaje)
             return (
               <div key={a.id} className={`card ${colorTipo}`}>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="text-sm font-bold">
-                      {a.carro_id ? `${(a.carros as any)?.codigo} — ${(a.carros as any)?.nombre}` : (a.titulo || a.tipo?.replace(/_/g, ' '))}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {a.carro_id ? (a.carros as any)?.ubicacion : a.mensaje?.replace(/\[equipo:[^\]]+\]/, '').trim()}
-                    </div>
+                    <div className="text-sm font-bold">{tituloMostrar || '—'}</div>
+                    <div className="text-xs text-gray-500">{subtituloMostrar}</div>
                   </div>
                   <span className={`badge ${badgeTipo} flex-shrink-0`}>{a.tipo?.replace(/_/g,' ')}</span>
                 </div>
-                {a.carro_id && <div className="text-xs text-gray-600 mb-3">{a.mensaje}</div>}
+                {a.carro_id && mensajeLimpio && <div className="text-xs text-gray-600 mb-3">{mensajeLimpio}</div>}
                 <div className="flex gap-2">
                   <button
                     className="flex-1 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 disabled:opacity-40"
                     disabled={!a.carro_id && !(a as any).equipo_id && !(a.mensaje || '').match(/\[(equipo|material):([a-f0-9-]{36})\]/)}
                     onClick={() => {
-                      // Prioridad: equipo_id explícito → carro_id → fallback regex en mensaje (alertas legacy)
                       const eqId = (a as any).equipo_id as string | null
                       if (eqId) { router.push(`/admin/equipos/${eqId}`); return }
                       if (a.carro_id) { router.push(`/carro/${a.carro_id}`); return }
                       const m = (a.mensaje || '').match(/\[(equipo|material):([a-f0-9-]{36})\]/)
                       if (m) {
                         if (m[1] === 'equipo') router.push(`/admin/equipos/${m[2]}`)
-                        else router.push(`/buscar?q=${m[2]}`)  // material: usar buscador
+                        else router.push(`/buscar?q=${m[2]}`)
                       }
                     }}>
                     {a.carro_id ? 'Ver carro' : 'Ver equipo'}
