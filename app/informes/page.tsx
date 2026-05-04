@@ -1,13 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import type { Perfil } from '@/lib/types'
+import { rutaPadre } from '@/lib/navigation'
 
 export default function InformesPage() {
   const [perfil, setPerfil] = useState<Perfil|null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => {
@@ -15,7 +17,7 @@ export default function InformesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/'); return }
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-      if (!p?.activo || p.rol === 'auditor') { router.back(); return }
+      if (!p?.activo || p.rol === 'auditor') { router.push('/'); return }
       setPerfil(p)
       setLoading(false)
     }
@@ -66,7 +68,7 @@ export default function InformesPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">Informes</span>
       </div>
 

@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { rutaPadre } from '@/lib/navigation'
 
 interface MatVto {
   carro_codigo: string; carro_nombre: string; carro_hospital_id: string
@@ -54,6 +55,7 @@ export default function InformeVencimientosPage() {
   const [servicios, setServicios] = useState<any[]>([])
   const [servicio, setServicio] = useState('')
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => { cargarDatos() }, [])
@@ -159,7 +161,7 @@ Object.values(porCarro).map(({ info, materiales }) => `
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">{hospital?.nombre || 'Hospital'}</span>
         <span className="font-semibold text-sm text-right">Vencimientos</span>
       </div>

@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+import { rutaPadre } from '@/lib/navigation'
 
 // =====================================================================
 // Tipos
@@ -125,6 +126,7 @@ export default function EquiposPage() {
   const [busqueda, setBusqueda] = useState('')
 
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   const formInicial = {
@@ -269,7 +271,7 @@ export default function EquiposPage() {
       )}
 
       <div className="topbar" style={{ borderBottom: `2px solid ${colorPrimario}20` }}>
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
         <div className="flex-1 min-w-0 text-center">
           <div className="text-xs text-gray-400 leading-none">{hospital?.nombre}</div>
           <div className="font-semibold text-sm">Inventario de Equipos</div>

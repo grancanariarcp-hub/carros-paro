@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, usePathname, useParams } from 'next/navigation'
 import { estadoColor, formatFecha, formatFechaHora } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { Carro, Inspeccion, Perfil } from '@/lib/types'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+import { rutaPadre } from '@/lib/navigation'
 
 export default function MenuCarroPage() {
   const [carro, setCarro] = useState<Carro | null>(null)
@@ -24,6 +25,7 @@ export default function MenuCarroPage() {
   const [guardandoPlantilla, setGuardandoPlantilla] = useState(false)
 
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams()
   const id = params.id as string
   const supabase = createClient()
@@ -38,7 +40,7 @@ export default function MenuCarroPage() {
 
     const { data: c } = await supabase.from('carros')
       .select('*, servicios(nombre)').eq('id', id).single()
-    if (!c) { router.back(); return }
+    if (!c) { router.push('/'); return }
     setCarro(c)
     setNumeroCenso((c as any).numero_censo || '')
     setPlantillaSeleccionada((c as any).plantilla_id || '')
@@ -143,7 +145,7 @@ export default function MenuCarroPage() {
       )}
 
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">{carro.codigo}</span>
       </div>
 

@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import { rutaPadre } from '@/lib/navigation'
 
 interface Equipo {
   id: string
@@ -65,6 +66,7 @@ export default function InformesPage() {
   })
   const informeRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useHospitalTheme(hospital?.color_primario)
@@ -202,7 +204,7 @@ export default function InformesPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">Informes de equipos</span>
         <button onClick={descargarPDF} disabled={generando || equiposFiltrados.length === 0}
           className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40 flex items-center gap-1">

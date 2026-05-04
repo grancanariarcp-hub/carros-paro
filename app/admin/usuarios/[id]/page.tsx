@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, usePathname, useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { rutaPadre } from '@/lib/navigation'
 
 interface Perfil {
   id: string
@@ -61,6 +62,7 @@ export default function FichaUsuarioPage() {
   const [form, setForm]           = useState<Partial<Perfil>>({})
 
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams()
   const usuarioId = params.id as string
   const supabase  = createClient()
@@ -83,7 +85,7 @@ export default function FichaUsuarioPage() {
       .select('*, servicios(nombre), hospitales(nombre, color_primario)')
       .eq('id', usuarioId).single()
 
-    if (!u) { router.back(); return }
+    if (!u) { router.push('/'); return }
     setUsuario(u as Perfil)
     setForm({
       nombre: u.nombre,
@@ -169,7 +171,7 @@ export default function FichaUsuarioPage() {
   return (
     <div className="page">
       <div className="topbar" style={{ borderBottom: `2px solid ${colorHospital}20` }}>
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center truncate">{usuario.nombre}</span>
         {!editando ? (
           <button onClick={() => setEditando(true)}

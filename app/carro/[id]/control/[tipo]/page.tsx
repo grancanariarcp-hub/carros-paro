@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, usePathname, useParams } from 'next/navigation'
 import { colorVencimiento, classBadgeVto, formatFecha, proximoControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import FirmaDigital, { type DatosFirma } from '@/components/FirmaDigital'
 import type { Carro, Cajon, Material, Perfil, Desfibrilador } from '@/lib/types'
+import { rutaPadre } from '@/lib/navigation'
 
 interface ItemState {
   material_id: string
@@ -45,6 +46,7 @@ export default function ControlPage() {
   const [campoEscaneo, setCampoEscaneo] = useState<'precinto_retirado' | 'precinto_colocado' | 'desf_censo'>('precinto_retirado')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams()
   const carroId = params.id as string
   const tipo = params.tipo as string
@@ -378,7 +380,7 @@ export default function ControlPage() {
       )}
 
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">{tipoLabel}</span>
       </div>
 

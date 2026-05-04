@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { rutaPadre } from '@/lib/navigation'
 
 export default function SupervisorUsuariosPage() {
   const [perfil, setPerfil]     = useState<any>(null)
@@ -13,6 +14,7 @@ export default function SupervisorUsuariosPage() {
   const [modal, setModal]       = useState<any>(null)
   const [form, setForm]         = useState({ nombre: '', email: '', activo: true })
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => { cargarDatos() }, [])
@@ -87,7 +89,7 @@ export default function SupervisorUsuariosPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">Usuarios de solo lectura</span>
         <button onClick={() => { setModal('nuevo'); setForm({ nombre: '', email: '', activo: true }) }}
           className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold">

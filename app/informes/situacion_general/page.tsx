@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import { rutaPadre } from '@/lib/navigation'
 
 
 function nombreArchivoPDF(codigo: string, tipo: string): string {
@@ -28,6 +29,7 @@ export default function InformeSituacionGeneralPage() {
   const [filtroTipo, setFiltroTipo] = useState<string>('todos')
   const [filtroEstado, setFiltroEstado] = useState<string>('todos')
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => { cargarDatos() }, [])
@@ -159,7 +161,7 @@ export default function InformeSituacionGeneralPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">{hospital?.nombre || 'Hospital'}</span>
         <span className="font-semibold text-sm text-right">Situación general</span>
       </div>

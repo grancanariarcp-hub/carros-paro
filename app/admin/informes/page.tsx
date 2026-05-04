@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import { rutaPadre } from '@/lib/navigation'
 
 // =====================================================================
 // Tipos
@@ -188,6 +189,7 @@ function AdminInformesInner() {
   const informeEqRef = useRef<HTMLDivElement>(null)
   const informeCtrlRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useHospitalTheme(hospital?.color_primario)
@@ -332,7 +334,7 @@ function AdminInformesInner() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">Informes</span>
         <button
           onClick={() => descargarPDF(

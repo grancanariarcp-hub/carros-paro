@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { rutaPadre } from '@/lib/navigation'
 
 const ROLES = [
   { value: 'auditor', label: 'Auditor', desc: 'Realiza controles y actualiza vencimientos' },
@@ -21,6 +22,7 @@ export default function NuevoUsuarioPage() {
   const [estadoPlan, setEstadoPlan] = useState<any>(null)
   const [perfil, setPerfil] = useState<any>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => { cargarDatos() }, [])
@@ -30,7 +32,7 @@ export default function NuevoUsuarioPage() {
     if (!user) { router.push('/'); return }
 
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || !['administrador', 'superadmin'].includes(p.rol)) { router.back(); return }
+    if (!p || !['administrador', 'superadmin'].includes(p.rol)) { router.push('/'); return }
     setPerfil(p)
 
     if (p.hospital_id) {
@@ -113,7 +115,7 @@ export default function NuevoUsuarioPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">Nuevo usuario</span>
       </div>
       <form onSubmit={handleSubmit} className="content">

@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, usePathname, useParams } from 'next/navigation'
 import { formatFechaHora, formatFecha } from '@/lib/utils'
 import type { Inspeccion, ItemInspeccion } from '@/lib/types'
+import { rutaPadre } from '@/lib/navigation'
 
 export default function ResultadoPage() {
   const [insp, setInsp] = useState<Inspeccion | null>(null)
@@ -14,6 +15,7 @@ export default function ResultadoPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams()
   const inspId = params.inspId as string
   const carroId = params.id as string
@@ -107,7 +109,7 @@ export default function ResultadoPage() {
         <div className="text-2xl mb-2">⚠️</div>
         <div className="text-sm font-semibold text-red-700 mb-1">Error al cargar</div>
         <div className="text-xs text-gray-500 mb-4">{error}</div>
-        <button onClick={() => router.back()} className="btn-secondary text-sm">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="btn-secondary text-sm">← Volver</button>
       </div>
     </div>
   )
@@ -118,7 +120,7 @@ export default function ResultadoPage() {
         <div className="text-2xl mb-2">🔍</div>
         <div className="text-sm font-semibold text-gray-700 mb-1">Inspección no encontrada</div>
         <div className="text-xs text-gray-400 mb-4">ID: {inspId}</div>
-        <button onClick={() => router.back()} className="btn-secondary text-sm">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="btn-secondary text-sm">← Volver</button>
       </div>
     </div>
   )

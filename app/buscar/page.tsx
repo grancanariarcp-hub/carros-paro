@@ -2,9 +2,10 @@
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+import { rutaPadre } from '@/lib/navigation'
 
 interface Resultado {
   tipo: 'equipo' | 'carro' | 'material'
@@ -27,6 +28,7 @@ function BuscadorContent() {
   const [buscado, setBuscado] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
@@ -259,7 +261,7 @@ function BuscadorContent() {
       )}
 
       <div className="topbar" style={{borderBottom:`2px solid ${colorPrimario}20`}}>
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium flex-shrink-0">← Volver</button>
         <div className="flex-1 min-w-0 text-center">
           <div className="text-xs text-gray-400 leading-none">{hospital?.nombre}</div>
           <div className="font-semibold text-sm">Buscador de activos</div>

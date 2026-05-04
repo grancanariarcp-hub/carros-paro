@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, usePathname, useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { rutaPadre } from '@/lib/navigation'
 
 interface Material {
   id: string
@@ -40,6 +41,7 @@ export default function VencimientosPage() {
   const [guardando, setGuardando] = useState<string|null>(null)
   const [filtro, setFiltro] = useState<'todos'|'proximos'|'sin_fecha'>('todos')
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams()
   const carroId = params.id as string
   const supabase = createClient()
@@ -118,7 +120,7 @@ export default function VencimientosPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-right">Vencimientos</span>
       </div>
 

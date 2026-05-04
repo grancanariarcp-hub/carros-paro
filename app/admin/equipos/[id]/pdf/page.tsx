@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, usePathname, useParams } from 'next/navigation'
+import { rutaPadre } from '@/lib/navigation'
 
 // =====================================================================
 // Tipos
@@ -77,6 +78,7 @@ export default function FichaEquipoPDFPage() {
 
   const fichaRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const params = useParams()
   const equipoId = params.id as string
   const supabase = createClient()
@@ -156,7 +158,7 @@ export default function FichaEquipoPDFPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">Ficha PDF</span>
         <button onClick={descargarPDF} disabled={generando}
           className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1">

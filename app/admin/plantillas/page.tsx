@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import { rutaPadre } from '@/lib/navigation'
 
 interface Plantilla {
   id: string
@@ -37,6 +38,7 @@ export default function PlantillasPage() {
     nombre: '', descripcion: '', tipo_carro: '', es_base: false,
   })
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
   useHospitalTheme(hospital?.color_primario)
 
@@ -219,7 +221,7 @@ export default function PlantillasPage() {
   return (
     <div className="page">
       <div className="topbar">
-        <button onClick={() => router.back()} className="text-blue-700 text-sm font-medium">← Volver</button>
+        <button onClick={() => router.push(rutaPadre(pathname))} className="text-blue-700 text-sm font-medium">← Volver</button>
         <span className="font-semibold text-sm flex-1 text-center">Plantillas de control</span>
         <button onClick={() => setCreando(true)}
           className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold">
