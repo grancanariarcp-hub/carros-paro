@@ -7,11 +7,9 @@ const nextConfig = {
 
 // Wrapper de Sentry: instrumenta el build, sube sourcemaps a Sentry
 // (solo si SENTRY_AUTH_TOKEN está disponible) y configura tunneling.
-module.exports = withSentryConfig(nextConfig, {
-  // Identificación del proyecto en Sentry — visible en URLs de errores.
-  org: 'critic-sl',
-  project: 'astor',
+const hasSentryToken = !!process.env.SENTRY_AUTH_TOKEN
 
+module.exports = withSentryConfig(nextConfig, {
   // Reduce ruido en la consola del build.
   silent: !process.env.CI,
 
@@ -19,10 +17,20 @@ module.exports = withSentryConfig(nextConfig, {
   // dominio, evitando bloqueos de adblockers que filtran *.sentry.io.
   tunnelRoute: '/monitoring',
 
-  // Subir sourcemaps SOLO si hay auth token (evita errores en CI sin auth).
-  // En local sin token: skipea sourcemap upload.
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-
   // Esconde el sourcemap del bundle público (usuario no los descarga).
   hideSourceMaps: true,
+
+  // Sourcemaps y releases: solo si hay auth token (evita warnings en builds
+  // sin token). Cuando configures SENTRY_AUTH_TOKEN, también descomenta
+  // org/project para que el plugin sepa dónde subir.
+  ...(hasSentryToken
+    ? {
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        // org: 'tu-org-slug',           // ver tu URL de Sentry
+        // project: 'astor',
+      }
+    : {
+        sourcemaps: { disable: true },
+        release: { create: false },
+      }),
 })
