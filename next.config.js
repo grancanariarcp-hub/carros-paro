@@ -20,15 +20,16 @@ module.exports = withSentryConfig(nextConfig, {
   // Esconde el sourcemap del bundle público (usuario no los descarga).
   hideSourceMaps: true,
 
+  // Identificación del proyecto en Sentry. Coincide con la URL de tu org:
+  //   https://gran-canaria-rcp.sentry.io/projects/javascript-nextjs/
+  org: 'gran-canaria-rcp',
+  project: 'javascript-nextjs',
+
   // Sourcemaps y releases: solo si hay auth token (evita warnings en builds
-  // sin token). Cuando configures SENTRY_AUTH_TOKEN, también descomenta
-  // org/project para que el plugin sepa dónde subir.
+  // sin token). Configura SENTRY_AUTH_TOKEN en Vercel para activar la subida
+  // automática de sourcemaps en cada deploy.
   ...(hasSentryToken
-    ? {
-        authToken: process.env.SENTRY_AUTH_TOKEN,
-        // org: 'tu-org-slug',           // ver tu URL de Sentry
-        // project: 'astor',
-      }
+    ? { authToken: process.env.SENTRY_AUTH_TOKEN }
     : {
         sourcemaps: { disable: true },
         release: { create: false },

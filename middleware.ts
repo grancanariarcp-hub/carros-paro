@@ -19,7 +19,6 @@ const PUBLIC_PATHS = [
   '/buscar',            // si quieres dejar buscar público; ajustable
   '/api',               // las route handlers manejan su propia auth
   '/monitoring',        // tunnel de Sentry
-  '/sentry-test',       // página de test (eliminar tras validar)
 ]
 
 function isPublicPath(pathname: string): boolean {
