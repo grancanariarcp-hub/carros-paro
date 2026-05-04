@@ -3,6 +3,17 @@
 
 import * as Sentry from '@sentry/nextjs'
 
+// Diagnóstico: mostrar en la consola si el DSN está presente en el bundle.
+// Útil para confirmar que NEXT_PUBLIC_SENTRY_DSN se inyectó en build-time.
+if (typeof window !== 'undefined') {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
+  // eslint-disable-next-line no-console
+  console.log(
+    '[sentry] init',
+    dsn ? `DSN ok (${dsn.slice(0, 30)}...)` : 'DSN AUSENTE — env var no inyectada al bundle'
+  )
+}
+
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
