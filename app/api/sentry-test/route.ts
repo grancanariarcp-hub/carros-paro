@@ -4,9 +4,14 @@ import { NextResponse } from 'next/server'
 // Acceder desde navegador: https://app.astormanager.com/api/sentry-test
 // Lanza un error que Sentry debe registrar como issue.
 //
+// `force-dynamic` evita que Next.js intente pre-renderizar este route
+// en build (lo que provoca un error como pretendíamos pero rompe el build).
+//
 // Eliminar este archivo cuando ya no se necesite el test.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   throw new Error('Sentry server-side test ' + new Date().toISOString())
-  // typescript: lo siguiente nunca se alcanza
   return NextResponse.json({ ok: true })
 }
