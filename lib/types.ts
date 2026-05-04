@@ -152,12 +152,20 @@ export interface ItemInspeccion {
 
 export interface Alerta {
   id: string
-  carro_id: string
+  hospital_id?: string
+  carro_id?: string
+  servicio_id?: string
+  equipo_id?: string
   tipo: string
+  severidad?: 'baja' | 'media' | 'alta' | 'critica'
+  titulo?: string
   mensaje?: string
   resuelta: boolean
+  resuelta_en?: string
+  resuelta_por?: string
   creado_en: string
   carros?: Carro
+  equipos?: { id: string; nombre: string; numero_censo?: string }
 }
 
 export interface Notificacion {

@@ -318,10 +318,19 @@ export default function AdminPage() {
                 </div>
                 {a.carro_id && <div className="text-xs text-gray-600 mb-3">{a.mensaje}</div>}
                 <div className="flex gap-2">
-                  <button className="flex-1 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700"
+                  <button
+                    className="flex-1 py-2 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 disabled:opacity-40"
+                    disabled={!a.carro_id && !(a as any).equipo_id && !(a.mensaje || '').match(/\[(equipo|material):([a-f0-9-]{36})\]/)}
                     onClick={() => {
-                      if (a.carro_id) { router.push(`/carro/${a.carro_id}`) }
-                      else { const m = (a.mensaje || '').match(/\[equipo:([a-f0-9-]{36})\]/); if (m) router.push(`/admin/equipos/${m[1]}`) }
+                      // Prioridad: equipo_id explícito → carro_id → fallback regex en mensaje (alertas legacy)
+                      const eqId = (a as any).equipo_id as string | null
+                      if (eqId) { router.push(`/admin/equipos/${eqId}`); return }
+                      if (a.carro_id) { router.push(`/carro/${a.carro_id}`); return }
+                      const m = (a.mensaje || '').match(/\[(equipo|material):([a-f0-9-]{36})\]/)
+                      if (m) {
+                        if (m[1] === 'equipo') router.push(`/admin/equipos/${m[2]}`)
+                        else router.push(`/buscar?q=${m[2]}`)  // material: usar buscador
+                      }
                     }}>
                     {a.carro_id ? 'Ver carro' : 'Ver equipo'}
                   </button>
