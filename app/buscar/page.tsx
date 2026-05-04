@@ -159,11 +159,39 @@ function BuscadorContent() {
     }
   }
 
-  function handleEscaneo(codigo: string) {
+  async function handleEscaneo(codigo: string) {
     setEscaneando(false)
     setBusqueda(codigo)
-    buscar(codigo)
     toast.success('Código leído: ' + codigo)
+
+    // Fast-path: lookup_codigo_barras hace bypass de RLS controlado y filtra
+    // estrictamente por hospital del usuario. Permite a supervisores ver
+    // fichas de equipos/carros/materiales aunque sean de OTRO servicio.
+    try {
+      const { data, error } = await supabase.rpc('lookup_codigo_barras', { p_codigo: codigo })
+      if (error) throw error
+      if (data) {
+        const r: any = data
+        if (r.tipo === 'carro') {
+          router.push(`/carro/${r.id}`)
+          return
+        }
+        if (r.tipo === 'material') {
+          router.push(`/carro/${r.carro_id}`)
+          return
+        }
+        if (r.tipo === 'equipo') {
+          router.push(`/admin/equipos/${r.id}`)
+          return
+        }
+      }
+    } catch (err: any) {
+      // Si el RPC falla (no debería), caemos al search normal
+      console.warn('lookup_codigo_barras falló, usando búsqueda normal', err)
+    }
+
+    // No encontrado por código exacto → búsqueda normal por texto
+    buscar(codigo)
   }
 
   function estadoColor(estado?: string) {
