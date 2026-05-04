@@ -30,13 +30,13 @@ interface Estadisticas {
 
 const ROL_LABEL: Record<string, string> = {
   superadmin: 'Superadmin', administrador: 'Administrador',
-  supervisor: 'Supervisor', auditor: 'Auditor',
+  calidad: 'Calidad', supervisor: 'Supervisor', auditor: 'Auditor',
   tecnico: 'Técnico', readonly: 'Solo lectura',
 }
 
 const ROL_COLOR: Record<string, string> = {
   superadmin: '#7c3aed', administrador: '#1d4ed8',
-  supervisor: '#0891b2', auditor: '#059669',
+  calidad: '#0d9488', supervisor: '#0891b2', auditor: '#059669',
   tecnico: '#d97706', readonly: '#6b7280',
 }
 
@@ -72,7 +72,8 @@ export default function FichaUsuarioPage() {
     if (!user) { router.push('/'); return }
 
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || !['administrador', 'superadmin', 'supervisor'].includes(p.rol)) {
+    // calidad ve usuarios pero NO los edita (la edición se bloquea por rolesDisponibles())
+    if (!p || !['administrador', 'superadmin', 'calidad', 'supervisor'].includes(p.rol)) {
       router.push('/'); return
     }
     setPerfilActual(p)
@@ -145,12 +146,13 @@ export default function FichaUsuarioPage() {
   // Roles que puede asignar el usuario actual
   function rolesDisponibles() {
     if (perfilActual?.rol === 'superadmin') {
-      return ['administrador', 'supervisor', 'auditor', 'tecnico', 'readonly']
+      return ['administrador', 'calidad', 'supervisor', 'auditor', 'tecnico', 'readonly']
     }
     if (perfilActual?.rol === 'administrador') {
-      return ['supervisor', 'auditor', 'tecnico', 'readonly']
+      return ['calidad', 'supervisor', 'auditor', 'tecnico', 'readonly']
     }
-    return ['readonly']
+    // 'calidad' NO gestiona usuarios — si llega aquí no debería poder cambiar roles
+    return []
   }
 
   if (loading) return (

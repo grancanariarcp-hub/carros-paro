@@ -97,7 +97,7 @@ export default function PerfilPage() {
 
   function volverPanel() {
     if (perfil?.rol === 'superadmin') router.push('/superadmin')
-    else if (perfil?.rol === 'administrador') router.push('/admin')
+    else if (perfil?.rol === 'administrador' || perfil?.rol === 'calidad') router.push('/admin')
     else if (perfil?.rol === 'supervisor') router.push('/supervisor')
     else router.push('/auditor')
   }

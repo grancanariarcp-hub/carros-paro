@@ -89,7 +89,7 @@ export default function ResultadoPage() {
 
   function irAlInicio() {
     if (!perfil) { router.push('/'); return }
-    if (perfil.rol === 'administrador') router.push('/admin')
+    if (perfil.rol === 'administrador' || perfil.rol === 'calidad') router.push('/admin')
     else if (perfil.rol === 'supervisor') router.push('/supervisor')
     else router.push('/auditor')
   }

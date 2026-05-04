@@ -1,0 +1,26 @@
+-- ============================================================================
+-- ÁSTOR — Secretos del entorno (esquema private.app_secrets)
+-- ============================================================================
+-- Ejecutar UNA VEZ por entorno (DEV, PROD) en el SQL Editor de Supabase.
+--
+-- Estos secretos los lee el trigger notificar_alerta_por_email y el cron
+-- informe-mensual-dia-1, y son específicos de cada entorno.
+--
+-- ⚠️  NO COMMITEAR los valores reales. Copiar este archivo a
+--     supabase/setup_secrets_<env>.sql.local (en .gitignore) con los valores
+--     y ejecutarlo desde el SQL editor del proyecto correspondiente.
+-- ============================================================================
+
+insert into private.app_secrets (key, value, description) values
+  ('functions_url',
+   'https://<PROJECT_REF>.supabase.co/functions/v1',
+   'URL base de edge functions del entorno'),
+  ('service_role_key',
+   '<sb_secret_...>',
+   'Service role key (uso interno: cron informe-mensual)')
+on conflict (key) do update
+  set value = excluded.value,
+      updated_at = now();
+
+-- Verificación:
+select key, length(value) as value_length from private.app_secrets order by key;

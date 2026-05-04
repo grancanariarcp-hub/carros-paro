@@ -32,7 +32,7 @@ export default function AdminPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || p.rol !== 'administrador') { router.push('/'); return }
+    if (!p || (p.rol !== 'administrador' && p.rol !== 'calidad')) { router.push('/'); return }
     setPerfil(p)
     if (p.hospital_id) {
       const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()

@@ -139,7 +139,7 @@ export default function QRPage() {
   }
 
   function irAPanel() {
-    if (perfil.rol === 'administrador') router.push('/admin')
+    if (perfil.rol === 'administrador' || perfil.rol === 'calidad') router.push('/admin')
     else if (perfil.rol === 'supervisor') router.push('/supervisor')
     else router.push('/auditor')
   }
@@ -281,7 +281,7 @@ body { font-family:Arial,sans-serif; }
                   <div style={{fontSize:'11px', color:'#94a3b8'}}>Después de usar el carro</div>
                 </div>
               </button>
-              {(perfil.rol === 'supervisor' || perfil.rol === 'administrador') && (
+              {(perfil.rol === 'supervisor' || perfil.rol === 'administrador' || perfil.rol === 'calidad') && (
                 <button className="btn-secondary" style={{textAlign:'left', display:'flex', alignItems:'center', gap:'10px'}}
                   onClick={() => router.push(`/carro/${carroId}/control/extra`)}>
                   <div style={{width:'34px', height:'34px', borderRadius:'10px', background:'#F5F3FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>

@@ -1,4 +1,4 @@
-export type Rol = 'superadmin' | 'administrador' | 'supervisor' | 'auditor' | 'tecnico' | 'readonly'
+export type Rol = 'superadmin' | 'administrador' | 'calidad' | 'supervisor' | 'auditor' | 'tecnico' | 'readonly'
 export type EstadoCarro = 'operativo' | 'condicional' | 'no_operativo' | 'sin_control'
 export type TipoControl = 'mensual' | 'semanal' | 'quincenal' | 'post_uso' | 'extra'
 export type ResultadoInspeccion = 'operativo' | 'condicional' | 'no_operativo'

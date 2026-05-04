@@ -325,8 +325,8 @@ export default function MenuCarroPage() {
           </svg>
         </button>
 
-        {/* Control extra — solo supervisor y admin */}
-        {(rol === 'supervisor' || rol === 'administrador') && (
+        {/* Control extra — supervisor, administrador y calidad */}
+        {(rol === 'supervisor' || rol === 'administrador' || rol === 'calidad') && (
           <button className="btn-secondary text-left flex items-center gap-3"
             onClick={() => router.push(`/carro/${id}/control/extra`)}>
             <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">

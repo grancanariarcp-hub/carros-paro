@@ -119,7 +119,7 @@ export default function LoginPage() {
       .single()
     if (!perfil || !perfil.activo) throw new Error('Tu cuenta aún no fue aprobada.')
     if (perfil.rol === 'superadmin') router.push('/superadmin')
-    else if (perfil.rol === 'administrador') router.push('/admin')
+    else if (perfil.rol === 'administrador' || perfil.rol === 'calidad') router.push('/admin')
     else if (perfil.rol === 'supervisor') router.push('/supervisor')
     else router.push('/auditor')
   }

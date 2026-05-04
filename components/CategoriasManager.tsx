@@ -20,7 +20,7 @@ export interface CategoriaEquipo {
 
 interface Props {
   hospitalId: string | null   // null = modo superadmin (gestiona globales)
-  rol: 'superadmin' | 'administrador'
+  rol: 'superadmin' | 'administrador' | 'calidad'
   titulo?: string
 }
 
@@ -111,7 +111,7 @@ export default function CategoriasManager({ hospitalId, rol, titulo }: Props) {
 
   async function toggleActivo(cat: CategoriaEquipo) {
     // Si es global y el admin la quiere ocultar, usa la tabla puente
-    if (cat.es_global && rol === 'administrador' && hospitalId) {
+    if (cat.es_global && (rol === 'administrador' || rol === 'calidad') && hospitalId) {
       const { error } = await supabase
         .from('categorias_equipo_hospital')
         .upsert({
@@ -202,7 +202,7 @@ export default function CategoriasManager({ hospitalId, rol, titulo }: Props) {
       </div>
 
       {/* Favoritas (solo admin) */}
-      {rol === 'administrador' && favoritas.length > 0 && (
+      {(rol === 'administrador' || rol === 'calidad') && favoritas.length > 0 && (
         <div className="card">
           <div className="text-xs font-semibold text-gray-700 mb-2">⭐ Favoritas</div>
           {favoritas.map(cat => (
@@ -221,7 +221,7 @@ export default function CategoriasManager({ hospitalId, rol, titulo }: Props) {
       )}
 
       {/* Propias del hospital */}
-      {rol === 'administrador' && propias.length > 0 && (
+      {(rol === 'administrador' || rol === 'calidad') && propias.length > 0 && (
         <div className="card">
           <div className="text-xs font-semibold text-gray-700 mb-2">
             🏥 Categorías de este hospital ({propias.length})
@@ -247,7 +247,7 @@ export default function CategoriasManager({ hospitalId, rol, titulo }: Props) {
           <div className="text-xs font-semibold text-gray-700">
             🌐 Categorías globales del sistema ({globales.length})
           </div>
-          {rol === 'administrador' && (
+          {(rol === 'administrador' || rol === 'calidad') && (
             <button onClick={restaurarOcultas}
               className="text-xs text-blue-600 font-semibold">
               Restaurar ocultas
@@ -285,7 +285,7 @@ function FilaCategoria({
   onToggleActivo, onToggleFavorita,
 }: {
   cat: CategoriaEquipo
-  rol: 'superadmin' | 'administrador'
+  rol: 'superadmin' | 'administrador' | 'calidad'
   editando: string | null
   editNombre: string
   onEditar: () => void
@@ -335,7 +335,7 @@ function FilaCategoria({
       </div>
 
       {/* Favorita — solo admin, solo globales */}
-      {rol === 'administrador' && !esPropia && (
+      {(rol === 'administrador' || rol === 'calidad') && !esPropia && (
         <button onClick={onToggleFavorita}
           className={`text-xs px-2 py-1 rounded-lg border font-semibold transition-colors ${
             cat.favorita
@@ -364,13 +364,13 @@ function FilaCategoria({
             : 'border-green-200 text-green-600 bg-green-50'
         }`}
         title={
-          cat.es_global && rol === 'administrador'
+          cat.es_global && (rol === 'administrador' || rol === 'calidad')
             ? 'Ocultar esta categoría global en tu hospital'
             : cat.activo ? 'Desactivar' : 'Activar'
         }
       >
         {cat.activo
-          ? (cat.es_global && rol === 'administrador' ? 'Ocultar' : 'Desactivar')
+          ? (cat.es_global && (rol === 'administrador' || rol === 'calidad') ? 'Ocultar' : 'Desactivar')
           : 'Activar'}
       </button>
     </div>
