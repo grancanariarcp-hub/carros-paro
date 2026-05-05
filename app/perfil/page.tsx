@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import PushToggle from '@/components/PushToggle'
 
 const ROL_LABEL: Record<string, string> = {
   superadmin: 'Superadmin', administrador: 'Administrador',
@@ -238,6 +239,11 @@ export default function PerfilPage() {
                       : <span className="text-gray-400 text-xs">No asignado</span>}
                   </span>
                 </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <div className="text-xs font-semibold text-gray-500 mb-2">Notificaciones push (este dispositivo)</div>
+                {perfil?.id && <PushToggle usuarioId={perfil.id} />}
               </div>
             </div>
           </>
