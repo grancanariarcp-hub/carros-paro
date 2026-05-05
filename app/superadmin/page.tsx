@@ -475,6 +475,7 @@ export default function SuperAdminPage() {
                       {/* Acciones */}
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <button onClick={() => setEditandoHospital({ ...h })} style={S.btnSec}>✏️ Editar</button>
+                        <button onClick={() => router.push(`/superadmin/hospital/${h.id}/logos`)} style={S.btnSec}>🎨 Logos</button>
                         <button onClick={() => { setFiltroHospital(h.id); setTab('usuarios') }} style={S.btnSec}>👥 Ver usuarios</button>
                         <button onClick={() => toggleActivo(h)} style={{ ...S.btnSec, color: h.activo ? '#dc2626' : '#16a34a', background: h.activo ? '#fef2f2' : '#f0fdf4', border: `1px solid ${h.activo ? '#fecaca' : '#bbf7d0'}` }}>
                           {h.activo ? 'Desactivar' : 'Activar'}
