@@ -120,7 +120,7 @@ export default function EquiposPage() {
   const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [escaneando, setEscaneando] = useState(false)
-  const [campoEscaneo, setCampoEscaneo] = useState<'censo' | 'barras'>('barras')
+  const [campoEscaneo, setCampoEscaneo] = useState<'censo' | 'barras' | 'serie'>('barras')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [filtroCategoriaId, setFiltroCategoriaId] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
@@ -229,6 +229,8 @@ export default function EquiposPage() {
     setEscaneando(false)
     if (campoEscaneo === 'barras') {
       setForm(prev => ({ ...prev, codigo_barras: codigo }))
+    } else if (campoEscaneo === 'serie') {
+      setForm(prev => ({ ...prev, numero_serie: codigo }))
     } else {
       setForm(prev => ({ ...prev, numero_censo: codigo }))
     }
@@ -319,8 +321,12 @@ export default function EquiposPage() {
                 </div>
                 <div>
                   <label className="label">N° serie</label>
-                  <input className="input" value={form.numero_serie}
-                    onChange={e => setForm(f => ({ ...f, numero_serie: e.target.value }))} />
+                  <div className="flex gap-1.5">
+                    <input className="input flex-1" value={form.numero_serie}
+                      onChange={e => setForm(f => ({ ...f, numero_serie: e.target.value }))} />
+                    <button type="button" onClick={() => { setCampoEscaneo('serie'); setEscaneando(true) }}
+                      className="px-2 bg-gray-900 text-white rounded-xl text-xs" title="Escanear código">📷</button>
+                  </div>
                 </div>
               </div>
               <div>

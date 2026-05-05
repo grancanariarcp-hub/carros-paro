@@ -171,7 +171,7 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
   const [guardando, setGuardando] = useState(false)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [escaneando, setEscaneando] = useState(false)
-  const [campoEscaneo, setCampoEscaneo] = useState<'censo' | 'barras'>('barras')
+  const [campoEscaneo, setCampoEscaneo] = useState<'censo' | 'barras' | 'serie'>('barras')
   const [mostrarFormMant, setMostrarFormMant] = useState(false)
   const [formEdit, setFormEdit] = useState<EquipoCompleto | null>(null)
   const [perfil, setPerfil] = useState<any>(null)
@@ -315,6 +315,8 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
     if (!formEdit) return
     if (campoEscaneo === 'barras') {
       setFormEdit(f => f ? { ...f, codigo_barras: codigo } : f)
+    } else if (campoEscaneo === 'serie') {
+      setFormEdit(f => f ? { ...f, numero_serie: codigo } : f)
     } else {
       setFormEdit(f => f ? { ...f, numero_censo: codigo } : f)
     }
@@ -396,8 +398,15 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
                       className="px-2 py-2 bg-gray-900 text-white rounded-xl text-xs">📷</button>
                   </div>
                 </div>
-                <Campo label="N° de serie" value={formEdit.numero_serie || ''}
-                  onChange={v => setFormEdit(f => f ? { ...f, numero_serie: v } : f)} />
+                <div>
+                  <label className="label">N° de serie</label>
+                  <div className="flex gap-1.5">
+                    <input className="input flex-1" value={formEdit.numero_serie || ''}
+                      onChange={e => setFormEdit(f => f ? { ...f, numero_serie: e.target.value } : f)} />
+                    <button type="button" onClick={() => { setCampoEscaneo('serie'); setEscaneando(true) }}
+                      className="px-2 py-2 bg-gray-900 text-white rounded-xl text-xs" title="Escanear">📷</button>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="label">Código de barras</label>

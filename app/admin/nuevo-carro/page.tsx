@@ -7,16 +7,27 @@ import type { Servicio } from '@/lib/types'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import { rutaPadre } from '@/lib/navigation'
 
+interface Plantilla {
+  id: string
+  nombre: string
+  tipo_carro: string | null
+  es_base: boolean
+  servicio_id: string | null
+}
+
 export default function NuevoCarroPage() {
   const [servicios, setServicios] = useState<Servicio[]>([])
+  const [plantillas, setPlantillas] = useState<Plantilla[]>([])
   const [loading, setLoading] = useState(false)
   const [estadoPlan, setEstadoPlan] = useState<any>(null)
   const [perfil, setPerfil] = useState<any>(null)
   const [escaneando, setEscaneando] = useState(false)
+  const [modo, setModo] = useState<'plantilla' | 'manual'>('plantilla')
   const [form, setForm] = useState({
     codigo: '', nombre: '', ubicacion: '', servicio_id: '',
     responsable: '', frecuencia_control: 'mensual', primer_control: '',
     numero_censo: '', tipo_carro: 'parada',
+    plantilla_id: '',
   })
   const router = useRouter()
   const pathname = usePathname()
@@ -28,15 +39,40 @@ export default function NuevoCarroPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || !['administrador', 'superadmin'].includes(p.rol)) { router.push('/'); return }
+    if (!p || !['administrador', 'calidad', 'supervisor', 'superadmin'].includes(p.rol)) {
+      toast.error('No tienes permisos para crear carros')
+      router.push(rutaPadre(pathname))
+      return
+    }
     setPerfil(p)
+
     if (p.hospital_id) {
       const { data: plan } = await supabase.rpc('estado_plan', { p_hospital_id: p.hospital_id })
       setEstadoPlan(plan)
     }
+
     const { data: svcs } = await supabase.from('servicios')
       .select('*').eq('activo', true).eq('hospital_id', p.hospital_id).order('nombre')
     setServicios(svcs || [])
+
+    // Plantillas: las del hospital + las globales (si existen).
+    // Para supervisor: las del hospital (RLS filtra por servicio en plantillas
+    // específicas; servicio_id IS NULL son globales del hospital).
+    const { data: pls } = await supabase.from('plantillas')
+      .select('id, nombre, tipo_carro, es_base, servicio_id')
+      .eq('hospital_id', p.hospital_id).eq('activo', true).order('es_base', { ascending: false })
+    setPlantillas(pls || [])
+
+    // Pre-seleccionar el servicio del supervisor (no editable).
+    if (p.rol === 'supervisor' && p.servicio_id) {
+      setForm(f => ({ ...f, servicio_id: p.servicio_id }))
+    }
+
+    // Si hay plantilla base, pre-seleccionarla
+    const base = (pls || []).find(pl => pl.es_base)
+    if (base) {
+      setForm(f => ({ ...f, plantilla_id: base.id, tipo_carro: base.tipo_carro || 'parada' }))
+    }
   }
 
   function handleEscaneo(codigo: string) {
@@ -48,59 +84,82 @@ export default function NuevoCarroPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.codigo || !form.nombre) {
-      toast.error('Código y nombre son obligatorios')
-      return
+      toast.error('Código y nombre son obligatorios'); return
     }
     if (estadoPlan && !estadoPlan.puede_crear_carro) {
-      toast.error(`Has alcanzado el límite de ${estadoPlan.max_carros} carros de tu plan.`)
-      return
+      toast.error(`Has alcanzado el límite de ${estadoPlan.max_carros} carros de tu plan.`); return
     }
+    if (modo === 'plantilla' && !form.plantilla_id) {
+      toast.error('Selecciona una plantilla o cambia a modo manual'); return
+    }
+
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const { data, error } = await supabase.rpc('copiar_plantilla', {
-        p_codigo: form.codigo.toUpperCase(),
-        p_nombre: form.nombre,
-        p_ubicacion: form.ubicacion || null,
-        p_servicio_id: form.servicio_id || null,
-        p_responsable: form.responsable || null,
-        p_frecuencia: form.frecuencia_control,
-        p_proximo_control: form.primer_control || null,
-        p_creado_por: user?.id,
-      })
-      if (error) {
-        if (error.message.includes('unique') || error.message.includes('duplicate')) {
+
+      // 1) Crear el carro vacío
+      const { data: nuevoCarro, error: e1 } = await supabase.from('carros').insert({
+        hospital_id: perfil.hospital_id,
+        servicio_id: form.servicio_id || null,
+        codigo: form.codigo.toUpperCase(),
+        nombre: form.nombre,
+        ubicacion: form.ubicacion || null,
+        responsable: form.responsable || null,
+        frecuencia_control: form.frecuencia_control,
+        proximo_control: form.primer_control || null,
+        numero_censo: form.numero_censo || null,
+        codigo_barras_censo: form.numero_censo || null,
+        tipo_carro: form.tipo_carro,
+        estado: 'sin_control',
+        creado_por: user?.id,
+      }).select('id').single()
+
+      if (e1) {
+        if (e1.message.includes('unique') || e1.message.includes('duplicate')) {
           toast.error('Ya existe un carro con ese código')
         } else {
-          throw error
+          throw e1
         }
         return
       }
-      if (perfil?.hospital_id) {
-        await supabase.from('carros').update({
-          hospital_id: perfil.hospital_id,
-          numero_censo: form.numero_censo || null,
-          codigo_barras_censo: form.numero_censo || null,
-          tipo_carro: form.tipo_carro,
-        }).eq('id', data)
+
+      // 2) Si se eligió plantilla, copiar sus cajones e items
+      if (modo === 'plantilla' && form.plantilla_id) {
+        const { error: e2 } = await supabase.rpc('copiar_plantilla_a_carro', {
+          p_carro_id: nuevoCarro!.id,
+          p_plantilla_id: form.plantilla_id,
+        })
+        if (e2) {
+          // El carro ya está creado; reportamos el fallo de plantilla pero
+          // no lo eliminamos (el user puede añadir materiales manualmente).
+          console.warn('copiar_plantilla_a_carro:', e2)
+          toast.error('Carro creado, pero no se pudo aplicar la plantilla: ' + e2.message)
+        } else {
+          toast.success('Carro creado con plantilla aplicada')
+        }
+      } else {
+        toast.success('Carro creado (sin plantilla — añade cajones manualmente)')
       }
-      await supabase.from('log_auditoria').insert({
-        usuario_id: user?.id,
-        hospital_id: perfil?.hospital_id,
-        accion: 'carro_creado',
-        tabla_afectada: 'carros',
-        registro_id: data,
-        detalle: { codigo: form.codigo.toUpperCase(), nombre: form.nombre, numero_censo: form.numero_censo },
-        resultado: 'exito',
-      })
-      toast.success('Carro creado con plantilla completa')
-      router.push(`/admin/carro/${data}/materiales`)
+
+      // 3) Audit log opcional (los triggers de BD ya lo registran)
+      router.push(`/admin/carro/${nuevoCarro!.id}/materiales`)
     } catch (err: any) {
       toast.error('Error al crear el carro: ' + err.message)
     } finally {
       setLoading(false)
     }
   }
+
+  if (!perfil) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Cargando...</div>
+    </div>
+  )
+
+  const esSupervisor = perfil.rol === 'supervisor'
+  const plantillasFiltradas = plantillas.filter(pl =>
+    !pl.servicio_id || pl.servicio_id === form.servicio_id
+  )
 
   return (
     <div className="page">
@@ -134,10 +193,48 @@ export default function NuevoCarroPage() {
           </div>
         )}
 
-        <div className="card bg-blue-50 border-blue-100">
-          <p className="text-xs text-blue-700 leading-relaxed">
-            Al crear el carro se copiará automáticamente la plantilla maestra con las 8 secciones y los materiales configurados.
-          </p>
+        {/* MODO: Plantilla vs Manual */}
+        <div className="card">
+          <div className="section-title mb-3">¿Cómo creamos este carro?</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setModo('plantilla')}
+              className={`p-3 rounded-xl border text-left ${modo === 'plantilla' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+              <div className="text-2xl mb-1">📋</div>
+              <div className="font-semibold text-sm">Desde plantilla</div>
+              <div className="text-xs text-gray-500 mt-0.5">Cajones e items predefinidos</div>
+            </button>
+            <button type="button" onClick={() => setModo('manual')}
+              className={`p-3 rounded-xl border text-left ${modo === 'manual' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+              <div className="text-2xl mb-1">✍️</div>
+              <div className="font-semibold text-sm">Manual</div>
+              <div className="text-xs text-gray-500 mt-0.5">Añadir cajones después</div>
+            </button>
+          </div>
+
+          {modo === 'plantilla' && (
+            <div className="mt-3">
+              <label className="label">Plantilla</label>
+              <select className="input" value={form.plantilla_id}
+                onChange={e => {
+                  const pl = plantillas.find(p => p.id === e.target.value)
+                  setForm(f => ({ ...f, plantilla_id: e.target.value, tipo_carro: pl?.tipo_carro || f.tipo_carro }))
+                }}>
+                <option value="">Selecciona una plantilla…</option>
+                {plantillasFiltradas.map(pl => (
+                  <option key={pl.id} value={pl.id}>
+                    {pl.nombre}{pl.es_base ? ' (base)' : ''}{pl.tipo_carro ? ` — ${pl.tipo_carro}` : ''}
+                  </option>
+                ))}
+              </select>
+              {plantillasFiltradas.length === 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  No hay plantillas disponibles para este servicio. Crea una en{' '}
+                  <button type="button" onClick={() => router.push('/admin/plantillas')}
+                    className="underline">/admin/plantillas</button> o usa modo manual.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -165,12 +262,26 @@ export default function NuevoCarroPage() {
               </select>
             </div>
             <div>
-              <label className="label">Servicio / unidad</label>
-              <select className="input" value={form.servicio_id}
-                onChange={e => setForm({...form, servicio_id: e.target.value})}>
+              <label className="label">
+                Servicio / unidad
+                {esSupervisor && <span className="ml-2 text-xs text-gray-400">(tu servicio)</span>}
+              </label>
+              <select
+                className="input"
+                value={form.servicio_id}
+                onChange={e => setForm({...form, servicio_id: e.target.value})}
+                disabled={esSupervisor}
+              >
                 <option value="">Selecciona un servicio...</option>
                 {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
+              {servicios.length === 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  No hay servicios. Pídele al admin que cree uno en{' '}
+                  <button type="button" onClick={() => router.push('/admin/servicios')}
+                    className="underline">/admin/servicios</button>.
+                </p>
+              )}
             </div>
             <div>
               <label className="label">Ubicación física</label>
@@ -201,10 +312,10 @@ export default function NuevoCarroPage() {
               className="flex-shrink-0 px-3 py-2 bg-gray-900 text-white rounded-xl flex items-center gap-1.5 text-xs font-semibold active:bg-gray-700"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M4 6h2v2H4zM4 10h2v2H4zM4 14h2v2H4zM10 6h2v2h-2zM10 10h2v2h-2zM10 14h2v2h-2zM16 6h2v2h-2zM16 10h2v2h-2zM16 14h2v2h-2z" strokeWidth={1.5}/>
-                <rect x="2" y="4" width="8" height="8" rx="1" strokeWidth={1.5}/>
-                <rect x="14" y="4" width="8" height="8" rx="1" strokeWidth={1.5}/>
-                <rect x="2" y="16" width="8" height="4" rx="1" strokeWidth={1.5}/>
+                <rect x="3" y="3" width="7" height="7" strokeWidth={2}/>
+                <rect x="14" y="3" width="7" height="7" strokeWidth={2}/>
+                <rect x="3" y="14" width="7" height="7" strokeWidth={2}/>
+                <rect x="14" y="14" width="3" height="3" strokeWidth={2}/>
               </svg>
               Escanear
             </button>
@@ -236,7 +347,9 @@ export default function NuevoCarroPage() {
 
         <button type="submit" className="btn-primary"
           disabled={loading || (estadoPlan && !estadoPlan.puede_crear_carro)}>
-          {loading ? 'Creando carro...' : 'Crear carro con plantilla completa →'}
+          {loading ? 'Creando carro...'
+            : modo === 'plantilla' ? 'Crear carro con plantilla →'
+            : 'Crear carro vacío →'}
         </button>
       </form>
     </div>

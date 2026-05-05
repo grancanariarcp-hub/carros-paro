@@ -223,6 +223,17 @@ export default function SupervisorPage() {
         {/* ACCESOS RÁPIDOS */}
         <div className="grid grid-cols-2 gap-2">
           <button
+            className="card flex items-center gap-3 cursor-pointer active:opacity-80 text-left"
+            style={{ background: colorPrimario, borderColor: colorPrimario }}
+            onClick={() => router.push('/admin/nuevo-carro')}>
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-white">Nuevo carro</span>
+          </button>
+          <button
             className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
             onClick={() => router.push('/admin/equipos')}>
             <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
