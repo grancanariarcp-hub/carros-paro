@@ -8,6 +8,7 @@ import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import FirmaDigital, { type DatosFirma } from '@/components/FirmaDigital'
 import type { Carro, Cajon, Material, Perfil, Desfibrilador } from '@/lib/types'
 import { rutaPadre } from '@/lib/navigation'
+import { compressFotoIncidencia } from '@/lib/image-utils'
 
 interface ItemState {
   material_id: string
@@ -159,9 +160,12 @@ export default function ControlPage() {
   }
 
   async function subirFotoPrecinto(tipo: 'retirado' | 'colocado', file: File): Promise<string | null> {
-    const ext = file.name.split('.').pop()
+    const archivo = await compressFotoIncidencia(file)
+    const ext = archivo.name.split('.').pop()
     const path = `precintos/${carroId}/${Date.now()}_precinto_${tipo}.${ext}`
-    const { data } = await supabase.storage.from('evidencias').upload(path, file)
+    const { data } = await supabase.storage.from('evidencias').upload(path, archivo, {
+      contentType: archivo.type,
+    })
     if (!data) return null
     const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
     return url.publicUrl
@@ -200,13 +204,14 @@ export default function ControlPage() {
     const resultado = calcularResultado()
 
     try {
-      // Subir fotos de fallos
+      // Subir fotos de fallos (comprimidas)
       for (const [matId, item] of Object.entries(items)) {
         if (item.foto_file) {
-          const ext = item.foto_file.name.split('.').pop()
+          const archivo = await compressFotoIncidencia(item.foto_file)
+          const ext = archivo.name.split('.').pop()
           const path = `${carroId}/${Date.now()}_${matId}.${ext}`
           const { data: up } = await supabase.storage
-            .from('fotos-fallos').upload(path, item.foto_file)
+            .from('fotos-fallos').upload(path, archivo, { contentType: archivo.type })
           if (up) {
             const { data: url } = supabase.storage.from('fotos-fallos').getPublicUrl(path)
             items[matId].foto_url = url.publicUrl

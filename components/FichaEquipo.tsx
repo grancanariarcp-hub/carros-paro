@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+import { compressFotoIncidencia, ratioCompresion } from '@/lib/image-utils'
 
 // =====================================================================
 // Tipos
@@ -299,15 +300,28 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
   async function subirFoto(file: File) {
     if (!equipo) return
     setSubiendoFoto(true)
-    const ext = file.name.split('.').pop()
-    const path = `equipos/${equipo.id}/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('evidencias').upload(path, file, { upsert: true })
-    if (error) { toast.error('Error al subir foto'); setSubiendoFoto(false); return }
-    const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
-    await supabase.from('equipos').update({ foto_url: url.publicUrl }).eq('id', equipo.id)
-    toast.success('Foto actualizada')
-    await cargarTodo()
-    setSubiendoFoto(false)
+    try {
+      // Comprimir antes de subir (max 1600px, WebP si soportado)
+      const original = file
+      const archivo = await compressFotoIncidencia(file)
+      if (archivo.size !== original.size) {
+        console.log(`[equipo foto] ${ratioCompresion(original.size, archivo.size)}`)
+      }
+      const ext = archivo.name.split('.').pop()
+      const path = `equipos/${equipo.id}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('evidencias').upload(path, archivo, {
+        upsert: true, contentType: archivo.type,
+      })
+      if (error) throw error
+      const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
+      await supabase.from('equipos').update({ foto_url: url.publicUrl }).eq('id', equipo.id)
+      toast.success('Foto actualizada')
+      await cargarTodo()
+    } catch (err: any) {
+      toast.error('Error al subir foto: ' + err.message)
+    } finally {
+      setSubiendoFoto(false)
+    }
   }
 
   function handleEscaneo(codigo: string) {

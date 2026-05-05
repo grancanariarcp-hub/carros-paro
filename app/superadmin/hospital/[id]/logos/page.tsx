@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname, useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
+import { compressLogo, ratioCompresion } from '@/lib/image-utils'
 
 /**
  * Gestor de logos institucionales para un hospital. Solo accesible al superadmin.
@@ -84,9 +85,9 @@ export default function HospitalLogosPage() {
     if (!file) return
     const slotInfo = SLOTS.find(s => s.key === slot)!
 
-    // Validar tamaño (2 MB)
-    if (file.size > 2_000_000) {
-      toast.error('El logo no puede pesar más de 2 MB')
+    // Validar tamaño (10 MB para el original — luego se comprime)
+    if (file.size > 10_000_000) {
+      toast.error('El archivo no puede pesar más de 10 MB')
       return
     }
     if (!/^image\//.test(file.type)) {
@@ -96,13 +97,21 @@ export default function HospitalLogosPage() {
 
     setSubiendo(slot)
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+      // Comprimir antes de subir (max 400px, WebP si soportado).
+      // SVG se devuelve sin tocar (vector ya óptimo).
+      const original = file
+      const archivo = await compressLogo(file)
+      if (archivo.size !== original.size) {
+        console.log(`[logos] ${slot}: ${ratioCompresion(original.size, archivo.size)}`)
+      }
+
+      const ext = archivo.name.split('.').pop()?.toLowerCase() || 'png'
       const path = `hospital-${hospitalId}/${slotInfo.nombreArchivo}.${ext}`
 
       // Subir (con upsert para que sobrescriba si ya existe)
       const { error: upErr } = await supabase.storage
         .from('logos')
-        .upload(path, file, { upsert: true, contentType: file.type })
+        .upload(path, archivo, { upsert: true, contentType: archivo.type })
       if (upErr) throw upErr
 
       // URL pública
