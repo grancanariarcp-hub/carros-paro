@@ -137,6 +137,14 @@ export default function ConfiguracionPage() {
                 onClick={() => router.push('/admin/configuracion/hospital')}
               />
             )}
+
+            <Card
+              icon="📦"
+              title="Exportar historial completo"
+              subtitle="Cumplimiento RGPD"
+              description="Descarga TODO el historial del hospital en formato abierto (CSV+JSON). Filtrable por periodo, servicio y tipo de información."
+              onClick={() => router.push('/admin/configuracion/export')}
+            />
           </>
         )}
 
