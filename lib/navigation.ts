@@ -66,16 +66,30 @@ export function rutaPadre(pathname: string, rol?: string | null): string {
   // /carro/[id] → dashboard del rol
   if (segs[0] === 'carro' && segs.length === 2) return dashboard
 
-  // /admin/X/[id]/Y → /admin/X/[id]
-  if (segs[0] === 'admin' && segs.length >= 4) {
-    return '/' + segs.slice(0, 3).join('/')
+  // /admin/...
+  if (segs[0] === 'admin') {
+    // Páginas índice REALES bajo /admin (las que tienen page.tsx propio).
+    // Si la sub-ruta no es una de estas, el padre lógico es /admin (no
+    // /admin/carro que no existe como página).
+    const indicesAdmin = new Set([
+      'equipos', 'usuarios', 'plantillas', 'servicios',
+      'informes', 'configuracion',
+    ])
+    if (segs.length >= 2 && !indicesAdmin.has(segs[1])) {
+      // /admin/carro/[id]/materiales, /admin/nuevo-carro, etc → /admin
+      return '/admin'
+    }
+    // /admin/configuracion/X → /admin/configuracion
+    if (segs.length >= 3 && segs[1] === 'configuracion') {
+      return '/admin/configuracion'
+    }
+    // /admin/X/[id]/Y → /admin/X/[id]
+    if (segs.length >= 4) return '/' + segs.slice(0, 3).join('/')
+    // /admin/X/[id] → /admin/X
+    if (segs.length === 3) return '/' + segs.slice(0, 2).join('/')
+    // /admin/X → /admin
+    if (segs.length === 2) return '/admin'
   }
-  // /admin/X/[id] → /admin/X
-  if (segs[0] === 'admin' && segs.length === 3) {
-    return '/' + segs.slice(0, 2).join('/')
-  }
-  // /admin/X → /admin
-  if (segs[0] === 'admin' && segs.length === 2) return '/admin'
 
   // /supervisor/X → /supervisor
   if (segs[0] === 'supervisor' && segs.length >= 2) return '/supervisor'
