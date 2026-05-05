@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
+import { informeHeaderHTML } from '@/components/InformeHeader'
 
 interface MatVto {
   carro_codigo: string; carro_nombre: string; carro_hospital_id: string
@@ -48,6 +49,8 @@ export default function InformeVencimientosPage() {
   const [datos, setDatos] = useState<MatVto[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
+  const [hospitalConfig, setHospitalConfig] = useState<any>(null)
+  const [plantillaInforme, setPlantillaInforme] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [codigo, setCodigo] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
@@ -66,8 +69,15 @@ export default function InformeVencimientosPage() {
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
     setPerfil(p)
     if (p?.hospital_id) {
-      const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
+      const [{ data: h }, { data: cfg }, { data: pl }] = await Promise.all([
+        supabase.from('hospitales').select('*').eq('id', p.hospital_id).single(),
+        supabase.from('hospital_config').select('*').eq('hospital_id', p.hospital_id).maybeSingle(),
+        supabase.from('plantillas_informe').select('*')
+          .eq('hospital_id', p.hospital_id).eq('tipo', 'vencimientos').maybeSingle(),
+      ])
       setHospital(h)
+      setHospitalConfig(cfg)
+      setPlantillaInforme(pl)
     }
     const { data: svcs } = await supabase.from('servicios').select('*').eq('activo', true).order('nombre')
     setServicios(svcs || [])
@@ -107,13 +117,18 @@ export default function InformeVencimientosPage() {
     const fecha = new Date().toLocaleDateString('es-ES')
     const nombreHospital = hospital?.nombre || 'Hospital'
     const servicioNombre = servicio ? servicios.find(s => s.id === servicio)?.nombre : 'Todos'
+    const headerHTML = informeHeaderHTML({
+      hospital: hospital || { nombre: nombreHospital },
+      hospitalConfig,
+      plantillaInforme,
+      tipoDocumento: 'INFORME DE VENCIMIENTOS DE MATERIAL',
+      codigo,
+      fecha,
+      pagina: '1 de 1',
+    })
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   body{font-family:Arial,sans-serif;margin:2cm;color:#1e293b;font-size:11px}
-  .header{border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:20px;display:flex;align-items:flex-start;gap:16px}
-  .header-logo{max-height:48px;object-fit:contain}
-  .hospital{font-size:14px;font-weight:bold;color:#1d4ed8}
-  .titulo{font-size:18px;font-weight:bold;margin:6px 0 2px}
-  .codigo{font-size:11px;color:#64748b}
+  .meta-info{font-size:10px;color:#64748b;margin-bottom:16px}
   .carro-block{margin-bottom:20px;page-break-inside:avoid}
   .carro-header{background:#1d4ed8;color:white;padding:8px 10px;border-radius:6px 6px 0 0}
   .carro-meta{background:#f8fafc;padding:6px 10px;font-size:10px;color:#64748b;border:1px solid #e2e8f0;border-top:none}
@@ -123,14 +138,11 @@ export default function InformeVencimientosPage() {
   .footer{margin-top:30px;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
   @media print{@page{margin:1.5cm}}
 </style></head><body>
-<div class="header">
-  ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}"/>` : ''}
-  <div>
-    <div class="hospital">${nombreHospital}</div>
-    <div class="titulo">Informe de Vencimientos de Material</div>
-    <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
-    <div class="codigo" style="margin-top:4px">${fechaDesde ? `Desde: ${fechaDesde} · ` : ''}Hasta: ${fechaHasta} · Servicio: ${servicioNombre} · Total: ${datos.length} materiales</div>
-  </div>
+${headerHTML}
+<div class="meta-info">
+  ${fechaDesde ? `Desde: <strong>${fechaDesde}</strong> · ` : ''}Hasta: <strong>${fechaHasta}</strong> ·
+  Servicio: <strong>${servicioNombre}</strong> ·
+  Total: <strong>${datos.length}</strong> materiales · Por: <strong>${perfil?.nombre || ''}</strong>
 </div>
 ${datos.length === 0 ? '<div style="text-align:center;padding:40px;border:1px dashed #e2e8f0;border-radius:8px;color:#16a34a;font-weight:bold">✓ Sin vencimientos en el período</div>' :
 Object.values(porCarro).map(({ info, materiales }) => `

@@ -196,3 +196,68 @@ export function InformeFooter({ texto }: { texto?: string | null }) {
     </div>
   )
 }
+
+
+/**
+ * Versión HTML-string del encabezado, para páginas que generan el PDF
+ * concatenando HTML como string en lugar de JSX. Devuelve un fragmento
+ * insertable en el body. Usa los mismos campos que <InformeHeader>.
+ */
+export function informeHeaderHTML(params: {
+  hospital: Hospital
+  hospitalConfig: HospitalConfig | null
+  plantillaInforme?: PlantillaInforme | null
+  tipoDocumento: string
+  codigo: string
+  fecha: string
+  pagina?: string
+}): string {
+  const { hospital, hospitalConfig, plantillaInforme, tipoDocumento, codigo, fecha } = params
+  const pagina = params.pagina || '1 de 1'
+  const colorPrimario = hospital.color_primario || '#1d4ed8'
+
+  const linea1 = (plantillaInforme?.membrete_linea1?.trim() || hospitalConfig?.informe_unidad?.trim() || hospital.nombre || '').toUpperCase()
+  const linea2 = (plantillaInforme?.membrete_linea2?.trim() || hospitalConfig?.informe_comision?.trim() || '').toUpperCase()
+  const titulo = (plantillaInforme?.titulo_personalizado?.trim() || tipoDocumento).toUpperCase()
+  const fechaFmt = formatFechaSiNecesario(fecha)
+
+  const logoP = hospitalConfig?.informe_logo_principal_url
+  const logoS = hospitalConfig?.informe_logo_secundario_url
+  const hayP = !!logoP
+  const hayS = !!logoS
+  const wP = hayP ? '20%' : '0'
+  const wS = hayS ? '15%' : '0'
+  const wT = `${100 - (hayP ? 20 : 0) - (hayS ? 15 : 0)}%`
+
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+  return `
+<table style="width:100%;border-collapse:collapse;border:1px solid #ccc;margin-bottom:20px;font-family:system-ui,-apple-system,sans-serif">
+  <tr>
+    ${hayP ? `<td style="width:${wP};padding:8px;border:1px solid #ccc;vertical-align:middle;text-align:center">
+      <img src="${logoP}" alt="Logo principal" crossorigin="anonymous" style="max-height:70px;max-width:100%;object-fit:contain" />
+    </td>` : ''}
+    ${hayS ? `<td style="width:${wS};padding:8px;border:1px solid #ccc;vertical-align:middle;text-align:center">
+      <img src="${logoS}" alt="Logo secundario" crossorigin="anonymous" style="max-height:60px;max-width:100%;object-fit:contain" />
+    </td>` : ''}
+    <td style="width:${wT};padding:8px;border:1px solid #ccc;vertical-align:middle">
+      ${linea1 ? `<div style="font-weight:700;font-size:11px;margin-bottom:3px;line-height:1.3">${escapeHtml(linea1)}</div>` : ''}
+      ${linea2 ? `<div style="font-weight:700;font-size:11px;margin-bottom:6px;line-height:1.3">${escapeHtml(linea2)}</div>` : ''}
+      <div style="font-weight:700;font-size:11px;margin-bottom:8px;color:${colorPrimario};line-height:1.3">${escapeHtml(titulo)}</div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #ccc">
+        <tr style="background:#dbeafe">
+          <td style="padding:4px 8px;border:1px solid #ccc;font-weight:700;font-size:10px;width:40%">Código</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;font-weight:700;font-size:10px;width:35%">Fecha</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;font-weight:700;font-size:10px;width:25%">Página</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 8px;border:1px solid #ccc;font-size:10px;background:#fef9c3;font-weight:600">${escapeHtml(codigo)}</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;font-size:10px">${escapeHtml(fechaFmt)}</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;font-size:10px">${escapeHtml(pagina)}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`.trim()
+}

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
+import { informeHeaderHTML } from '@/components/InformeHeader'
 import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
@@ -24,6 +25,7 @@ export default function InformeSituacionGeneralPage() {
   const [carros, setCarros] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
+  const [hospitalConfig, setHospitalConfig] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [codigo, setCodigo] = useState('')
   const [filtroTipo, setFiltroTipo] = useState<string>('todos')
@@ -40,8 +42,12 @@ export default function InformeSituacionGeneralPage() {
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
     setPerfil(p)
     if (p?.hospital_id) {
-      const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
+      const [{ data: h }, { data: cfg }] = await Promise.all([
+        supabase.from('hospitales').select('*').eq('id', p.hospital_id).single(),
+        supabase.from('hospital_config').select('*').eq('hospital_id', p.hospital_id).maybeSingle(),
+      ])
       setHospital(h)
+      setHospitalConfig(cfg)
     }
     const { data: cod } = await supabase.rpc('generar_codigo_informe', { tipo_inf: 'situacion_general' })
     setCodigo(cod || '')
@@ -77,13 +83,17 @@ export default function InformeSituacionGeneralPage() {
   async function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
     const nombreHospital = hospital?.nombre || 'Hospital'
+    const headerHTML = informeHeaderHTML({
+      hospital: hospital || { nombre: nombreHospital },
+      hospitalConfig,
+      tipoDocumento: 'INFORME DE SITUACIÓN GENERAL',
+      codigo,
+      fecha,
+      pagina: '1 de 1',
+    })
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   body{font-family:Arial,sans-serif;margin:2cm;color:#1e293b;font-size:11px}
-  .header{border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:20px;display:flex;align-items:flex-start;gap:16px}
-  .header-logo{max-height:48px;object-fit:contain}
-  .hospital{font-size:14px;font-weight:bold;color:#1d4ed8}
-  .titulo{font-size:18px;font-weight:bold;margin:6px 0 2px}
-  .codigo{font-size:10px;color:#64748b}
+  .meta-info{font-size:10px;color:#64748b;margin-bottom:16px}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
   .kpi{border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
   .kpi-num{font-size:24px;font-weight:bold;line-height:1}
@@ -99,18 +109,11 @@ export default function InformeSituacionGeneralPage() {
   .footer{margin-top:30px;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
   @media print{@page{margin:1.5cm;size:landscape}}
 </style></head><body>
-<div class="header">
-  ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}"/>` : ''}
-  <div>
-    <div class="hospital">${nombreHospital}</div>
-    <div class="titulo">Informe de Situación General</div>
-    <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre}</div>
-    <div class="codigo" style="margin-top:4px">
-      Tipo: ${filtroTipo === 'todos' ? 'Todos' : filtroTipo.replace('_',' ')} · 
-      Estado: ${filtroEstado === 'todos' ? 'Todos' : filtroEstado.replace('_',' ')} · 
-      Total: ${carrosFiltrados.length} carros
-    </div>
-  </div>
+${headerHTML}
+<div class="meta-info">
+  Tipo: <strong>${filtroTipo === 'todos' ? 'Todos' : filtroTipo.replace('_',' ')}</strong> ·
+  Estado: <strong>${filtroEstado === 'todos' ? 'Todos' : filtroEstado.replace('_',' ')}</strong> ·
+  Total: <strong>${carrosFiltrados.length}</strong> carros · Por: <strong>${perfil?.nombre || ''}</strong>
 </div>
 <div class="kpis">
   <div class="kpi"><div class="kpi-num" style="color:#16a34a">${stats.operativos}</div><div class="kpi-label">Operativos</div></div>

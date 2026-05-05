@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname, useParams } from 'next/navigation'
 import { rutaPadre } from '@/lib/navigation'
+import InformeHeader from '@/components/InformeHeader'
 
 // =====================================================================
 // Tipos
@@ -62,6 +63,9 @@ export default function FichaEquipoPDFPage() {
   const [equipo, setEquipo] = useState<any>(null)
   const [historial, setHistorial] = useState<Mantenimiento[]>([])
   const [hospital, setHospital] = useState<any>(null)
+  const [hospitalConfig, setHospitalConfig] = useState<any>(null)
+  const [plantillaInforme, setPlantillaInforme] = useState<any>(null)
+  const [codigoInforme, setCodigoInforme] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [generando, setGenerando] = useState(false)
 
@@ -91,17 +95,26 @@ export default function FichaEquipoPDFPage() {
 
     const { data: p } = await supabase.from('perfiles')
       .select('*, hospitales(*)').eq('id', user.id).single()
-    setHospital((p as any)?.hospitales)
+    const h = (p as any)?.hospitales
+    setHospital(h)
+    const hospitalId = p?.hospital_id
 
-    const { data: eq } = await supabase.from('equipos')
-      .select('*, servicios(nombre), carros(codigo, nombre), cajones(nombre)')
-      .eq('id', equipoId).single()
-    setEquipo(eq)
-
-    const { data: hist } = await supabase.from('historial_mantenimientos')
-      .select('*').eq('equipo_id', equipoId)
-      .order('fecha', { ascending: false })
-    setHistorial(hist || [])
+    const [eqRes, histRes, cfgRes, plRes, codRes] = await Promise.all([
+      supabase.from('equipos')
+        .select('*, servicios(nombre), carros(codigo, nombre), cajones(nombre)')
+        .eq('id', equipoId).single(),
+      supabase.from('historial_mantenimientos')
+        .select('*').eq('equipo_id', equipoId).order('fecha', { ascending: false }),
+      hospitalId ? supabase.from('hospital_config').select('*').eq('hospital_id', hospitalId).maybeSingle() : Promise.resolve({ data: null }),
+      hospitalId ? supabase.from('plantillas_informe').select('*')
+        .eq('hospital_id', hospitalId).eq('tipo', 'historial_auditorias').maybeSingle() : Promise.resolve({ data: null }),
+      supabase.rpc('generar_codigo_informe', { tipo_inf: 'historial_auditorias' }),
+    ])
+    setEquipo(eqRes.data)
+    setHistorial(histRes.data || [])
+    setHospitalConfig(cfgRes.data)
+    setPlantillaInforme(plRes.data)
+    if (codRes.data) setCodigoInforme(codRes.data as string)
 
     setLoading(false)
   }
@@ -208,30 +221,27 @@ export default function FichaEquipoPDFPage() {
         {/* Vista previa del PDF */}
         <div ref={fichaRef} style={{ backgroundColor: '#ffffff', padding: '24px', fontFamily: 'sans-serif' }}>
 
-          {/* Cabecera */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${colorPrimario}`, paddingBottom: '14px', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {hospital?.logo_url
-                ? <img src={hospital.logo_url} alt="" style={{ height: '40px', objectFit: 'contain' }} crossOrigin="anonymous" />
-                : <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: colorPrimario, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: '#fff', fontSize: '18px', fontWeight: 700 }}>+</span>
-                  </div>}
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '15px' }}>{hospital?.nombre}</div>
-                <div style={{ fontSize: '11px', color: '#6b7280' }}>Ficha de equipo médico</div>
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '11px', color: '#6b7280' }}>Generado: {new Date().toLocaleDateString('es-ES')}</div>
-              <div style={{
-                marginTop: '6px', display: 'inline-block',
-                padding: '3px 10px', borderRadius: '12px',
-                background: estadoInfo.bg, color: estadoInfo.color,
-                fontSize: '11px', fontWeight: 700,
-              }}>
-                {estadoInfo.label}
-              </div>
-            </div>
+          {/* Encabezado oficial */}
+          <InformeHeader
+            hospital={hospital || { nombre: '' }}
+            hospitalConfig={hospitalConfig}
+            plantillaInforme={plantillaInforme}
+            tipoDocumento="FICHA DE EQUIPO MÉDICO"
+            codigo={codigoInforme || '—'}
+            fecha={new Date().toLocaleDateString('es-ES')}
+            pagina="1 de 1"
+          />
+
+          {/* Estado del equipo en banner separado */}
+          <div style={{ textAlign: 'right', marginBottom: '12px' }}>
+            <span style={{
+              display: 'inline-block',
+              padding: '3px 10px', borderRadius: '12px',
+              background: estadoInfo.bg, color: estadoInfo.color,
+              fontSize: '11px', fontWeight: 700,
+            }}>
+              {estadoInfo.label}
+            </span>
           </div>
 
           {/* Nombre y categoría */}

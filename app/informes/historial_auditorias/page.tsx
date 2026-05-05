@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { estadoColor, formatFechaHora } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
+import { informeHeaderHTML } from '@/components/InformeHeader'
 
 
 function nombreArchivoPDF(codigo: string, tipo: string): string {
@@ -24,6 +25,8 @@ export default function InformeHistorialPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
+  const [hospitalConfig, setHospitalConfig] = useState<any>(null)
+  const [plantillaInforme, setPlantillaInforme] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [codigo, setCodigo] = useState('')
   const [auditores, setAuditores] = useState<any[]>([])
@@ -44,8 +47,15 @@ export default function InformeHistorialPage() {
     setPerfil(p)
 
     if (p?.hospital_id) {
-      const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
+      const [{ data: h }, { data: cfg }, { data: pl }] = await Promise.all([
+        supabase.from('hospitales').select('*').eq('id', p.hospital_id).single(),
+        supabase.from('hospital_config').select('*').eq('hospital_id', p.hospital_id).maybeSingle(),
+        supabase.from('plantillas_informe').select('*')
+          .eq('hospital_id', p.hospital_id).eq('tipo', 'historial_auditorias').maybeSingle(),
+      ])
       setHospital(h)
+      setHospitalConfig(cfg)
+      setPlantillaInforme(pl)
     }
 
     const [{ data: auds }, { data: cars }, { data: cod }] = await Promise.all([
@@ -91,15 +101,19 @@ export default function InformeHistorialPage() {
   async function generarPDF() {
     const fecha = new Date().toLocaleDateString('es-ES')
     const nombreHospital = hospital?.nombre || 'Hospital'
+    const headerHTML = informeHeaderHTML({
+      hospital: hospital || { nombre: nombreHospital },
+      hospitalConfig,
+      plantillaInforme,
+      tipoDocumento: 'HISTORIAL DE AUDITORÍAS',
+      codigo,
+      fecha,
+      pagina: '1 de 1',
+    })
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   body { font-family: Arial, sans-serif; margin: 2cm; color: #1e293b; font-size: 10px; }
-  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
-  .header-logo { max-height: 48px; object-fit: contain; }
-  .header-text { flex: 1; }
-  .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
-  .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
-  .codigo { font-size: 10px; color: #64748b; }
+  .meta-info { font-size: 10px; color: #64748b; margin-bottom: 16px; }
   table { width: 100%; border-collapse: collapse; }
   th { background: #1d4ed8; color: white; padding: 6px 8px; text-align: left; font-size: 10px; }
   td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }
@@ -111,16 +125,11 @@ export default function InformeHistorialPage() {
   .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
   @media print { @page { margin: 1.5cm; size: landscape; } }
 </style></head><body>
-<div class="header">
-  ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}" />` : ''}
-  <div class="header-text">
-    <div class="hospital">${nombreHospital}</div>
-    <div class="titulo">Historial de Auditorías</div>
-    <div class="codigo">Código: ${codigo} · Generado: ${fecha} · Por: ${perfil?.nombre} · Total: ${datos.length} registros</div>
-    <div class="codigo" style="margin-top:4px">
-      ${filtros.desde ? `Desde: ${filtros.desde} · ` : ''}${filtros.hasta ? `Hasta: ${filtros.hasta} · ` : ''}Resultado: ${filtros.resultado || 'Todos'}
-    </div>
-  </div>
+${headerHTML}
+<div class="meta-info">
+  Total: <strong>${datos.length}</strong> registros ·
+  ${filtros.desde ? `Desde: <strong>${filtros.desde}</strong> · ` : ''}${filtros.hasta ? `Hasta: <strong>${filtros.hasta}</strong> · ` : ''}
+  Resultado: <strong>${filtros.resultado || 'Todos'}</strong> · Por: <strong>${perfil?.nombre || ''}</strong>
 </div>
 ${datos.length === 0 ? `
 <div class="sin-datos">

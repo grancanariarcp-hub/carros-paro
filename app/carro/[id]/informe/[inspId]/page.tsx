@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import { rutaPadre } from '@/lib/navigation'
+import InformeHeader from '@/components/InformeHeader'
 
 interface Equipo {
   id: string
@@ -55,6 +56,9 @@ export default function InformesPage() {
   const [categorias, setCategorias] = useState<string[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
+  const [hospitalConfig, setHospitalConfig] = useState<any>(null)
+  const [plantillaInforme, setPlantillaInforme] = useState<any>(null)
+  const [codigoInforme, setCodigoInforme] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [generando, setGenerando] = useState(false)
   const [filtros, setFiltros] = useState<Filtros>({
@@ -84,7 +88,7 @@ export default function InformesPage() {
     const hospitalId = p?.hospital_id
     if (!hospitalId) { setLoading(false); return }
 
-    const [eqRes, svRes] = await Promise.all([
+    const [eqRes, svRes, cfgRes, plRes, codRes] = await Promise.all([
       supabase.from('equipos')
         .select('*, servicios(nombre), carros(codigo, nombre)')
         .eq('hospital_id', hospitalId)
@@ -95,11 +99,18 @@ export default function InformesPage() {
         .eq('hospital_id', hospitalId)
         .eq('activo', true)
         .order('nombre'),
+      supabase.from('hospital_config').select('*').eq('hospital_id', hospitalId).maybeSingle(),
+      supabase.from('plantillas_informe').select('*')
+        .eq('hospital_id', hospitalId).eq('tipo', 'historial_auditorias').maybeSingle(),
+      supabase.rpc('generar_codigo_informe', { tipo_inf: 'historial_auditorias' }),
     ])
 
     const eqs = eqRes.data || []
     setEquipos(eqs)
     setServicios(svRes.data || [])
+    setHospitalConfig(cfgRes.data)
+    setPlantillaInforme(plRes.data)
+    if (codRes.data) setCodigoInforme(codRes.data as string)
 
     // Extraer categorías únicas
     const cats = Array.from(new Set(eqs.map((e: any) => e.categoria).filter(Boolean))).sort() as string[]
@@ -290,27 +301,22 @@ export default function InformesPage() {
         ) : (
           <div ref={informeRef} style={{ backgroundColor: '#ffffff', padding: '24px', fontFamily: 'sans-serif' }}>
 
-            {/* Cabecera */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '2px solid #1d4ed8', paddingBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {hospital?.logo_url ? (
-                  <img src={hospital.logo_url} alt="Logo" style={{ height: '40px', objectFit: 'contain' }} crossOrigin="anonymous" />
-                ) : (
-                  <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: hospital?.color_primario || '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>+</span>
-                  </div>
-                )}
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '15px' }}>{hospital?.nombre}</div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{tituloInforme()}</div>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: '11px', color: '#6b7280' }}>
-                <div>Generado: {new Date().toLocaleDateString('es-ES')}</div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827', marginTop: '2px' }}>
-                  {equiposFiltrados.length} equipos
-                </div>
-              </div>
+            {/* Encabezado oficial */}
+            <InformeHeader
+              hospital={hospital || { nombre: '' }}
+              hospitalConfig={hospitalConfig}
+              plantillaInforme={plantillaInforme}
+              tipoDocumento={tituloInforme()}
+              codigo={codigoInforme || '—'}
+              fecha={new Date().toLocaleDateString('es-ES')}
+              pagina="1 de 1"
+            />
+
+            {/* Resumen de cantidad bajo el encabezado */}
+            <div style={{ textAlign: 'right', fontSize: '11px', color: '#6b7280', marginBottom: '12px' }}>
+              <span style={{ fontWeight: 600, fontSize: '13px', color: '#111827' }}>
+                {equiposFiltrados.length} equipos
+              </span>
             </div>
 
             {/* Equipos agrupados por servicio */}

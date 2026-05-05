@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { formatFecha } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
+import { informeHeaderHTML } from '@/components/InformeHeader'
 
 function nombreArchivoPDF(codigo: string, tipo: string): string {
   const ahora = new Date()
@@ -32,6 +33,8 @@ export default function InformeControlesVencidosPage() {
   const [datos, setDatos] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
+  const [hospitalConfig, setHospitalConfig] = useState<any>(null)
+  const [plantillaInforme, setPlantillaInforme] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [codigo, setCodigo] = useState('')
   const [servicio, setServicio] = useState('')
@@ -49,8 +52,15 @@ export default function InformeControlesVencidosPage() {
     setPerfil(p)
 
     if (p?.hospital_id) {
-      const { data: h } = await supabase.from('hospitales').select('*').eq('id', p.hospital_id).single()
+      const [{ data: h }, { data: cfg }, { data: pl }] = await Promise.all([
+        supabase.from('hospitales').select('*').eq('id', p.hospital_id).single(),
+        supabase.from('hospital_config').select('*').eq('hospital_id', p.hospital_id).maybeSingle(),
+        supabase.from('plantillas_informe').select('*')
+          .eq('hospital_id', p.hospital_id).eq('tipo', 'controles_vencidos').maybeSingle(),
+      ])
       setHospital(h)
+      setHospitalConfig(cfg)
+      setPlantillaInforme(pl)
     }
 
     const { data: svcs } = await supabase.from('servicios').select('*').eq('activo', true).order('nombre')
@@ -83,37 +93,33 @@ export default function InformeControlesVencidosPage() {
 
   function generarHTML(): string {
     const fecha = new Date().toLocaleDateString('es-ES')
-    const hora = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
     const nombreHospital = hospital?.nombre || 'Hospital'
+    const headerHTML = informeHeaderHTML({
+      hospital: hospital || { nombre: nombreHospital },
+      hospitalConfig,
+      plantillaInforme,
+      tipoDocumento: 'INFORME DE CONTROLES VENCIDOS',
+      codigo,
+      fecha,
+      pagina: '1 de 1',
+    })
     return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #1e293b; }
-  .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 16px; }
-  .header-logo { max-height: 48px; object-fit: contain; }
-  .header-text { flex: 1; }
-  .hospital { font-size: 14px; font-weight: bold; color: #1d4ed8; }
-  .titulo { font-size: 18px; font-weight: bold; margin: 6px 0 2px; }
-  .codigo { font-size: 11px; color: #64748b; }
   .meta { display: flex; gap: 20px; font-size: 11px; color: #64748b; margin-bottom: 16px; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  th { background: #1d4ed8; color: white; padding: 8px; text-align: left; }
-  td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; }
-  tr:nth-child(even) td { background: #f8fafc; }
+  table.datos { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.datos th { background: #1d4ed8; color: white; padding: 8px; text-align: left; }
+  table.datos td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; }
+  table.datos tr:nth-child(even) td { background: #f8fafc; }
   .badge-red { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
   .sin-datos { text-align: center; padding: 40px 20px; border: 1px dashed #e2e8f0; border-radius: 8px; color: #64748b; }
   .footer { margin-top: 30px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
 </style></head><body>
-<div class="header">
-  ${hospital?.logo_url ? `<img class="header-logo" src="${hospital.logo_url}" alt="${nombreHospital}" />` : ''}
-  <div class="header-text">
-    <div class="hospital">${nombreHospital}</div>
-    <div class="titulo">Informe de Controles Vencidos</div>
-    <div class="codigo">Código: ${codigo} · Generado: ${fecha} ${hora} · Por: ${perfil?.nombre}</div>
-  </div>
-</div>
+${headerHTML}
 <div class="meta">
   <span>Total carros vencidos: <strong>${datos.length}</strong></span>
   <span>Servicio: <strong>${servicio ? servicios.find((s: any) => s.id === servicio)?.nombre : 'Todos'}</strong></span>
+  <span>Generado por: <strong>${perfil?.nombre || ''}</strong></span>
 </div>
 ${datos.length === 0 ? `
 <div class="sin-datos">
@@ -121,7 +127,7 @@ ${datos.length === 0 ? `
   <div style="font-size:12px">No se encontraron carros con controles vencidos.</div>
 </div>
 ` : `
-<table>
+<table class="datos">
   <thead><tr>
     <th>Código</th><th>Nombre</th><th>Servicio</th><th>Ubicación</th><th>Responsable</th><th>Fecha prevista</th><th>Días retraso</th>
   </tr></thead>
