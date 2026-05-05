@@ -44,8 +44,9 @@ export default function ServiciosPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/'); return }
     const { data: p } = await supabase.from('perfiles').select('*').eq('id', user.id).single()
-    if (!p || !['administrador', 'supervisor', 'superadmin'].includes(p.rol)) {
-      router.push('/'); return
+    if (!p || !['administrador', 'calidad', 'supervisor', 'superadmin'].includes(p.rol)) {
+      toast.error('No tienes permisos para acceder a servicios')
+      router.push(rutaPadre(pathname)); return
     }
     setPerfil(p)
 
