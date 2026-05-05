@@ -113,6 +113,7 @@ function useCategorias(hospitalId: string | null) {
 export default function EquiposPage() {
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [servicios, setServicios] = useState<any[]>([])
+  const [secciones, setSecciones] = useState<{ id: string; nombre: string; servicio_id: string }[]>([])
   const [carros, setCarros] = useState<any[]>([])
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
@@ -132,7 +133,7 @@ export default function EquiposPage() {
   const formInicial = {
     nombre: '', marca: '', modelo: '', numero_serie: '', numero_censo: '',
     codigo_barras: '', categoria: '', categoria_id: '', estado: 'operativo',
-    indispensable: false, servicio_id: '', carro_id: '',
+    indispensable: false, servicio_id: '', seccion_id: '', carro_id: '',
     fecha_adquisicion: '', fecha_fabricacion: '', fecha_garantia_hasta: '',
     fecha_ultimo_mantenimiento: '', fecha_proximo_mantenimiento: '',
     fecha_ultima_calibracion: '', fecha_proxima_calibracion: '',
@@ -183,6 +184,13 @@ export default function EquiposPage() {
     const { data } = await supabase.from('servicios')
       .select('id,nombre').eq('hospital_id', hospitalId).eq('activo', true).order('nombre')
     setServicios(data || [])
+    if (data && data.length > 0) {
+      const { data: secs } = await supabase.from('secciones')
+        .select('id, nombre, servicio_id')
+        .in('servicio_id', data.map(s => s.id))
+        .eq('activo', true).is('deleted_at', null).order('nombre')
+      setSecciones(secs || [])
+    }
   }
 
   async function cargarCarros(hospitalId: string) {
@@ -369,11 +377,22 @@ export default function EquiposPage() {
               <div>
                 <label className="label">Servicio / Unidad</label>
                 <select className="input" value={form.servicio_id}
-                  onChange={e => setForm(f => ({ ...f, servicio_id: e.target.value }))}>
+                  onChange={e => setForm(f => ({ ...f, servicio_id: e.target.value, seccion_id: '' }))}>
                   <option value="">Sin servicio</option>
                   {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               </div>
+              {form.servicio_id && secciones.filter(s => s.servicio_id === form.servicio_id).length > 0 && (
+                <div>
+                  <label className="label">Sección dentro del servicio</label>
+                  <select className="input" value={form.seccion_id}
+                    onChange={e => setForm(f => ({ ...f, seccion_id: e.target.value }))}>
+                    <option value="">Sin sección</option>
+                    {secciones.filter(s => s.servicio_id === form.servicio_id)
+                      .map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="label">Frecuencia mantenimiento</label>
                 <input className="input" list="frec-nuevo"

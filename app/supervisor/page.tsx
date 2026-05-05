@@ -258,6 +258,16 @@ export default function SupervisorPage() {
           </button>
           <button
             className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
+            onClick={() => router.push('/supervisor/secciones')}>
+            <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" strokeWidth={2}/>
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-800">Secciones</span>
+          </button>
+          <button
+            className="card flex items-center gap-3 cursor-pointer active:bg-gray-50 text-left"
             onClick={() => router.push('/supervisor/usuarios')}>
             <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">

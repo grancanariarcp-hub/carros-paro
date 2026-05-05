@@ -18,13 +18,14 @@ interface Plantilla {
 export default function NuevoCarroPage() {
   const [servicios, setServicios] = useState<Servicio[]>([])
   const [plantillas, setPlantillas] = useState<Plantilla[]>([])
+  const [secciones, setSecciones] = useState<{ id: string; nombre: string; servicio_id: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [estadoPlan, setEstadoPlan] = useState<any>(null)
   const [perfil, setPerfil] = useState<any>(null)
   const [escaneando, setEscaneando] = useState(false)
   const [modo, setModo] = useState<'plantilla' | 'manual'>('plantilla')
   const [form, setForm] = useState({
-    codigo: '', nombre: '', ubicacion: '', servicio_id: '',
+    codigo: '', nombre: '', ubicacion: '', servicio_id: '', seccion_id: '',
     responsable: '', frecuencia_control: 'mensual', primer_control: '',
     numero_censo: '', tipo_carro: 'parada',
     plantilla_id: '',
@@ -54,6 +55,15 @@ export default function NuevoCarroPage() {
     const { data: svcs } = await supabase.from('servicios')
       .select('*').eq('activo', true).eq('hospital_id', p.hospital_id).order('nombre')
     setServicios(svcs || [])
+
+    // Cargar TODAS las secciones del hospital (filtraremos por servicio en UI)
+    if (svcs && svcs.length > 0) {
+      const { data: secs } = await supabase.from('secciones')
+        .select('id, nombre, servicio_id')
+        .in('servicio_id', svcs.map(s => s.id))
+        .eq('activo', true).is('deleted_at', null).order('nombre')
+      setSecciones(secs || [])
+    }
 
     // Plantillas: las del hospital + las globales (si existen).
     // Para supervisor: las del hospital (RLS filtra por servicio en plantillas
@@ -101,6 +111,7 @@ export default function NuevoCarroPage() {
       const { data: nuevoCarro, error: e1 } = await supabase.from('carros').insert({
         hospital_id: perfil.hospital_id,
         servicio_id: form.servicio_id || null,
+        seccion_id: form.seccion_id || null,
         codigo: form.codigo.toUpperCase(),
         nombre: form.nombre,
         ubicacion: form.ubicacion || null,
@@ -269,7 +280,7 @@ export default function NuevoCarroPage() {
               <select
                 className="input"
                 value={form.servicio_id}
-                onChange={e => setForm({...form, servicio_id: e.target.value})}
+                onChange={e => setForm({...form, servicio_id: e.target.value, seccion_id: ''})}
                 disabled={esSupervisor}
               >
                 <option value="">Selecciona un servicio...</option>
@@ -283,6 +294,17 @@ export default function NuevoCarroPage() {
                 </p>
               )}
             </div>
+            {form.servicio_id && secciones.filter(s => s.servicio_id === form.servicio_id).length > 0 && (
+              <div>
+                <label className="label">Sección dentro del servicio (opcional)</label>
+                <select className="input" value={form.seccion_id}
+                  onChange={e => setForm({...form, seccion_id: e.target.value})}>
+                  <option value="">Sin sección</option>
+                  {secciones.filter(s => s.servicio_id === form.servicio_id)
+                    .map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="label">Ubicación física</label>
               <input className="input" placeholder="Ej: Pasillo B, piso 3" value={form.ubicacion}
