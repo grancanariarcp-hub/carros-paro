@@ -183,14 +183,16 @@ function iconoTipo(tipo: string, severidad: string): string {
 // VAPID keys desde private.app_secrets
 // ============================================================================
 async function cargarVapid(): Promise<{ publicKey: Uint8Array; privateD: Uint8Array; subject: string } | null> {
-  const { data } = await supabase
-    .schema('private')
-    .from('app_secrets')
-    .select('key, value')
-    .in('key', ['vapid_public_key', 'vapid_private_key', 'vapid_subject'])
+  // RPC público restringido a service_role; el schema private no está expuesto
+  // vía PostgREST por seguridad.
+  const { data, error } = await supabase.rpc('get_vapid_secrets')
+  if (error) {
+    console.error('[send-push] get_vapid_secrets error:', error.message)
+    return null
+  }
 
   const m: Record<string, string> = {}
-  for (const r of (data || [])) m[r.key] = r.value
+  for (const r of (data || [])) m[r.out_key] = r.out_value
 
   if (!m.vapid_public_key || !m.vapid_private_key || !m.vapid_subject) return null
 

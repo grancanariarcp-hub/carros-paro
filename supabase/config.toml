@@ -377,6 +377,16 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+# Funciones llamadas desde triggers de la BD (sin JWT en el request)
+[functions.send-push]
+verify_jwt = false
+[functions.alerta-email]
+verify_jwt = false
+[functions.informe-mensual]
+verify_jwt = false
+[functions.login-por-codigo]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

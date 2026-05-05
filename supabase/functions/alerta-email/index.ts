@@ -51,16 +51,24 @@ Deno.serve(async (req) => {
       return resp({ ok: true, mensaje: 'Alerta no urgente, no se envía email' })
     }
 
-    // Obtener destinatarios: admins y supervisores del hospital
-    // Para alertas críticas enviamos a todos los admins aunque no tengan recibir_alertas
-    const { data: destinatarios } = await supabase
-      .from('perfiles')
-      .select('nombre, email, email_alertas, rol')
-      .eq('hospital_id', alerta.hospital_id)
-      .eq('activo', true)
-      .in('rol', ['administrador', 'supervisor'])
+    // Obtener destinatarios: admins y supervisores del hospital + superadmins
+    // (estos últimos no tienen hospital_id, requieren query separada)
+    const [{ data: hospUsers }, { data: superadmins }] = await Promise.all([
+      supabase
+        .from('perfiles')
+        .select('nombre, email, email_alertas, rol')
+        .eq('hospital_id', alerta.hospital_id)
+        .eq('activo', true)
+        .in('rol', ['administrador', 'supervisor']),
+      supabase
+        .from('perfiles')
+        .select('nombre, email, email_alertas')
+        .eq('rol', 'superadmin')
+        .eq('activo', true),
+    ])
 
-    if (!destinatarios || destinatarios.length === 0) {
+    const todos = [...(hospUsers || []), ...(superadmins || [])]
+    if (todos.length === 0) {
       return resp({ ok: true, mensaje: 'Sin destinatarios configurados' })
     }
 
@@ -70,22 +78,8 @@ Deno.serve(async (req) => {
 
     // Enviar a cada destinatario
     let enviados = 0
-    for (const dest of destinatarios) {
+    for (const dest of todos) {
       const to = dest.email_alertas || dest.email
-      if (!to) continue
-      await enviarEmail({ to, subject, html })
-      enviados++
-    }
-
-    // También enviar a superadmins (no tienen hospital_id, query separada)
-    const { data: superadmins } = await supabase
-      .from('perfiles')
-      .select('nombre, email, email_alertas')
-      .eq('rol', 'superadmin')
-      .eq('activo', true)
-
-    for (const sa of (superadmins || [])) {
-      const to = sa.email_alertas || sa.email
       if (!to) continue
       await enviarEmail({ to, subject, html })
       enviados++
