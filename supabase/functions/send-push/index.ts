@@ -11,13 +11,19 @@
 //   - vapid_private_key (32-byte 'd' value del JWK, base64url)
 //   - vapid_subject     (mailto:contacto@astormanager.com)
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Conectamos a postgres directamente, no vía PostgREST. Razones:
+//   - El nuevo sistema "JWT Signing Keys" rompe el role-mapping de PostgREST
+//     con las legacy JWT en algunos proyectos (queries devuelven [] aunque la
+//     fila exista y RLS esté off).
+//   - El cache de schema de PostgREST se queda pillado y los nuevos RPCs no
+//     aparecen aunque se haga `notify pgrst, 'reload schema'` ni restart.
+//   - postgres directo usa el role `postgres` (BYPASSRLS = true) — todo simple.
+import postgres from 'npm:postgres@3.4.4'
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const DATABASE_URL = Deno.env.get('SUPABASE_DB_URL')!
 const APP_URL      = Deno.env.get('APP_URL') || 'https://app.astormanager.com'
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const sql = postgres(DATABASE_URL, { prepare: false })
 
 // ============================================================================
 // Handler principal
@@ -27,66 +33,88 @@ Deno.serve(async (req) => {
     const { alerta_id } = await req.json()
     if (!alerta_id) return resp({ ok: false, error: 'alerta_id requerido' }, 400)
 
-    // 1) Cargar la alerta
-    const { data: alerta, error: errA } = await supabase
-      .from('alertas')
-      .select(`
-        id, tipo, mensaje, severidad, creado_en, hospital_id,
-        carro_id, equipo_id,
-        carros ( codigo, nombre, servicio_id ),
-        hospitales ( nombre )
-      `)
-      .eq('id', alerta_id)
-      .single()
-    if (errA || !alerta) return resp({ ok: false, error: 'Alerta no encontrada' }, 404)
+    console.log(`[send-push] alerta_id=${alerta_id}`)
 
-    // 2) Determinar destinatarios
-    //    - admins, calidad y superadmins del hospital
-    //    - supervisor del servicio del carro (si aplica)
+    // 1) Cargar la alerta + carro + hospital
+    const alertas = await sql`
+      select
+        a.id, a.tipo, a.mensaje, a.severidad, a.creado_en,
+        a.hospital_id, a.carro_id, a.equipo_id,
+        c.codigo as c_codigo, c.nombre as c_nombre,
+        c.ubicacion as c_ubicacion, c.servicio_id as c_servicio_id,
+        h.nombre as h_nombre, h.color_primario as h_color
+      from public.alertas a
+      left join public.carros c on c.id = a.carro_id
+      left join public.hospitales h on h.id = a.hospital_id
+      where a.id = ${alerta_id}::uuid
+      limit 1
+    `
+    if (alertas.length === 0) {
+      console.log(`[send-push] alerta ${alerta_id} NO encontrada en BD`)
+      return resp({ ok: false, error: 'Alerta no encontrada' }, 404)
+    }
+    const a = alertas[0]
+    const alerta = {
+      id: a.id, tipo: a.tipo, mensaje: a.mensaje, severidad: a.severidad,
+      creado_en: a.creado_en, hospital_id: a.hospital_id,
+      carro_id: a.carro_id, equipo_id: a.equipo_id,
+      carro: a.carro_id ? {
+        codigo: a.c_codigo, nombre: a.c_nombre,
+        ubicacion: a.c_ubicacion, servicio_id: a.c_servicio_id,
+      } : null,
+      hospital: { nombre: a.h_nombre, color_primario: a.h_color },
+    }
+
+    // 2) Destinatarios
     const destinatariosIds = await calcularDestinatarios(alerta)
-    if (destinatariosIds.size === 0) {
+    if (destinatariosIds.length === 0) {
       return resp({ ok: true, mensaje: 'Sin destinatarios' })
     }
 
-    // 3) Cargar suscripciones activas
-    const { data: subs } = await supabase
-      .from('web_push_subscriptions')
-      .select('id, usuario_id, endpoint, p256dh, auth')
-      .in('usuario_id', Array.from(destinatariosIds))
-    if (!subs || subs.length === 0) {
+    // 3) Suscripciones push de los destinatarios
+    //    Iteramos por usuario para evitar problemas con arrays UUID en postgres.js
+    const subs: any[] = []
+    for (const userId of destinatariosIds) {
+      const filasU = await sql`
+        select id, usuario_id, endpoint, p256dh, auth
+        from public.web_push_subscriptions
+        where usuario_id = ${userId}::uuid
+      `
+      for (const f of filasU) subs.push(f)
+    }
+    if (subs.length === 0) {
       return resp({ ok: true, mensaje: 'Sin suscripciones push' })
     }
 
-    // 4) Cargar VAPID keys
+    // 4) VAPID keys (también via direct postgres)
     const vapid = await cargarVapid()
     if (!vapid) return resp({ ok: false, error: 'VAPID no configurado' }, 500)
 
-    // 5) Construir payload
+    // 5) Payload
     const payload = construirPayload(alerta)
 
-    // 6) Enviar a cada suscripción
+    // 6) Envío
     let enviados = 0
-    let invalidas: string[] = []
+    const invalidas: string[] = []
     for (const sub of subs) {
       try {
-        const r = await enviarPush(sub, payload, vapid)
+        const r = await enviarPush(sub as any, payload, vapid)
         if (r.ok) {
           enviados++
         } else if (r.status === 404 || r.status === 410) {
-          // Endpoint expirado: eliminar
           invalidas.push(sub.id)
           console.log(`[send-push] sub ${sub.id} expirada (${r.status}), eliminando`)
         } else {
           console.error(`[send-push] error ${r.status} para sub ${sub.id}: ${r.body}`)
         }
       } catch (err: any) {
-        console.error(`[send-push] excepción enviando a ${sub.endpoint.slice(0, 60)}: ${err.message}`)
+        console.error(`[send-push] excepción: ${err.message}`)
       }
     }
 
     // 7) Limpiar suscripciones muertas
-    if (invalidas.length > 0) {
-      await supabase.from('web_push_subscriptions').delete().in('id', invalidas)
+    for (const subId of invalidas) {
+      await sql`delete from public.web_push_subscriptions where id = ${subId}::uuid`
     }
 
     console.log(`[send-push] ✓ ${enviados}/${subs.length} push enviados para alerta ${alerta_id}`)
@@ -101,46 +129,28 @@ Deno.serve(async (req) => {
 // ============================================================================
 // Destinatarios
 // ============================================================================
-async function calcularDestinatarios(alerta: any): Promise<Set<string>> {
-  const ids = new Set<string>()
-
-  // Admins, calidad y supervisores del hospital
-  const { data: adminsHosp } = await supabase
-    .from('perfiles')
-    .select('id, rol, servicio_id')
-    .eq('hospital_id', alerta.hospital_id)
-    .eq('activo', true)
-    .in('rol', ['administrador', 'calidad', 'supervisor'])
-
-  for (const p of (adminsHosp || [])) {
-    if (p.rol === 'administrador' || p.rol === 'calidad') {
-      ids.add(p.id)
-    } else if (p.rol === 'supervisor') {
-      // Supervisor solo si la alerta es de su servicio
-      const servicioCarro = (alerta as any).carros?.servicio_id
-      if (servicioCarro && p.servicio_id === servicioCarro) {
-        ids.add(p.id)
-      }
-    }
-  }
-
-  // Superadmins (sin hospital_id)
-  const { data: sas } = await supabase
-    .from('perfiles')
-    .select('id')
-    .eq('rol', 'superadmin')
-    .eq('activo', true)
-  for (const sa of (sas || [])) ids.add(sa.id)
-
-  return ids
+async function calcularDestinatarios(alerta: any): Promise<string[]> {
+  const servicioId: string | null = alerta.carro?.servicio_id ?? null
+  const filas = await sql`
+    select id from public.perfiles
+    where activo = true
+      and (
+        (rol in ('administrador','calidad') and hospital_id = ${alerta.hospital_id}::uuid)
+        or (rol = 'supervisor' and hospital_id = ${alerta.hospital_id}::uuid
+            and (${servicioId}::uuid is null or servicio_id = ${servicioId}::uuid))
+        or rol = 'superadmin'
+      )
+  `
+  return filas.map((f: any) => f.id)
 }
 
 // ============================================================================
 // Payload del push
 // ============================================================================
 function construirPayload(alerta: any): Uint8Array {
-  const carro = (alerta as any).carros
-  const hospital = (alerta as any).hospitales
+  // El RPC fn_alerta_full devuelve carro y hospital embebidos como objetos
+  const carro = alerta.carro
+  const hospital = alerta.hospital
   const tipoLabel = labelTipo(alerta.tipo)
   const icono = iconoTipo(alerta.tipo, alerta.severidad)
 
@@ -183,19 +193,15 @@ function iconoTipo(tipo: string, severidad: string): string {
 // VAPID keys desde private.app_secrets
 // ============================================================================
 async function cargarVapid(): Promise<{ publicKey: Uint8Array; privateD: Uint8Array; subject: string } | null> {
-  // RPC público restringido a service_role; el schema private no está expuesto
-  // vía PostgREST por seguridad.
-  const { data, error } = await supabase.rpc('get_vapid_secrets')
-  if (error) {
-    console.error('[send-push] get_vapid_secrets error:', error.message)
-    return null
-  }
-
+  // Lectura directa de private.app_secrets via postgres (bypass PostgREST).
+  const filas = await sql`
+    select key, value from private.app_secrets
+    where key in ('vapid_public_key', 'vapid_private_key', 'vapid_subject')
+  `
   const m: Record<string, string> = {}
-  for (const r of (data || [])) m[r.out_key] = r.out_value
+  for (const r of filas) m[r.key as string] = r.value as string
 
   if (!m.vapid_public_key || !m.vapid_private_key || !m.vapid_subject) return null
-
   return {
     publicKey: b64urlDecode(m.vapid_public_key),
     privateD:  b64urlDecode(m.vapid_private_key),

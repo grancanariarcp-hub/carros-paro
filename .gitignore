@@ -60,3 +60,4 @@ supabase/setup_*.sql.local
 
 # Herramientas locales de desarrollo (no commitear)
 .claude/
+body.json

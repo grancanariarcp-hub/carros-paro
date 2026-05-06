@@ -2,16 +2,17 @@
 // Se llama via pg_net desde un trigger de PostgreSQL
 // cuando se inserta una nueva alerta en la tabla alertas
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Conectamos a postgres directamente (no vía PostgREST) — ver send-push para
+// la explicación. Direct postgres usa role `postgres` que bypassa RLS.
+import postgres from 'npm:postgres@3.4.4'
 
-const SUPABASE_URL    = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const DATABASE_URL    = Deno.env.get('SUPABASE_DB_URL')!
 const RESEND_API_KEY  = Deno.env.get('RESEND_API_KEY')!
 const FROM_EMAIL      = Deno.env.get('FROM_EMAIL') || 'contacto@astormanager.com'
 const FROM_NAME       = Deno.env.get('FROM_NAME')  || 'ÁSTOR by CRITIC SL'
 const APP_URL         = Deno.env.get('APP_URL')    || 'https://app.astormanager.com'
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const sql = postgres(DATABASE_URL, { prepare: false })
 
 Deno.serve(async (req) => {
   try {
@@ -22,28 +23,39 @@ Deno.serve(async (req) => {
       return resp({ ok: false, error: 'alerta_id requerido' }, 400)
     }
 
-    // Cargar la alerta con datos del hospital y carro
-    const { data: alerta, error } = await supabase
-      .from('alertas')
-      .select(`
-        id, tipo, mensaje, severidad, creado_en,
-        hospital_id,
-        carros ( codigo, nombre, ubicacion, servicios(nombre) ),
-        hospitales ( nombre, color_primario )
-      `)
-      .eq('id', alerta_id)
-      .single()
-
-    if (error || !alerta) {
+    // Cargar la alerta + carro + hospital + servicio vía postgres directo
+    const filas = await sql`
+      select
+        a.id, a.tipo, a.mensaje, a.severidad, a.creado_en, a.hospital_id,
+        c.codigo as c_codigo, c.nombre as c_nombre,
+        c.ubicacion as c_ubicacion, c.servicio_id as c_servicio_id,
+        sv.nombre as sv_nombre,
+        h.nombre as h_nombre, h.color_primario as h_color
+      from public.alertas a
+      left join public.carros c on c.id = a.carro_id
+      left join public.servicios sv on sv.id = c.servicio_id
+      left join public.hospitales h on h.id = a.hospital_id
+      where a.id = ${alerta_id}::uuid
+      limit 1
+    `
+    if (filas.length === 0) {
+      console.log(`[alerta-email] alerta ${alerta_id} NO encontrada`)
       return resp({ ok: false, error: 'Alerta no encontrada' }, 404)
     }
-
-    const hospital = (alerta as any).hospitales
-    const carro    = (alerta as any).carros
+    const f = filas[0]
+    const alerta = {
+      id: f.id, tipo: f.tipo, mensaje: f.mensaje, severidad: f.severidad,
+      creado_en: f.creado_en, hospital_id: f.hospital_id,
+    }
+    const hospital = { nombre: f.h_nombre, color_primario: f.h_color }
+    const carro    = f.c_codigo ? {
+      codigo: f.c_codigo, nombre: f.c_nombre, ubicacion: f.c_ubicacion,
+      servicio_id: f.c_servicio_id,
+      servicio: f.sv_nombre ? { nombre: f.sv_nombre } : null,
+    } : null
     const color    = hospital?.color_primario || '#1d4ed8'
 
-    // Solo enviar si es alerta crítica o alta
-    // Para tipos de alerta de equipos siempre enviamos
+    // Solo alertas críticas/altas o tipos críticos
     const esUrgente = ['critica', 'alta'].includes(alerta.severidad) ||
       ['carro_no_operativo', 'equipo_mantenimiento_vencido', 'equipo_calibracion_vencida'].includes(alerta.tipo)
 
@@ -51,23 +63,19 @@ Deno.serve(async (req) => {
       return resp({ ok: true, mensaje: 'Alerta no urgente, no se envía email' })
     }
 
-    // Obtener destinatarios: admins y supervisores del hospital + superadmins
-    // (estos últimos no tienen hospital_id, requieren query separada)
-    const [{ data: hospUsers }, { data: superadmins }] = await Promise.all([
-      supabase
-        .from('perfiles')
-        .select('nombre, email, email_alertas, rol')
-        .eq('hospital_id', alerta.hospital_id)
-        .eq('activo', true)
-        .in('rol', ['administrador', 'supervisor']),
-      supabase
-        .from('perfiles')
-        .select('nombre, email, email_alertas')
-        .eq('rol', 'superadmin')
-        .eq('activo', true),
-    ])
-
-    const todos = [...(hospUsers || []), ...(superadmins || [])]
+    // Destinatarios: admin/calidad/supervisor del hospital + superadmins
+    const servicioId: string | null = carro?.servicio_id ?? null
+    const todos = await sql`
+      select id, nombre, email, email_alertas, rol, recibir_alertas
+      from public.perfiles
+      where activo = true
+        and (
+          (rol in ('administrador','calidad') and hospital_id = ${alerta.hospital_id}::uuid)
+          or (rol = 'supervisor' and hospital_id = ${alerta.hospital_id}::uuid
+              and (${servicioId}::uuid is null or servicio_id = ${servicioId}::uuid))
+          or rol = 'superadmin'
+        )
+    `
     if (todos.length === 0) {
       return resp({ ok: true, mensaje: 'Sin destinatarios configurados' })
     }
@@ -182,7 +190,7 @@ function htmlAlerta({ alerta, hospital, carro, color, appUrl }: any): string {
       <div style="font-size:11px;font-weight:700;color:#9ca3af;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">Carro afectado</div>
       <div style="background:#f9fafb;border-radius:10px;padding:14px;">
         <div style="font-size:16px;font-weight:700;color:#111827;">${carro.codigo} — ${carro.nombre}</div>
-        ${carro.servicios?.nombre ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;">Servicio: ${carro.servicios.nombre}</div>` : ''}
+        ${carro.servicio?.nombre ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;">Servicio: ${carro.servicio.nombre}</div>` : ''}
         ${carro.ubicacion ? `<div style="font-size:12px;color:#6b7280;">Ubicación: ${carro.ubicacion}</div>` : ''}
       </div>
     </div>` : ''}
