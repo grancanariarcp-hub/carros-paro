@@ -36,21 +36,29 @@ Deno.serve(async (req) => {
     console.log(`[send-push] alerta_id=${alerta_id}`)
 
     // 1) Cargar la alerta + carro + hospital
-    const alertas = await sql`
-      select
-        a.id, a.tipo, a.mensaje, a.severidad, a.creado_en,
-        a.hospital_id, a.carro_id, a.equipo_id,
-        c.codigo as c_codigo, c.nombre as c_nombre,
-        c.ubicacion as c_ubicacion, c.servicio_id as c_servicio_id,
-        h.nombre as h_nombre, h.color_primario as h_color
-      from public.alertas a
-      left join public.carros c on c.id = a.carro_id
-      left join public.hospitales h on h.id = a.hospital_id
-      where a.id = ${alerta_id}::uuid
-      limit 1
-    `
+    //    Reintentamos hasta 3 veces con 500ms entre intentos por si pg_net
+    //    invocó la función antes del commit de la transacción del INSERT.
+    let alertas: any[] = []
+    for (let intento = 1; intento <= 3; intento++) {
+      alertas = await sql`
+        select
+          a.id, a.tipo, a.mensaje, a.severidad, a.creado_en,
+          a.hospital_id, a.carro_id, a.equipo_id,
+          c.codigo as c_codigo, c.nombre as c_nombre,
+          c.ubicacion as c_ubicacion, c.servicio_id as c_servicio_id,
+          h.nombre as h_nombre, h.color_primario as h_color
+        from public.alertas a
+        left join public.carros c on c.id = a.carro_id
+        left join public.hospitales h on h.id = a.hospital_id
+        where a.id = ${alerta_id}::uuid
+        limit 1
+      `
+      if (alertas.length > 0) break
+      console.log(`[send-push] intento ${intento}: alerta no visible aún, reintentando...`)
+      await new Promise(r => setTimeout(r, 500))
+    }
     if (alertas.length === 0) {
-      console.log(`[send-push] alerta ${alerta_id} NO encontrada en BD`)
+      console.log(`[send-push] alerta ${alerta_id} NO encontrada tras 3 intentos`)
       return resp({ ok: false, error: 'Alerta no encontrada' }, 404)
     }
     const a = alertas[0]

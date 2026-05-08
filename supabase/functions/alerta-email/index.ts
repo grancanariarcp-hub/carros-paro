@@ -23,23 +23,30 @@ Deno.serve(async (req) => {
       return resp({ ok: false, error: 'alerta_id requerido' }, 400)
     }
 
-    // Cargar la alerta + carro + hospital + servicio vía postgres directo
-    const filas = await sql`
-      select
-        a.id, a.tipo, a.mensaje, a.severidad, a.creado_en, a.hospital_id,
-        c.codigo as c_codigo, c.nombre as c_nombre,
-        c.ubicacion as c_ubicacion, c.servicio_id as c_servicio_id,
-        sv.nombre as sv_nombre,
-        h.nombre as h_nombre, h.color_primario as h_color
-      from public.alertas a
-      left join public.carros c on c.id = a.carro_id
-      left join public.servicios sv on sv.id = c.servicio_id
-      left join public.hospitales h on h.id = a.hospital_id
-      where a.id = ${alerta_id}::uuid
-      limit 1
-    `
+    // Cargar la alerta + carro + hospital + servicio vía postgres directo.
+    // Reintentamos hasta 3 veces por si pg_net se adelantó al commit.
+    let filas: any[] = []
+    for (let intento = 1; intento <= 3; intento++) {
+      filas = await sql`
+        select
+          a.id, a.tipo, a.mensaje, a.severidad, a.creado_en, a.hospital_id,
+          c.codigo as c_codigo, c.nombre as c_nombre,
+          c.ubicacion as c_ubicacion, c.servicio_id as c_servicio_id,
+          sv.nombre as sv_nombre,
+          h.nombre as h_nombre, h.color_primario as h_color
+        from public.alertas a
+        left join public.carros c on c.id = a.carro_id
+        left join public.servicios sv on sv.id = c.servicio_id
+        left join public.hospitales h on h.id = a.hospital_id
+        where a.id = ${alerta_id}::uuid
+        limit 1
+      `
+      if (filas.length > 0) break
+      console.log(`[alerta-email] intento ${intento}: alerta no visible aún`)
+      await new Promise(r => setTimeout(r, 500))
+    }
     if (filas.length === 0) {
-      console.log(`[alerta-email] alerta ${alerta_id} NO encontrada`)
+      console.log(`[alerta-email] alerta ${alerta_id} NO encontrada tras 3 intentos`)
       return resp({ ok: false, error: 'Alerta no encontrada' }, 404)
     }
     const f = filas[0]
