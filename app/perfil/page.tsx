@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import PushToggle from '@/components/PushToggle'
+import NotifTiposEditor from '@/components/NotifTiposEditor'
 
 const ROL_LABEL: Record<string, string> = {
   superadmin: 'Superadmin', administrador: 'Administrador',
@@ -246,6 +247,14 @@ export default function PerfilPage() {
                 {perfil?.id && <PushToggle usuarioId={perfil.id} />}
               </div>
             </div>
+
+            {/* Preferencias granulares por tipo de alerta */}
+            {perfil?.id && (
+              <NotifTiposEditor
+                perfilId={perfil.id}
+                initial={perfil?.notif_tipos}
+              />
+            )}
           </>
         )}
 

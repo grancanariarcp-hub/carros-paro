@@ -70,8 +70,11 @@ Deno.serve(async (req) => {
       return resp({ ok: true, mensaje: 'Alerta no urgente, no se envía email' })
     }
 
-    // Destinatarios: admin/calidad/supervisor del hospital + superadmins
+    // Destinatarios: admin/calidad/supervisor del hospital + superadmins.
+    // Filtramos por notif_tipos[tipo].email: si está definido y es false,
+    // el usuario ha silenciado este tipo. Si no está, default true.
     const servicioId: string | null = carro?.servicio_id ?? null
+    const tipo: string = alerta.tipo
     const todos = await sql`
       select id, nombre, email, email_alertas, rol, recibir_alertas
       from public.perfiles
@@ -82,6 +85,7 @@ Deno.serve(async (req) => {
               and (${servicioId}::uuid is null or servicio_id = ${servicioId}::uuid))
           or rol = 'superadmin'
         )
+        and coalesce((notif_tipos -> ${tipo} ->> 'email')::boolean, true)
     `
     if (todos.length === 0) {
       return resp({ ok: true, mensaje: 'Sin destinatarios configurados' })

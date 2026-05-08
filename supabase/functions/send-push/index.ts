@@ -138,7 +138,13 @@ Deno.serve(async (req) => {
 // Destinatarios
 // ============================================================================
 async function calcularDestinatarios(alerta: any): Promise<string[]> {
+  // Filtramos por:
+  //  - rol/hospital/servicio (igual que antes)
+  //  - notif_tipos[tipo].push: si está definido, debe ser distinto de false.
+  //    Si no está, default true. Permite a cada usuario silenciar push de
+  //    tipos concretos sin perder los demás.
   const servicioId: string | null = alerta.carro?.servicio_id ?? null
+  const tipo: string = alerta.tipo
   const filas = await sql`
     select id from public.perfiles
     where activo = true
@@ -148,6 +154,7 @@ async function calcularDestinatarios(alerta: any): Promise<string[]> {
             and (${servicioId}::uuid is null or servicio_id = ${servicioId}::uuid))
         or rol = 'superadmin'
       )
+      and coalesce((notif_tipos -> ${tipo} ->> 'push')::boolean, true)
   `
   return filas.map((f: any) => f.id)
 }
