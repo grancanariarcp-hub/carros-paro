@@ -4,13 +4,23 @@
  * Vuelca todas las tablas vía API REST usando la service_role key.
  * No necesita la contraseña de Postgres ni pg_dump instalado.
  *
- * Uso:  node scripts/backup-datos.mjs
+ *   node scripts/backup-datos.mjs                    → carpeta con los JSON
+ *   node scripts/backup-datos.mjs --cifrar <clave>   → además, un único
+ *                                                      archivo .astorbak cifrado
+ *
+ * El backup contiene DATOS PERSONALES: firmas digitales del personal
+ * sanitario, nombres y correos. Si va a salir de este ordenador —copia en la
+ * nube, disco externo, otro equipo— usa --cifrar. Sin cifrar, cualquiera con
+ * acceso al archivo lee todo.
+ *
+ * Para restaurarlo:  node scripts/restaurar-backup.mjs <archivo> <clave>
  *
  * Limitación: guarda DATOS, no el esquema. El esquema vive en
  * supabase/migrations/. Los dos juntos permiten reconstruir el proyecto.
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomBytes, scryptSync, createCipheriv } from 'node:crypto'
 
 const PAGE = 1000
 
@@ -106,3 +116,47 @@ writeFileSync(
 
 console.log(`\n${totalFilas} filas en total. ${fallos ? `${fallos} tablas con error.` : 'Sin errores.'}`)
 console.log(`Guardado en ${destino}`)
+
+// ---------------------------------------------------------------------------
+// Cifrado opcional: empaqueta todo en un único archivo protegido con clave.
+//
+// AES-256-GCM: además de cifrar, detecta si el archivo se ha alterado — en un
+// backup importa tanto que nadie lo lea como saber que llega íntegro.
+// La clave pasa por scrypt, que es deliberadamente lento, para que probar
+// claves a la fuerza sea caro.
+// ---------------------------------------------------------------------------
+const iCifrar = process.argv.indexOf('--cifrar')
+if (iCifrar !== -1) {
+  const clave = process.argv[iCifrar + 1]
+  if (!clave || clave.startsWith('--')) {
+    console.error('\n--cifrar necesita una clave: node scripts/backup-datos.mjs --cifrar "mi clave"')
+    process.exit(1)
+  }
+  if (clave.length < 12) {
+    console.error('\nUsa una clave de al menos 12 caracteres: esto protege datos personales.')
+    process.exit(1)
+  }
+
+  // Reunimos todo lo volcado en un solo objeto.
+  const paquete = { manifiesto: JSON.parse(readFileSync(join(destino, '_manifiesto.json'), 'utf8')), tablas: {}, usuarios: null }
+  for (const tabla of tablas) {
+    try { paquete.tablas[tabla] = JSON.parse(readFileSync(join(destino, `${tabla}.json`), 'utf8')) } catch {}
+  }
+  try { paquete.usuarios = JSON.parse(readFileSync(join(destino, '_auth_users.json'), 'utf8')) } catch {}
+
+  const sal = randomBytes(16)
+  const iv  = randomBytes(12)
+  const derivada = scryptSync(clave, sal, 32)
+  const cipher = createCipheriv('aes-256-gcm', derivada, iv)
+  const cifrado = Buffer.concat([cipher.update(JSON.stringify(paquete), 'utf8'), cipher.final()])
+  const etiqueta = cipher.getAuthTag()
+
+  // Formato: [sal 16][iv 12][etiqueta 16][datos]
+  const archivo = `${destino}.astorbak`
+  writeFileSync(archivo, Buffer.concat([sal, iv, etiqueta, cifrado]))
+
+  const mb = (Buffer.byteLength(JSON.stringify(paquete)) / 1048576).toFixed(2)
+  console.log(`\nCifrado en ${archivo}  (${mb} MB de datos)`)
+  console.log('Este archivo sí puede salir del ordenador. Guarda la clave aparte:')
+  console.log('sin ella el backup es irrecuperable, no hay forma de saltársela.')
+}

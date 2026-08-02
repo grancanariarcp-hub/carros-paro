@@ -69,17 +69,10 @@ function semaforo(stats: HospitalStats): 'verde' | 'amarillo' | 'rojo' {
   return 'verde'
 }
 
-const S = {
-  page:   { minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', sans-serif" } as React.CSSProperties,
-  // clamp() da espaciado fluido en estilos inline, donde no caben media
-  // queries: se estrecha en móvil y crece hasta el máximo en PC.
-  topbar: { background: '#080c14', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 clamp(0.875rem, 4vw, 2rem)', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 50 } as React.CSSProperties,
-  body:   { maxWidth: '1200px', margin: '0 auto', padding: 'clamp(1rem, 4vw, 2rem) clamp(0.875rem, 4vw, 1.5rem)' } as React.CSSProperties,
-  input:  { width: '100%', padding: '0.6rem 0.75rem', border: '1.5px solid #e5e7eb', borderRadius: '6px', fontSize: '0.8rem', fontFamily: "'Inter', sans-serif", color: '#111827', outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
-  label:  { display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#374151', marginBottom: '0.3rem' } as React.CSSProperties,
-  btnPri: { padding: '0.6rem 1.25rem', background: '#111827', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" } as React.CSSProperties,
-  btnSec: { padding: '0.6rem 1.25rem', background: 'white', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" } as React.CSSProperties,
-}
+// Los estilos de este panel viven ahora en app/globals.css como clases .sa-*.
+// Estaban en un objeto de estilos inline, que no admite media queries: nada
+// podía adaptarse al tamaño de pantalla, y cualquier retoque había que
+// repetirlo en las once llamadas.
 
 // =====================================================================
 // Componente principal
@@ -347,9 +340,9 @@ export default function SuperAdminPage() {
   )
 
   return (
-    <div style={S.page}>
+    <div className="sa-page">
       {/* Topbar */}
-      <div style={S.topbar}>
+      <div className="sa-topbar">
         {/* La barra mide 56px fijos: en vez de desbordar, lo prescindible
             (subtítulo y nombre de usuario) se recorta con puntos suspensivos. */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', minWidth: 0 }}>
@@ -363,7 +356,7 @@ export default function SuperAdminPage() {
         </div>
       </div>
 
-      <div style={S.body}>
+      <div className="sa-body">
 
         {/* Resumen global */}
         <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
@@ -490,10 +483,10 @@ export default function SuperAdminPage() {
 
                       {/* Acciones */}
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <button onClick={() => setEditandoHospital({ ...h })} style={S.btnSec}>✏️ Editar</button>
-                        <button onClick={() => router.push(`/superadmin/hospital/${h.id}/logos`)} style={S.btnSec}>🎨 Logos</button>
-                        <button onClick={() => { setFiltroHospital(h.id); setTab('usuarios') }} style={S.btnSec}>👥 Ver usuarios</button>
-                        <button onClick={() => toggleActivo(h)} style={{ ...S.btnSec, color: h.activo ? '#dc2626' : '#16a34a', background: h.activo ? '#fef2f2' : '#f0fdf4', border: `1px solid ${h.activo ? '#fecaca' : '#bbf7d0'}` }}>
+                        <button onClick={() => setEditandoHospital({ ...h })} className="sa-btn sa-btn-sec">✏️ Editar</button>
+                        <button onClick={() => router.push(`/superadmin/hospital/${h.id}/logos`)} className="sa-btn sa-btn-sec">🎨 Logos</button>
+                        <button onClick={() => { setFiltroHospital(h.id); setTab('usuarios') }} className="sa-btn sa-btn-sec">👥 Ver usuarios</button>
+                        <button onClick={() => toggleActivo(h)} className="sa-btn sa-btn-sec" style={{ color: h.activo ? '#dc2626' : '#16a34a', background: h.activo ? '#fef2f2' : '#f0fdf4', border: `1px solid ${h.activo ? '#fecaca' : '#bbf7d0'}` }}>
                           {h.activo ? 'Desactivar' : 'Activar'}
                         </button>
                       </div>
@@ -505,32 +498,32 @@ export default function SuperAdminPage() {
                             {editandoHospital.logo_url && <img src={editandoHospital.logo_url} alt="logo" style={{ height: '36px', objectFit: 'contain', maxWidth: '100%' }} />}
                             <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                               onChange={e => { const f = e.target.files?.[0]; if (f) subirLogo(f, editandoHospital.id) }} />
-                            <button onClick={() => fileInputRef.current?.click()} disabled={subiendoLogo} style={S.btnPri}>
+                            <button onClick={() => fileInputRef.current?.click()} disabled={subiendoLogo} className="sa-btn sa-btn-pri">
                               {subiendoLogo ? 'Subiendo...' : editandoHospital.logo_url ? 'Cambiar logo' : 'Subir logo'}
                             </button>
                           </div>
                           <div className="form-grid" style={{ marginBottom: '1rem' }}>
                             {[['Nombre', 'nombre', 'text'], ['Email admin', 'email_admin', 'email'], ['Teléfono', 'telefono', 'tel'], ['Color primario', 'color_primario', 'color']].map(([l, f, t]) => (
                               <div key={f}>
-                                <label style={S.label}>{l}</label>
-                                <input type={t} value={editandoHospital[f] || ''} onChange={e => setEditandoHospital({ ...editandoHospital, [f]: e.target.value })} style={S.input} />
+                                <label className="sa-label">{l}</label>
+                                <input type={t} value={editandoHospital[f] || ''} onChange={e => setEditandoHospital({ ...editandoHospital, [f]: e.target.value })} className="sa-input" />
                               </div>
                             ))}
                             <div>
-                              <label style={S.label}>Plan</label>
-                              <select value={editandoHospital.plan} onChange={e => { const l = planLimites(e.target.value); setEditandoHospital({ ...editandoHospital, plan: e.target.value, ...l }) }} style={{ ...S.input, background: 'white' }}>
+                              <label className="sa-label">Plan</label>
+                              <select value={editandoHospital.plan} onChange={e => { const l = planLimites(e.target.value); setEditandoHospital({ ...editandoHospital, plan: e.target.value, ...l }) }} className="sa-input" style={{ background: 'white' }}>
                                 <option value="basico">Básico</option><option value="estandar">Estándar</option>
                                 <option value="hospital">Hospital</option><option value="enterprise">Enterprise</option>
                               </select>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                              <div><label style={S.label}>Máx. carros</label><input type="number" value={editandoHospital.max_carros} onChange={e => setEditandoHospital({ ...editandoHospital, max_carros: +e.target.value })} style={S.input} /></div>
-                              <div><label style={S.label}>Máx. usuarios</label><input type="number" value={editandoHospital.max_usuarios} onChange={e => setEditandoHospital({ ...editandoHospital, max_usuarios: +e.target.value })} style={S.input} /></div>
+                              <div><label className="sa-label">Máx. carros</label><input type="number" value={editandoHospital.max_carros} onChange={e => setEditandoHospital({ ...editandoHospital, max_carros: +e.target.value })} className="sa-input" /></div>
+                              <div><label className="sa-label">Máx. usuarios</label><input type="number" value={editandoHospital.max_usuarios} onChange={e => setEditandoHospital({ ...editandoHospital, max_usuarios: +e.target.value })} className="sa-input" /></div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <button onClick={guardarEdicionHospital} disabled={guardando} style={S.btnPri}>{guardando ? 'Guardando...' : 'Guardar'}</button>
-                            <button onClick={() => setEditandoHospital(null)} style={S.btnSec}>Cancelar</button>
+                            <button onClick={guardarEdicionHospital} disabled={guardando} className="sa-btn sa-btn-pri">{guardando ? 'Guardando...' : 'Guardar'}</button>
+                            <button onClick={() => setEditandoHospital(null)} className="sa-btn sa-btn-sec">Cancelar</button>
                           </div>
                         </div>
                       )}
@@ -549,13 +542,13 @@ export default function SuperAdminPage() {
             <div className="form-grid">
               {[['Nombre *', 'nombre', 'text', 'Hospital Universitario...'], ['Slug URL *', 'slug', 'text', 'hospital-nombre'], ['Email administrador *', 'email_admin', 'email', 'admin@hospital.es'], ['Teléfono', 'telefono', 'tel', '+34 900 000 000'], ['País', 'pais', 'text', 'España'], ['Color primario', 'color_primario', 'color', '']].map(([l, f, t, p]) => (
                 <div key={f}>
-                  <label style={S.label}>{l}</label>
-                  <input type={t} placeholder={p} value={(formHospital as any)[f]} onChange={e => setFormHospital(prev => ({ ...prev, [f]: e.target.value }))} style={S.input} />
+                  <label className="sa-label">{l}</label>
+                  <input type={t} placeholder={p} value={(formHospital as any)[f]} onChange={e => setFormHospital(prev => ({ ...prev, [f]: e.target.value }))} className="sa-input" />
                 </div>
               ))}
               <div style={{ gridColumn: '1/-1' }}>
-                <label style={S.label}>Plan</label>
-                <select value={formHospital.plan} onChange={e => { const l = planLimites(e.target.value); setFormHospital(p => ({ ...p, plan: e.target.value, ...l })) }} style={{ ...S.input, background: 'white' }}>
+                <label className="sa-label">Plan</label>
+                <select value={formHospital.plan} onChange={e => { const l = planLimites(e.target.value); setFormHospital(p => ({ ...p, plan: e.target.value, ...l })) }} className="sa-input" style={{ background: 'white' }}>
                   <option value="basico">Básico — 15 carros, 5 usuarios — 600 €/año</option>
                   <option value="estandar">Estándar — 40 carros, 15 usuarios — 1.500 €/año</option>
                   <option value="hospital">Hospital — 100 carros, 30 usuarios — 3.000 €/año</option>
@@ -564,8 +557,8 @@ export default function SuperAdminPage() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-              <button onClick={crearHospital} disabled={guardando} style={S.btnPri}>{guardando ? 'Creando...' : 'Crear hospital'}</button>
-              <button onClick={() => setTab('hospitales')} style={S.btnSec}>Cancelar</button>
+              <button onClick={crearHospital} disabled={guardando} className="sa-btn sa-btn-pri">{guardando ? 'Creando...' : 'Crear hospital'}</button>
+              <button onClick={() => setTab('hospitales')} className="sa-btn sa-btn-sec">Cancelar</button>
             </div>
           </div>
         )}
@@ -576,12 +569,12 @@ export default function SuperAdminPage() {
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
               {/* Anchos fluidos (flex-basis) en vez de fijos: en móvil se
                   estiran al ancho disponible y en PC mantienen su tamaño. */}
-              <input placeholder="Buscar por nombre o email..." value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} style={{ ...S.input, flex: '1 1 15rem', minWidth: 0 }} />
-              <select value={filtroHospital} onChange={e => setFiltroHospital(e.target.value)} style={{ ...S.input, flex: '1 1 13rem', minWidth: 0, background: 'white' }}>
+              <input placeholder="Buscar por nombre o email..." value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} className="sa-input" style={{ flex: '1 1 15rem', minWidth: 0 }} />
+              <select value={filtroHospital} onChange={e => setFiltroHospital(e.target.value)} className="sa-input" style={{ flex: '1 1 13rem', minWidth: 0, background: 'white' }}>
                 <option value="todos">Todos los hospitales</option>
                 {hospitalesStats.map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
               </select>
-              <button onClick={() => { setModalUsuario('nuevo'); setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: filtroHospital !== 'todos' ? filtroHospital : '', servicio_id: '', activo: true, codigo_empleado: '' }) }} style={S.btnPri}>
+              <button onClick={() => { setModalUsuario('nuevo'); setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: filtroHospital !== 'todos' ? filtroHospital : '', servicio_id: '', activo: true, codigo_empleado: '' }) }} className="sa-btn sa-btn-pri">
                 + Nuevo usuario
               </button>
               <span style={{ fontSize: '0.78rem', color: '#9ca3af' }}>{usuariosFiltrados.length} usuarios</span>
@@ -616,9 +609,9 @@ export default function SuperAdminPage() {
                       <td style={{ padding: '0.75rem' }}>
                         <div style={{ display: 'flex', gap: '0.4rem' }}>
                           <button onClick={() => { setModalUsuario(u); setFormUsuario({ nombre: u.nombre, email: u.email, rol: u.rol, hospital_id: u.hospital_id || '', servicio_id: u.servicio_id || '', activo: u.activo, codigo_empleado: u.codigo_empleado || '' }) }}
-                            style={{ ...S.btnSec, padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}>Editar</button>
+                            className="sa-btn sa-btn-sec sa-btn-mini">Editar</button>
                           <button onClick={() => toggleUsuarioActivo(u)}
-                            style={{ ...S.btnSec, padding: '0.3rem 0.6rem', fontSize: '0.7rem', color: u.activo ? '#dc2626' : '#16a34a' }}>
+                            className="sa-btn sa-btn-sec sa-btn-mini" style={{ color: u.activo ? '#dc2626' : '#16a34a' }}>
                             {u.activo ? 'Desactivar' : 'Activar'}
                           </button>
                         </div>
@@ -654,8 +647,8 @@ export default function SuperAdminPage() {
                     <div style={{ fontSize: '0.68rem', color: '#9ca3af', marginTop: '4px' }}>{new Date(s.creado_en).toLocaleString('es-ES')}</div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                    <button onClick={() => gestionarSolicitud(s.id, 'aprobada')} style={{ ...S.btnPri, background: '#16a34a', fontSize: '0.75rem' }}>Aprobar</button>
-                    <button onClick={() => gestionarSolicitud(s.id, 'rechazada')} style={{ ...S.btnSec, color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.75rem' }}>Rechazar</button>
+                    <button onClick={() => gestionarSolicitud(s.id, 'aprobada')} className="sa-btn sa-btn-pri" style={{ background: '#16a34a', fontSize: '0.75rem' }}>Aprobar</button>
+                    <button onClick={() => gestionarSolicitud(s.id, 'rechazada')} className="sa-btn sa-btn-sec" style={{ color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.75rem' }}>Rechazar</button>
                   </div>
                 </div>
               </div>
@@ -674,24 +667,24 @@ export default function SuperAdminPage() {
               {modalUsuario === 'nuevo' ? 'Crear usuario' : `Editar: ${modalUsuario.nombre}`}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div><label style={S.label}>Nombre completo *</label><input type="text" value={formUsuario.nombre} onChange={e => setFormUsuario(f => ({ ...f, nombre: e.target.value }))} style={S.input} /></div>
-              {modalUsuario === 'nuevo' && <div><label style={S.label}>Email *</label><input type="email" value={formUsuario.email} onChange={e => setFormUsuario(f => ({ ...f, email: e.target.value }))} style={S.input} /></div>}
+              <div><label className="sa-label">Nombre completo *</label><input type="text" value={formUsuario.nombre} onChange={e => setFormUsuario(f => ({ ...f, nombre: e.target.value }))} className="sa-input" /></div>
+              {modalUsuario === 'nuevo' && <div><label className="sa-label">Email *</label><input type="email" value={formUsuario.email} onChange={e => setFormUsuario(f => ({ ...f, email: e.target.value }))} className="sa-input" /></div>}
               <div>
-                <label style={S.label}>Hospital *</label>
-                <select value={formUsuario.hospital_id} onChange={e => setFormUsuario(f => ({ ...f, hospital_id: e.target.value }))} style={{ ...S.input, background: 'white' }}>
+                <label className="sa-label">Hospital *</label>
+                <select value={formUsuario.hospital_id} onChange={e => setFormUsuario(f => ({ ...f, hospital_id: e.target.value }))} className="sa-input" style={{ background: 'white' }}>
                   <option value="">Seleccionar hospital...</option>
                   {hospitalesStats.map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
                 </select>
               </div>
               <div>
-                <label style={S.label}>Rol</label>
-                <select value={formUsuario.rol} onChange={e => setFormUsuario(f => ({ ...f, rol: e.target.value }))} style={{ ...S.input, background: 'white' }}>
+                <label className="sa-label">Rol</label>
+                <select value={formUsuario.rol} onChange={e => setFormUsuario(f => ({ ...f, rol: e.target.value }))} className="sa-input" style={{ background: 'white' }}>
                   {ROLES_SUPERADMIN.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
               <div>
-                <label style={S.label}>Código de empleado <span style={{ color: '#9ca3af', fontWeight: 400 }}>(QR / código de barras)</span></label>
-                <input style={S.input} placeholder="Código asignado por RRHH" value={formUsuario.codigo_empleado || ''} onChange={e => setFormUsuario(f => ({ ...f, codigo_empleado: e.target.value }))} />
+                <label className="sa-label">Código de empleado <span style={{ color: '#9ca3af', fontWeight: 400 }}>(QR / código de barras)</span></label>
+                <input className="sa-input" placeholder="Código asignado por RRHH" value={formUsuario.codigo_empleado || ''} onChange={e => setFormUsuario(f => ({ ...f, codigo_empleado: e.target.value }))} />
                 <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '4px' }}>Permite acceder escaneando la tarjeta de empleado</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px' }}>
@@ -715,16 +708,16 @@ export default function SuperAdminPage() {
                 <BotonResetPassword
                   usuarioId={modalUsuario.id}
                   usuarioNombre={modalUsuario.nombre}
-                  estilo={S.btnSec}
+                  className="sa-btn sa-btn-sec"
                 />
               </div>
             )}
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-              <button onClick={modalUsuario === 'nuevo' ? crearUsuario : actualizarUsuario} disabled={guardando} style={S.btnPri}>
+              <button onClick={modalUsuario === 'nuevo' ? crearUsuario : actualizarUsuario} disabled={guardando} className="sa-btn sa-btn-pri">
                 {guardando ? 'Guardando...' : modalUsuario === 'nuevo' ? 'Crear usuario' : 'Guardar cambios'}
               </button>
-              <button onClick={() => setModalUsuario(null)} style={S.btnSec}>Cancelar</button>
+              <button onClick={() => setModalUsuario(null)} className="sa-btn sa-btn-sec">Cancelar</button>
             </div>
           </div>
         </div>

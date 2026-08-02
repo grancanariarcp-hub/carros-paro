@@ -302,6 +302,98 @@
   }
 
   /* ============================================================
+     PANEL SUPERADMIN
+     Tiene lenguaje visual propio (barra oscura, tipografía Inter,
+     esquinas menos redondeadas) porque es la consola interna de
+     CRITIC, no la app que usa el personal del hospital. Antes vivía
+     en un objeto de estilos inline, que impedía media queries: nada
+     podía adaptarse al tamaño de pantalla.
+  ============================================================ */
+  .sa-page {
+    @apply min-h-screen;
+    background: #f9fafb;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  .sa-topbar {
+    @apply flex items-center justify-between sticky top-0 z-50;
+    background: #080c14;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    height: 56px;
+    gap: 0.75rem;
+    /* clamp: se estrecha en móvil y crece hasta el máximo en PC. */
+    padding: 0 clamp(0.875rem, 4vw, 2rem);
+  }
+  .sa-body {
+    @apply mx-auto;
+    max-width: 1200px;
+    padding: clamp(1rem, 4vw, 2rem) clamp(0.875rem, 4vw, 1.5rem);
+  }
+
+  .sa-input {
+    @apply w-full box-border;
+    padding: 0.6rem 0.75rem;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #111827;
+    outline: none;
+    /* En móvil, altura mínima cómoda para el dedo (recomendación de
+       accesibilidad: 44px). En pantallas grandes vuelve a su tamaño. */
+    min-height: 2.75rem;
+  }
+  .sa-input:focus {
+    border-color: #6b7280;
+  }
+
+  .sa-label {
+    @apply block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.3rem;
+  }
+
+  /* Base común de los dos botones. */
+  .sa-btn {
+    @apply inline-flex items-center justify-center cursor-pointer
+           transition-colors disabled:opacity-60 disabled:cursor-not-allowed;
+    padding: 0.6rem 1.25rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-family: 'Inter', system-ui, sans-serif;
+    white-space: nowrap;
+    min-height: 2.75rem;
+  }
+  .sa-btn-pri {
+    background: #111827;
+    color: white;
+    border: none;
+    font-weight: 700;
+  }
+  .sa-btn-pri:hover:not(:disabled) { background: #1f2937; }
+
+  .sa-btn-sec {
+    background: white;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+    font-weight: 600;
+  }
+  .sa-btn-sec:hover:not(:disabled) { background: #f9fafb; }
+
+  /* Botón compacto para dentro de las tablas, donde el alto mínimo
+     de 44px haría las filas innecesariamente altas. */
+  .sa-btn-mini {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    min-height: 0;
+  }
+
+  @media (min-width: 768px) {
+    .sa-input, .sa-btn { min-height: 0; }
+  }
+
+  /* ============================================================
      ENLACE DE RECUPERACIÓN DE CONTRASEÑA
      Se muestra en el sitio del botón, sin modal: el administrador
      necesita verlo y copiarlo, no navegar a otra parte.
