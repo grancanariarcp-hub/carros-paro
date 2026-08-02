@@ -5,6 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation'
 import { formatFechaHora, formatFecha } from '@/lib/utils'
 import type { Inspeccion, ItemInspeccion } from '@/lib/types'
 import { rutaPadre } from '@/lib/navigation'
+import ReabrirInspeccion from '@/components/ReabrirInspeccion'
 
 export default function ResultadoPage() {
   const [insp, setInsp] = useState<Inspeccion | null>(null)
@@ -191,6 +192,18 @@ export default function ResultadoPage() {
           </div>
         </div>
 
+        {/* Reapertura. Solo tiene sentido sobre una inspección ya firmada:
+            si no lo está, se edita directamente. */}
+        {inspAny.firmado_en && (
+          <ReabrirInspeccion
+            inspeccionId={inspId}
+            reabiertaEn={inspAny.reabierta_en ?? null}
+            motivoReapertura={inspAny.motivo_reapertura}
+            puedeReabrir={['superadmin', 'administrador', 'calidad'].includes(perfil?.rol)}
+            onCambio={cargarDatos}
+          />
+        )}
+
         {/* Firma digital */}
         {inspAny.firma_url && (
           <div className="card">
@@ -227,6 +240,23 @@ export default function ResultadoPage() {
                 </div>
               </div>
             </div>
+
+            {/* Sello de enmienda. Va junto a la firma y NO en su lugar: la
+                fecha de firma se mantiene, y debajo consta que se modificó. */}
+            {inspAny.modificado_en && (
+              <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-amber-700">
+                <span className="font-semibold">Modificado el </span>
+                {new Date(inspAny.modificado_en).toLocaleString('es-ES', {
+                  day: '2-digit', month: 'short', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit',
+                })}
+                {inspAny.veces_reabierta > 1 && ` · ${inspAny.veces_reabierta} reaperturas`}
+                <div className="text-gray-400 mt-0.5">
+                  La firma original se conserva sin alterar. El detalle de cada
+                  cambio está en el registro de auditoría.
+                </div>
+              </div>
+            )}
           </div>
         )}
 

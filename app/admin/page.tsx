@@ -415,6 +415,11 @@ export default function AdminPage() {
             <button className="btn-secondary" onClick={() => router.push('/admin/nuevo-usuario')}>+ Crear usuario</button>
           </div>
 
+          <button className="btn-secondary flex items-center gap-2 w-full" onClick={() => router.push('/admin/auditoria')}>
+            <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 text-sm">🔍</div>
+            <span className="text-sm font-semibold">Registro de auditoría</span>
+          </button>
+
           <button className="btn-secondary flex items-center gap-2 w-full" onClick={() => router.push('/admin/plantillas')}>
             <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0"><IconPlantilla /></div>
             <span className="text-sm font-semibold">⚙️ Configurar plantillas de control</span>
