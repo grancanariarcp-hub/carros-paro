@@ -18,7 +18,7 @@
  * Limitación: guarda DATOS, no el esquema. El esquema vive en
  * supabase/migrations/. Los dos juntos permiten reconstruir el proyecto.
  */
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, statSync, readdirSync, unlinkSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { randomBytes, scryptSync, createCipheriv } from 'node:crypto'
 
@@ -126,8 +126,21 @@ console.log(`Guardado en ${destino}`)
 // claves a la fuerza sea caro.
 // ---------------------------------------------------------------------------
 const iCifrar = process.argv.indexOf('--cifrar')
-if (iCifrar !== -1) {
-  const clave = process.argv[iCifrar + 1]
+
+// La clave puede venir por argumento o de BACKUP_CLAVE en .env.local. Lo
+// segundo es lo que permite ejecutarlo desatendido desde el programador de
+// tareas: nadie puede teclearla a las 3 de la mañana.
+//
+// Que la clave viva en esta máquina y el backup cifrado en la nube es
+// precisamente la separación que hace útil el cifrado: quien acceda a Drive no
+// tiene la clave. (En .env.local ya está la service_role, que da acceso total
+// a la base de datos, así que la clave no empeora nada de lo que hay aquí.)
+const cifrarPorEnv = !!env.BACKUP_CLAVE?.trim()
+if (iCifrar !== -1 || cifrarPorEnv) {
+  const clave = iCifrar !== -1
+    ? process.argv[iCifrar + 1]
+    : env.BACKUP_CLAVE.trim()
+
   if (!clave || clave.startsWith('--')) {
     console.error('\n--cifrar necesita una clave: node scripts/backup-datos.mjs --cifrar "mi clave"')
     process.exit(1)
@@ -177,6 +190,21 @@ if (iCifrar !== -1) {
       const kb = (statSync(copia).size / 1024).toFixed(0)
       console.log(`\nCopiado a ${copia}  (${kb} KB)`)
       console.log('Si esa carpeta la sincroniza Drive u OneDrive, ya está fuera del ordenador.')
+
+      // Rotación: se conservan los últimos BACKUP_CONSERVAR (12 por defecto).
+      // Sin esto, una tarea programada llena la carpeta indefinidamente. Doce
+      // backups diarios cubren casi dos semanas hacia atrás, que es margen
+      // suficiente para detectar un borrado accidental y volver.
+      const conservar = Number(env.BACKUP_CONSERVAR?.trim() || 12)
+      const antiguos = readdirSync(destinoExterno)
+        .filter(f => f.endsWith('.astorbak'))
+        .sort()                 // el nombre es la fecha ISO: ordenar = cronológico
+        .slice(0, -conservar)   // todos menos los más recientes
+
+      for (const viejo of antiguos) {
+        unlinkSync(join(destinoExterno, viejo))
+        console.log(`  rotado (eliminado por antigüedad): ${viejo}`)
+      }
     } catch (err) {
       // No se aborta: el backup local ya existe y es lo importante. Pero se
       // avisa fuerte, porque un fallo silencioso aquí deja la copia externa
@@ -192,7 +220,7 @@ if (iCifrar !== -1) {
 }
 
 // Aviso si se pide destino externo sin cifrar: no se copia nada en claro.
-if (iCifrar === -1 && env.BACKUP_DESTINO?.trim()) {
+if (iCifrar === -1 && !cifrarPorEnv && env.BACKUP_DESTINO?.trim()) {
   console.log('\n⚠️  Hay BACKUP_DESTINO configurado pero NO se ha cifrado, así que')
   console.log('   no se copia nada fuera. Estos datos incluyen firmas del personal')
   console.log('   sanitario y no deben salir del ordenador sin cifrar.')
