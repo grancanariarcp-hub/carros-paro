@@ -76,23 +76,40 @@ export default function BotonResetPassword({
     return (
       <div className="reset-enlace">
         <div className="reset-enlace-titulo">
-          Enlace para {usuarioNombre || 'el usuario'}
+          Enlace de acceso para {usuarioNombre || 'el usuario'}
         </div>
+
+        {/* Esto NO es una contraseña, y conviene decirlo sin rodeos: es fácil
+            confundir una cadena larga con una clave e intentar teclearla en el
+            login, que es exactamente lo que no funciona. */}
         <p className="reset-enlace-ayuda">
-          Hazle llegar este enlace. Caduca en 1 hora y solo sirve una vez.
-          Al abrirlo elegirá su nueva contraseña.
+          <strong>Esto no es una contraseña.</strong> Es una dirección web que
+          {usuarioNombre ? ` ${usuarioNombre}` : ' el usuario'} debe <strong>abrir
+          en su navegador</strong>: allí elegirá la contraseña que quiera. Caduca
+          en 1 hora y solo funciona una vez.
         </p>
+
         <textarea
           className="reset-enlace-campo"
           readOnly
           value={enlace}
           rows={3}
           onFocus={e => e.currentTarget.select()}
+          aria-label="Enlace de recuperación"
         />
+
         <div className="reset-enlace-acciones">
           <button type="button" onClick={copiar} className="btn-primary">
             {copiado ? '✓ Copiado' : 'Copiar enlace'}
           </button>
+          <a
+            href={enlace}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary text-center"
+          >
+            Abrirlo ahora
+          </a>
           <button type="button" onClick={() => setEnlace(null)} className="btn-secondary">
             Cerrar
           </button>

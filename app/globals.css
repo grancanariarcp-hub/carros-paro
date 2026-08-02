@@ -329,6 +329,10 @@
   .reset-enlace-acciones .btn-primary,
   .reset-enlace-acciones .btn-secondary {
     @apply w-auto flex-1 py-2 text-xs;
+    /* El <a> "Abrirlo ahora" comparte estilo con los botones y necesita esto
+       para alinearse igual. */
+    @apply inline-flex items-center justify-center no-underline;
+    min-width: 7rem;
   }
 
   /* ============================================================
