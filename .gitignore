@@ -41,6 +41,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
+# Copias de seguridad (datos reales: firmas, logos, dumps) — NUNCA commitear
+backups/
+
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
