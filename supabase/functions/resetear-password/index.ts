@@ -41,6 +41,34 @@ function resp(cuerpo: unknown, status = 200) {
   })
 }
 
+/**
+ * A dónde debe volver el enlace de recuperación.
+ *
+ * Se usa el Origin de quien llama, para que el enlace vuelva al MISMO sitio
+ * desde el que se generó. Si se fija a producción, una vista previa genera
+ * enlaces que llevan a producción, donde la pantalla puede no existir todavía
+ * — el token se consume sin usarse y el usuario acaba viendo "credenciales no
+ * válidas" al intentar entrar con una contraseña que nunca llegó a fijar.
+ *
+ * El Origin NO se acepta a ciegas: es un valor que controla quien llama, y
+ * confiar en él sería un redirect abierto por el que robar el token. Solo se
+ * admiten orígenes conocidos; cualquier otro cae a APP_URL. Supabase vuelve a
+ * validarlo después contra uri_allow_list, así que hay dos filtros.
+ */
+function destinoPermitido(req: Request): string {
+  const origen = req.headers.get('Origin') ?? ''
+
+  const admitido =
+    origen === APP_URL ||
+    /^https:\/\/carros-paro-[a-z0-9-]+-grancanariarcp-hubs-projects\.vercel\.app$/.test(origen) ||
+    /^http:\/\/localhost:\d+$/.test(origen)
+
+  if (!admitido && origen) {
+    console.warn(`[resetear-password] Origin no admitido, se usa APP_URL: ${origen}`)
+  }
+  return `${admitido ? origen : APP_URL}/nueva-contrasena`
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
@@ -110,10 +138,11 @@ Deno.serve(async (req) => {
     // ---------------------------------------------------------------------
     // 4) Generar el enlace de recuperación
     // ---------------------------------------------------------------------
+    const redirectTo = destinoPermitido(req)
     const { data: enlaceData, error: errEnlace } = await admin.auth.admin.generateLink({
       type: 'recovery',
       email: destino.email,
-      options: { redirectTo: `${APP_URL}/nueva-contrasena` },
+      options: { redirectTo },
     })
 
     if (errEnlace || !enlaceData?.properties?.action_link) {
