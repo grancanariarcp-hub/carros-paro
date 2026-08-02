@@ -923,6 +923,7 @@ $$;
 
 -- recrear trigger por si la firma cambió
 drop trigger if exists trigger_alerta_email on public.alertas;
+drop trigger if exists trigger_alerta_email on public.alertas;
 create trigger trigger_alerta_email
   after insert on public.alertas
   for each row execute function public.notificar_alerta_por_email();
@@ -940,12 +941,19 @@ drop trigger if exists trg_materiales_updated  on public.materiales;
 drop trigger if exists trg_equipos_updated     on public.equipos;
 drop trigger if exists trg_plantillas_updated  on public.plantillas;
 
+drop trigger if exists trg_hospitales_updated on public.hospitales;
 create trigger trg_hospitales_updated  before update on public.hospitales  for each row execute function public.set_updated_at();
+drop trigger if exists trg_servicios_updated on public.servicios;
 create trigger trg_servicios_updated   before update on public.servicios   for each row execute function public.set_updated_at();
+drop trigger if exists trg_perfiles_updated on public.perfiles;
 create trigger trg_perfiles_updated    before update on public.perfiles    for each row execute function public.set_updated_at();
+drop trigger if exists trg_carros_updated on public.carros;
 create trigger trg_carros_updated      before update on public.carros      for each row execute function public.set_updated_at();
+drop trigger if exists trg_materiales_updated on public.materiales;
 create trigger trg_materiales_updated  before update on public.materiales  for each row execute function public.set_updated_at();
+drop trigger if exists trg_equipos_updated on public.equipos;
 create trigger trg_equipos_updated     before update on public.equipos     for each row execute function public.set_updated_at();
+drop trigger if exists trg_plantillas_updated on public.plantillas;
 create trigger trg_plantillas_updated  before update on public.plantillas  for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_audit_carros        on public.carros;
@@ -956,20 +964,29 @@ drop trigger if exists trg_audit_plantillas    on public.plantillas;
 drop trigger if exists trg_audit_alertas       on public.alertas;
 drop trigger if exists trg_audit_historial     on public.historial_mantenimientos;
 
+drop trigger if exists trg_audit_carros on public.carros;
 create trigger trg_audit_carros        after insert or update or delete on public.carros        for each row execute function public.audit_log_change();
+drop trigger if exists trg_audit_equipos on public.equipos;
 create trigger trg_audit_equipos       after insert or update or delete on public.equipos       for each row execute function public.audit_log_change();
+drop trigger if exists trg_audit_inspecciones on public.inspecciones;
 create trigger trg_audit_inspecciones  after insert or update or delete on public.inspecciones  for each row execute function public.audit_log_change();
+drop trigger if exists trg_audit_perfiles on public.perfiles;
 create trigger trg_audit_perfiles      after insert or update or delete on public.perfiles      for each row execute function public.audit_log_change();
+drop trigger if exists trg_audit_plantillas on public.plantillas;
 create trigger trg_audit_plantillas    after insert or update or delete on public.plantillas    for each row execute function public.audit_log_change();
+drop trigger if exists trg_audit_alertas on public.alertas;
 create trigger trg_audit_alertas       after insert or update or delete on public.alertas       for each row execute function public.audit_log_change();
+drop trigger if exists trg_audit_historial on public.historial_mantenimientos;
 create trigger trg_audit_historial     after insert or update or delete on public.historial_mantenimientos for each row execute function public.audit_log_change();
 
 -- inmutabilidad
+drop trigger if exists trg_inspecciones_inmutables on public.inspecciones;
 drop trigger if exists trg_inspecciones_inmutables on public.inspecciones;
 create trigger trg_inspecciones_inmutables
   before update or delete on public.inspecciones
   for each row execute function public.bloquear_inspeccion_firmada();
 
+drop trigger if exists trg_log_auditoria_inmutable on public.log_auditoria;
 drop trigger if exists trg_log_auditoria_inmutable on public.log_auditoria;
 create trigger trg_log_auditoria_inmutable
   before update or delete on public.log_auditoria
@@ -981,58 +998,75 @@ create trigger trg_log_auditoria_inmutable
 -- ============================================================================
 
 -- Hospitales
+drop policy if exists hospitales_select_propio on public.hospitales;
 create policy hospitales_select_propio on public.hospitales for select to authenticated
   using (id = public.auth_hospital_id() or public.es_superadmin());
+drop policy if exists hospitales_select_publico_login on public.hospitales;
 create policy hospitales_select_publico_login on public.hospitales for select to anon
   using (activo = true);
+drop policy if exists hospitales_all_superadmin on public.hospitales;
 create policy hospitales_all_superadmin on public.hospitales for all to authenticated
   using (public.es_superadmin()) with check (public.es_superadmin());
 
 -- Servicios
+drop policy if exists servicios_select_hospital on public.servicios;
 create policy servicios_select_hospital on public.servicios for select to authenticated
   using (hospital_id = public.auth_hospital_id() or public.es_superadmin());
+drop policy if exists servicios_modify_admin_calidad on public.servicios;
 create policy servicios_modify_admin_calidad on public.servicios for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()))
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
 
 -- Perfiles
+drop policy if exists perfiles_select_self on public.perfiles;
 create policy perfiles_select_self on public.perfiles for select to authenticated
   using (id = auth.uid() or hospital_id = public.auth_hospital_id() or public.es_superadmin());
+drop policy if exists perfiles_update_self on public.perfiles;
 create policy perfiles_update_self on public.perfiles for update to authenticated
   using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists perfiles_admin_all on public.perfiles;
 create policy perfiles_admin_all on public.perfiles for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.auth_rol() = 'administrador'))
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.auth_rol() = 'administrador'));
 
 -- Hospital config
+drop policy if exists hospital_config_select on public.hospital_config;
 create policy hospital_config_select on public.hospital_config for select to authenticated
   using (hospital_id = public.auth_hospital_id() or public.es_superadmin());
+drop policy if exists hospital_config_modify_admin on public.hospital_config;
 create policy hospital_config_modify_admin on public.hospital_config for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.auth_rol() = 'administrador'))
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.auth_rol() = 'administrador'));
 
 -- Ubicaciones
+drop policy if exists ubicaciones_select on public.ubicaciones;
 create policy ubicaciones_select on public.ubicaciones for select to authenticated
   using (hospital_id = public.auth_hospital_id() or public.es_superadmin());
+drop policy if exists ubicaciones_modify on public.ubicaciones;
 create policy ubicaciones_modify on public.ubicaciones for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()))
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
 
 -- Categorías
+drop policy if exists cat_equipo_select on public.categorias_equipo;
 create policy cat_equipo_select on public.categorias_equipo for select to authenticated
   using (activo = true and (hospital_id is null or hospital_id = public.auth_hospital_id() or public.es_superadmin()));
+drop policy if exists cat_equipo_modify on public.categorias_equipo;
 create policy cat_equipo_modify on public.categorias_equipo for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()))
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
+drop policy if exists cat_hospital_all on public.categorias_equipo_hospital;
 create policy cat_hospital_all on public.categorias_equipo_hospital for all to authenticated
   using (public.es_superadmin() or hospital_id = public.auth_hospital_id())
   with check (public.es_superadmin() or hospital_id = public.auth_hospital_id());
 
 -- Plantillas
+drop policy if exists plantillas_select on public.plantillas;
 create policy plantillas_select on public.plantillas for select to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and (
     servicio_id is null or public.auth_rol() in ('administrador','calidad','readonly')
     or servicio_id = public.auth_servicio_id())));
+drop policy if exists plantillas_modify on public.plantillas;
 create policy plantillas_modify on public.plantillas for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and (
     public.es_admin_o_calidad()
@@ -1041,10 +1075,12 @@ create policy plantillas_modify on public.plantillas for all to authenticated
     public.es_admin_o_calidad()
     or (public.auth_rol() = 'supervisor' and servicio_id = public.auth_servicio_id()))));
 
+drop policy if exists plantilla_versiones_select on public.plantilla_versiones;
 create policy plantilla_versiones_select on public.plantilla_versiones for select to authenticated
   using (public.es_superadmin() or exists (
     select 1 from public.plantillas p
     where p.id = plantilla_versiones.plantilla_id and p.hospital_id = public.auth_hospital_id()));
+drop policy if exists plantilla_versiones_insert on public.plantilla_versiones;
 create policy plantilla_versiones_insert on public.plantilla_versiones for insert to authenticated
   with check (public.es_superadmin() or exists (
     select 1 from public.plantillas p
@@ -1052,8 +1088,10 @@ create policy plantilla_versiones_insert on public.plantilla_versiones for inser
       and (public.es_admin_o_calidad()
            or (public.auth_rol() = 'supervisor' and p.servicio_id = public.auth_servicio_id()))));
 
+drop policy if exists plantilla_secciones_select on public.plantilla_secciones;
 create policy plantilla_secciones_select on public.plantilla_secciones for select to authenticated
   using (exists (select 1 from public.plantillas p where p.id = plantilla_secciones.plantilla_id));
+drop policy if exists plantilla_secciones_modify on public.plantilla_secciones;
 create policy plantilla_secciones_modify on public.plantilla_secciones for all to authenticated
   using (exists (select 1 from public.plantillas p where p.id = plantilla_secciones.plantilla_id
     and (public.es_superadmin() or (p.hospital_id = public.auth_hospital_id() and (public.es_admin_o_calidad()
@@ -1062,8 +1100,10 @@ create policy plantilla_secciones_modify on public.plantilla_secciones for all t
     and (public.es_superadmin() or (p.hospital_id = public.auth_hospital_id() and (public.es_admin_o_calidad()
       or (public.auth_rol() = 'supervisor' and p.servicio_id = public.auth_servicio_id()))))));
 
+drop policy if exists plantilla_items_select on public.plantilla_items;
 create policy plantilla_items_select on public.plantilla_items for select to authenticated
   using (exists (select 1 from public.plantilla_secciones ps where ps.id = plantilla_items.seccion_id));
+drop policy if exists plantilla_items_modify on public.plantilla_items;
 create policy plantilla_items_modify on public.plantilla_items for all to authenticated
   using (exists (select 1 from public.plantilla_secciones ps
     join public.plantillas p on p.id = ps.plantilla_id
@@ -1076,21 +1116,25 @@ create policy plantilla_items_modify on public.plantilla_items for all to authen
       and (public.es_superadmin() or (p.hospital_id = public.auth_hospital_id() and (public.es_admin_o_calidad()
         or (public.auth_rol() = 'supervisor' and p.servicio_id = public.auth_servicio_id()))))));
 
+drop policy if exists plantilla_informes_all on public.plantilla_informes;
 create policy plantilla_informes_all on public.plantilla_informes for all to authenticated
   using (exists (select 1 from public.plantillas p where p.id = plantilla_informes.plantilla_id
     and (public.es_superadmin() or (p.hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()))))
   with check (exists (select 1 from public.plantillas p where p.id = plantilla_informes.plantilla_id
     and (public.es_superadmin() or (p.hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()))));
 
+drop policy if exists plantillas_informe_all on public.plantillas_informe;
 create policy plantillas_informe_all on public.plantillas_informe for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()))
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
 
 -- Carros
+drop policy if exists carros_select on public.carros;
 create policy carros_select on public.carros for select to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id()
     and deleted_at is null and (public.ve_todo_el_hospital()
     or (public.auth_rol() = 'supervisor' and (servicio_id = public.auth_servicio_id() or servicio_id is null)))));
+drop policy if exists carros_modify on public.carros;
 create policy carros_modify on public.carros for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and (
     public.es_admin_o_calidad()
@@ -1100,6 +1144,7 @@ create policy carros_modify on public.carros for all to authenticated
     or (public.auth_rol() = 'supervisor' and servicio_id = public.auth_servicio_id()))));
 
 -- Cajones / Materiales / Desfibriladores (heredan por carro)
+drop policy if exists cajones_all on public.cajones;
 create policy cajones_all on public.cajones for all to authenticated
   using (exists (select 1 from public.carros c where c.id = cajones.carro_id and (
     public.es_superadmin() or (c.hospital_id = public.auth_hospital_id() and c.deleted_at is null
@@ -1109,6 +1154,7 @@ create policy cajones_all on public.cajones for all to authenticated
     public.es_superadmin() or (c.hospital_id = public.auth_hospital_id() and (public.es_admin_o_calidad()
       or (public.auth_rol() = 'supervisor' and c.servicio_id = public.auth_servicio_id()))))));
 
+drop policy if exists materiales_all on public.materiales;
 create policy materiales_all on public.materiales for all to authenticated
   using (exists (select 1 from public.cajones caj
     join public.carros c on c.id = caj.carro_id
@@ -1122,6 +1168,7 @@ create policy materiales_all on public.materiales for all to authenticated
       public.es_superadmin() or (c.hospital_id = public.auth_hospital_id() and (public.es_admin_o_calidad()
         or (public.auth_rol() = 'supervisor' and c.servicio_id = public.auth_servicio_id()))))));
 
+drop policy if exists desfibriladores_all on public.desfibriladores;
 create policy desfibriladores_all on public.desfibriladores for all to authenticated
   using (exists (select 1 from public.carros c where c.id = desfibriladores.carro_id and (
     public.es_superadmin() or (c.hospital_id = public.auth_hospital_id()
@@ -1132,10 +1179,12 @@ create policy desfibriladores_all on public.desfibriladores for all to authentic
       or (public.auth_rol() = 'supervisor' and c.servicio_id = public.auth_servicio_id()))))));
 
 -- Equipos
+drop policy if exists equipos_select on public.equipos;
 create policy equipos_select on public.equipos for select to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and deleted_at is null
     and (public.ve_todo_el_hospital()
       or (public.auth_rol() = 'supervisor' and (servicio_id = public.auth_servicio_id() or servicio_id is null)))));
+drop policy if exists equipos_modify on public.equipos;
 create policy equipos_modify on public.equipos for all to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and (
     public.es_admin_o_calidad() or public.auth_rol() = 'tecnico'
@@ -1145,34 +1194,42 @@ create policy equipos_modify on public.equipos for all to authenticated
     or (public.auth_rol() = 'supervisor' and servicio_id = public.auth_servicio_id()))));
 
 -- historial_mantenimientos
+drop policy if exists historial_mant_select on public.historial_mantenimientos;
 create policy historial_mant_select on public.historial_mantenimientos for select to authenticated
   using (exists (select 1 from public.equipos e where e.id = historial_mantenimientos.equipo_id
     and (public.es_superadmin() or e.hospital_id = public.auth_hospital_id())));
+drop policy if exists historial_mant_insert on public.historial_mantenimientos;
 create policy historial_mant_insert on public.historial_mantenimientos for insert to authenticated
   with check (exists (select 1 from public.equipos e where e.id = historial_mantenimientos.equipo_id
     and (public.es_superadmin() or (e.hospital_id = public.auth_hospital_id() and (public.es_admin_o_calidad() or public.auth_rol() = 'tecnico')))));
+drop policy if exists historial_mant_update_super on public.historial_mantenimientos;
 create policy historial_mant_update_super on public.historial_mantenimientos for update to authenticated
   using (public.es_superadmin()) with check (public.es_superadmin());
 
 -- Inspecciones e items
+drop policy if exists inspecciones_select on public.inspecciones;
 create policy inspecciones_select on public.inspecciones for select to authenticated
   using (public.es_superadmin() or exists (select 1 from public.carros c
     where c.id = inspecciones.carro_id and c.hospital_id = public.auth_hospital_id()
       and (public.ve_todo_el_hospital()
         or (public.auth_rol() = 'supervisor' and (c.servicio_id = public.auth_servicio_id() or c.servicio_id is null)))));
+drop policy if exists inspecciones_insert on public.inspecciones;
 create policy inspecciones_insert on public.inspecciones for insert to authenticated
   with check (exists (select 1 from public.carros c where c.id = inspecciones.carro_id
     and c.hospital_id = public.auth_hospital_id()
     and (public.es_admin_o_calidad() or public.auth_rol() in ('auditor','supervisor','tecnico'))));
+drop policy if exists inspecciones_update on public.inspecciones;
 create policy inspecciones_update on public.inspecciones for update to authenticated
   using (exists (select 1 from public.carros c where c.id = inspecciones.carro_id
     and c.hospital_id = public.auth_hospital_id()
     and (public.es_admin_o_calidad() or auditor_id = auth.uid())))
   with check (exists (select 1 from public.carros c where c.id = inspecciones.carro_id
     and c.hospital_id = public.auth_hospital_id()));
+drop policy if exists inspecciones_delete_super on public.inspecciones;
 create policy inspecciones_delete_super on public.inspecciones for delete to authenticated
   using (public.es_superadmin());
 
+drop policy if exists items_inspeccion_all on public.items_inspeccion;
 create policy items_inspeccion_all on public.items_inspeccion for all to authenticated
   using (exists (select 1 from public.inspecciones i
     join public.carros c on c.id = i.carro_id
@@ -1182,60 +1239,79 @@ create policy items_inspeccion_all on public.items_inspeccion for all to authent
     where i.id = items_inspeccion.inspeccion_id and c.hospital_id = public.auth_hospital_id()));
 
 -- Alertas
+drop policy if exists alertas_select on public.alertas;
 create policy alertas_select on public.alertas for select to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and (
     public.ve_todo_el_hospital()
     or (public.auth_rol() = 'supervisor' and (servicio_id = public.auth_servicio_id() or servicio_id is null)))));
+drop policy if exists alertas_insert on public.alertas;
 create policy alertas_insert on public.alertas for insert to authenticated
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
+drop policy if exists alertas_update_resolver on public.alertas;
 create policy alertas_update_resolver on public.alertas for update to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and (
     public.es_admin_o_calidad()
     or (public.auth_rol() = 'supervisor' and servicio_id = public.auth_servicio_id()))))
   with check (public.es_superadmin() or hospital_id = public.auth_hospital_id());
 
+drop policy if exists alertas_email_super on public.alertas_email;
 create policy alertas_email_super on public.alertas_email for all to authenticated
   using (public.es_superadmin()) with check (public.es_superadmin());
 
 -- Informes
+drop policy if exists informes_select on public.informes;
 create policy informes_select on public.informes for select to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.ve_todo_el_hospital()));
+drop policy if exists informes_insert on public.informes;
 create policy informes_insert on public.informes for insert to authenticated
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id()
     and (public.es_admin_o_calidad() or public.auth_rol() = 'auditor')));
+drop policy if exists informes_delete_super on public.informes;
 create policy informes_delete_super on public.informes for delete to authenticated
   using (public.es_superadmin());
 
 -- Notificaciones
+drop policy if exists notificaciones_select on public.notificaciones;
 create policy notificaciones_select on public.notificaciones for select to authenticated
   using (usuario_id = auth.uid() or public.es_superadmin()
     or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
+drop policy if exists notificaciones_insert on public.notificaciones;
 create policy notificaciones_insert on public.notificaciones for insert to authenticated
   with check (public.es_superadmin()
     or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
+drop policy if exists notificaciones_update_propias on public.notificaciones;
 create policy notificaciones_update_propias on public.notificaciones for update to authenticated
   using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 
 -- Log de auditoría
+drop policy if exists log_auditoria_select on public.log_auditoria;
 create policy log_auditoria_select on public.log_auditoria for select to authenticated
   using (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and public.es_admin_o_calidad()));
+drop policy if exists log_auditoria_insert on public.log_auditoria;
 create policy log_auditoria_insert on public.log_auditoria for insert to authenticated
   with check (hospital_id is null or hospital_id = public.auth_hospital_id() or public.es_superadmin());
 
 -- Evidencias
+drop policy if exists evidencias_select on public.evidencias;
 create policy evidencias_select on public.evidencias for select to authenticated
   using (public.es_superadmin() or hospital_id = public.auth_hospital_id());
+drop policy if exists evidencias_insert on public.evidencias;
 create policy evidencias_insert on public.evidencias for insert to authenticated
   with check (public.es_superadmin() or (hospital_id = public.auth_hospital_id() and subido_por = auth.uid()));
+drop policy if exists evidencias_delete_super on public.evidencias;
 create policy evidencias_delete_super on public.evidencias for delete to authenticated
   using (public.es_superadmin());
 
 -- Solicitudes_registro
+drop policy if exists solicitudes_insert_public on public.solicitudes_registro;
 create policy solicitudes_insert_public on public.solicitudes_registro for insert to anon with check (true);
-create policy solicitudes_insert_auth   on public.solicitudes_registro for insert to authenticated with check (true);
-create policy solicitudes_admin_select  on public.solicitudes_registro for select to authenticated
+drop policy if exists solicitudes_insert_auth on public.solicitudes_registro;
+create policy solicitudes_insert_auth on public.solicitudes_registro for insert to authenticated with check (true);
+drop policy if exists solicitudes_admin_select on public.solicitudes_registro;
+create policy solicitudes_admin_select on public.solicitudes_registro for select to authenticated
   using (public.es_superadmin() or public.auth_rol() = 'administrador');
-create policy solicitudes_admin_update  on public.solicitudes_registro for update to authenticated
+drop policy if exists solicitudes_admin_update on public.solicitudes_registro;
+create policy solicitudes_admin_update on public.solicitudes_registro for update to authenticated
   using (public.es_superadmin() or public.auth_rol() = 'administrador')
   with check (public.es_superadmin() or public.auth_rol() = 'administrador');
 

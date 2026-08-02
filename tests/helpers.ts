@@ -3,14 +3,16 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 /**
- * Carga las variables del archivo .env.local en process.env si no están ya
- * presentes (vitest no las carga por defecto como Next.js).
+ * Carga variables de entorno en process.env (vitest no las carga por defecto
+ * como hace Next.js).
+ *
+ * Orden de prioridad: `.env.test` antes que `.env.local`. Así los tests
+ * apuntan al proyecto de desarrollo aunque .env.local tenga producción, que
+ * es lo normal porque es el archivo del que vive la app.
  */
-function loadEnvLocal() {
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
+function loadEnvFile(nombre: string) {
   try {
-    const path = join(process.cwd(), '.env.local')
-    const content = readFileSync(path, 'utf-8')
+    const content = readFileSync(join(process.cwd(), nombre), 'utf-8')
     for (const raw of content.split(/\r?\n/)) {
       const line = raw.trim()
       if (!line || line.startsWith('#')) continue
@@ -21,11 +23,14 @@ function loadEnvLocal() {
       if (!process.env[key]) process.env[key] = value
     }
   } catch {
-    // si .env.local no existe, dejamos que falle más tarde con un mensaje claro
+    // si el archivo no existe seguimos: fallará más tarde con un mensaje claro
   }
 }
 
-loadEnvLocal()
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  loadEnvFile('.env.test')
+  loadEnvFile('.env.local')
+}
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
