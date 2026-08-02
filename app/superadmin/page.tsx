@@ -352,6 +352,13 @@ export default function SuperAdminPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0, flexShrink: 0 }}>
           <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '9rem' }}>{perfil?.nombre}</button>
           <VersionApp tono="oscuro" />
+          {/* La pantalla de auditoría muestra TODOS los hospitales cuando entra
+              un superadmin, pero solo estaba enlazada desde el panel de
+              administrador de hospital: desde aquí no había forma de llegar. */}
+          <button onClick={() => router.push('/admin/auditoria')} title="Registro de auditoría"
+            style={{ fontSize: '0.72rem', color: '#9ca3af', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.6rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            🔍 Auditoría
+          </button>
           <button onClick={cerrarSesion} style={{ fontSize: '0.72rem', color: '#6b7280', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.75rem', cursor: 'pointer' }}>Salir</button>
         </div>
       </div>
