@@ -18,8 +18,8 @@
  * Limitación: guarda DATOS, no el esquema. El esquema vive en
  * supabase/migrations/. Los dos juntos permiten reconstruir el proyecto.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, statSync } from 'node:fs'
+import { join, basename } from 'node:path'
 import { randomBytes, scryptSync, createCipheriv } from 'node:crypto'
 
 const PAGE = 1000
@@ -159,4 +159,42 @@ if (iCifrar !== -1) {
   console.log(`\nCifrado en ${archivo}  (${mb} MB de datos)`)
   console.log('Este archivo sí puede salir del ordenador. Guarda la clave aparte:')
   console.log('sin ella el backup es irrecuperable, no hay forma de saltársela.')
+
+  // -------------------------------------------------------------------------
+  // Copia a una carpeta sincronizada (Google Drive, OneDrive, disco externo).
+  //
+  // Solo se copia el archivo CIFRADO, nunca la carpeta con los JSON en claro.
+  // Es la única razón por la que esta copia es aceptable: son datos personales
+  // de personal sanitario, y una carpeta sincronizada acaba replicada en la
+  // nube y en cualquier equipo con la misma cuenta.
+  // -------------------------------------------------------------------------
+  const destinoExterno = env.BACKUP_DESTINO?.trim()
+  if (destinoExterno) {
+    try {
+      if (!existsSync(destinoExterno)) mkdirSync(destinoExterno, { recursive: true })
+      const copia = join(destinoExterno, basename(archivo))
+      copyFileSync(archivo, copia)
+      const kb = (statSync(copia).size / 1024).toFixed(0)
+      console.log(`\nCopiado a ${copia}  (${kb} KB)`)
+      console.log('Si esa carpeta la sincroniza Drive u OneDrive, ya está fuera del ordenador.')
+    } catch (err) {
+      // No se aborta: el backup local ya existe y es lo importante. Pero se
+      // avisa fuerte, porque un fallo silencioso aquí deja la copia externa
+      // sin actualizar sin que nadie se entere.
+      console.error(`\n⚠️  NO se pudo copiar a ${destinoExterno}`)
+      console.error(`   ${err.message}`)
+      console.error('   El backup local sí se guardó. Copia el archivo a mano.')
+    }
+  } else {
+    console.log('\nPara copiarlo automáticamente fuera del ordenador, añade a .env.local:')
+    console.log('  BACKUP_DESTINO=<ruta de una carpeta sincronizada>')
+  }
+}
+
+// Aviso si se pide destino externo sin cifrar: no se copia nada en claro.
+if (iCifrar === -1 && env.BACKUP_DESTINO?.trim()) {
+  console.log('\n⚠️  Hay BACKUP_DESTINO configurado pero NO se ha cifrado, así que')
+  console.log('   no se copia nada fuera. Estos datos incluyen firmas del personal')
+  console.log('   sanitario y no deben salir del ordenador sin cifrar.')
+  console.log('   Usa:  node scripts/backup-datos.mjs --cifrar "<clave>"')
 }
