@@ -19,6 +19,8 @@ const PUBLIC_PATHS = [
   '/buscar',            // si quieres dejar buscar público; ajustable
   '/api',               // las route handlers manejan su propia auth
   '/monitoring',        // tunnel de Sentry
+  '/nueva-contrasena',  // destino de los enlaces de recuperación: quien llega
+                        // aún no tiene sesión iniciada, solo el token del enlace
 ]
 
 function isPublicPath(pathname: string): boolean {

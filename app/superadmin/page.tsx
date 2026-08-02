@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import VersionApp from '@/components/VersionApp'
+import BotonResetPassword from '@/components/BotonResetPassword'
 
 // =====================================================================
 // Tipos
@@ -701,6 +702,24 @@ export default function SuperAdminPage() {
                 </div>
               </div>
             </div>
+            {/* Solo al editar: en "nuevo" todavía no existe la cuenta. */}
+            {modalUsuario !== 'nuevo' && (
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#374151', marginBottom: '0.35rem' }}>
+                  Acceso
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.6rem', lineHeight: 1.5 }}>
+                  Genera un enlace para que elija una contraseña nueva. Tú no la verás:
+                  su firma en los controles sigue siendo prueba de que firmó él.
+                </div>
+                <BotonResetPassword
+                  usuarioId={modalUsuario.id}
+                  usuarioNombre={modalUsuario.nombre}
+                  estilo={S.btnSec}
+                />
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button onClick={modalUsuario === 'nuevo' ? crearUsuario : actualizarUsuario} disabled={guardando} style={S.btnPri}>
                 {guardando ? 'Guardando...' : modalUsuario === 'nuevo' ? 'Crear usuario' : 'Guardar cambios'}

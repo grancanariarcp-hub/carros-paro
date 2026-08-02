@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname, useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
+import BotonResetPassword from '@/components/BotonResetPassword'
 
 interface Perfil {
   id: string
@@ -224,6 +225,24 @@ export default function FichaUsuarioPage() {
             }`}>
             {usuario.activo ? 'Desactivar acceso al sistema' : 'Activar acceso al sistema'}
           </button>
+
+          {/* Restablecer contraseña. El botón se oculta cuando no procede, pero
+              quien decide de verdad es la Edge Function: un admin de hospital no
+              puede alcanzar a un superadmin. */}
+          {(perfilActual?.rol === 'superadmin' ||
+            ((perfilActual?.rol === 'administrador' || perfilActual?.rol === 'calidad') &&
+             usuario.rol !== 'superadmin')) && (
+            <div className="mt-2">
+              <BotonResetPassword
+                usuarioId={usuario.id}
+                usuarioNombre={usuario.nombre}
+                className="w-full py-2 text-xs font-semibold rounded-xl border border-gray-200 text-gray-700 bg-white active:bg-gray-50 transition-colors"
+              />
+              <p className="text-xs text-gray-400 mt-1.5 leading-snug">
+                Genera un enlace para que elija contraseña nueva. Tú no la verás.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Estadísticas de actividad */}

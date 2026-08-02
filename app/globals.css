@@ -302,6 +302,36 @@
   }
 
   /* ============================================================
+     ENLACE DE RECUPERACIÓN DE CONTRASEÑA
+     Se muestra en el sitio del botón, sin modal: el administrador
+     necesita verlo y copiarlo, no navegar a otra parte.
+  ============================================================ */
+  .reset-enlace {
+    @apply w-full p-3 rounded-xl border border-blue-200 bg-blue-50 flex flex-col gap-2;
+  }
+  .reset-enlace-titulo {
+    @apply text-xs font-bold text-blue-800;
+  }
+  .reset-enlace-ayuda {
+    @apply text-xs text-blue-700 leading-snug;
+  }
+  .reset-enlace-campo {
+    @apply w-full p-2 rounded-lg border border-blue-200 bg-white
+           text-[0.68rem] text-gray-600 font-mono resize-none
+           focus:outline-none focus:ring-2 focus:ring-blue-200;
+    /* El enlace es una cadena larguísima sin espacios: sin esto estira el
+       contenedor y desborda la pantalla en móvil. */
+    word-break: break-all;
+  }
+  .reset-enlace-acciones {
+    @apply flex gap-2 flex-wrap;
+  }
+  .reset-enlace-acciones .btn-primary,
+  .reset-enlace-acciones .btn-secondary {
+    @apply w-auto flex-1 py-2 text-xs;
+  }
+
+  /* ============================================================
      DISTINTIVO DE VERSIÓN
      Discreto a propósito: informa sin competir con el nombre del
      usuario, que es lo que se lee primero.
