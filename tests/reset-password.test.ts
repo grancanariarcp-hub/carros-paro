@@ -93,6 +93,40 @@ describe('resetear-password — escalada de privilegios', () => {
   }, 30_000)
 })
 
+describe('resetear-password — queda registrado', () => {
+  it('anota en la auditoría quién restableció a quién', async () => {
+    // Esta prueba nace de un fallo real: se escribía resultado 'ok', que viola
+    // el CHECK de log_auditoria, y como nadie miraba el error de ese insert la
+    // auditoría llevaba vacía desde el principio. Un restablecimiento sin
+    // rastro es exactamente lo que no puede pasar en un sistema con firmas.
+    const destino = fx.users.supervisorA1.id
+    const svc = serviceClient()
+
+    // Se cuenta antes y después en vez de borrar y esperar exactamente uno:
+    // otros tests del fichero restablecen al mismo usuario, y depender del
+    // orden de ejecución hace que la prueba falle por donde no toca.
+    const contar = async () => {
+      const { count } = await svc.from('log_auditoria')
+        .select('id', { count: 'exact', head: true })
+        .eq('registro_id', destino).eq('accion', 'reset_password')
+      return count ?? 0
+    }
+
+    const antes = await contar()
+    const r = await resetearComo(fx.users.adminA, destino)
+    expect(r.status).toBe(200)
+    expect(await contar(), 'el restablecimiento no dejó rastro en la auditoría').toBe(antes + 1)
+
+    const { data } = await svc.from('log_auditoria')
+      .select('usuario_id, detalle')
+      .eq('registro_id', destino).eq('accion', 'reset_password')
+      .order('fecha', { ascending: false }).limit(1)
+
+    expect(data![0].usuario_id).toBe(fx.users.adminA.id)
+    expect((data![0].detalle as any).destino_rol).toBe('supervisor')
+  }, 30_000)
+})
+
 describe('resetear-password — sin sesión', () => {
   it('rechaza la llamada sin cabecera Authorization', async () => {
     const res = await fetch(ENDPOINT, {

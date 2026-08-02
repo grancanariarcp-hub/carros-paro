@@ -154,13 +154,17 @@ Deno.serve(async (req) => {
     // 5) Registrar en auditoría. Nunca se guarda el enlace: es una credencial
     //    de un solo uso y no debe quedar en la base de datos.
     // ---------------------------------------------------------------------
-    await admin.from('log_auditoria').insert({
+    // `resultado` solo admite 'exito' | 'error' | 'bloqueado'. Se escribía 'ok',
+    // que viola el CHECK, y como no se miraba el error la auditoría llevaba
+    // fallando en silencio desde el primer día: cero registros pese a los
+    // restablecimientos reales. Por eso ahora se comprueba y se avisa.
+    const { error: errAudit } = await admin.from('log_auditoria').insert({
       usuario_id:      solicitante.id,
       accion:          'reset_password',
       tabla_afectada:  'perfiles',
       registro_id:     destino.id,
       hospital_id:     destino.hospital_id,
-      resultado:       'ok',
+      resultado:       'exito',
       user_agent:      req.headers.get('user-agent'),
       detalle: {
         solicitante_nombre: solicitante.nombre,
@@ -170,6 +174,13 @@ Deno.serve(async (req) => {
         destino_rol:        destino.rol,
       },
     })
+
+    if (errAudit) {
+      // No se aborta: el administrador ya tiene su enlace y bloquearlo ahora
+      // solo le dejaría sin poder desbloquear a nadie. Pero queda en el log de
+      // la función, que es donde se mira cuando algo no cuadra.
+      console.error('[resetear-password] no se pudo auditar:', errAudit.message)
+    }
 
     console.log(`[resetear-password] ${solicitante.rol} ${solicitante.id} → ${destino.id}`)
 
