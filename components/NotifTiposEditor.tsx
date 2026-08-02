@@ -80,7 +80,10 @@ export default function NotifTiposEditor({
         defecto recibes todas — desmarca solo las que quieras silenciar.
       </div>
 
-      <div className="overflow-hidden border border-gray-100 rounded-xl">
+      {/* overflow-x-auto en vez de hidden: con nombres de tipo largos la
+          columna Push se recortaba sin posibilidad de alcanzarla. Sin
+          min-width, porque con 3 columnas cabe de sobra en móvil. */}
+      <div className="overflow-x-auto border border-gray-100 rounded-xl">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500">
             <tr>
