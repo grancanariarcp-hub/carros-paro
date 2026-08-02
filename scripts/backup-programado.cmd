@@ -25,6 +25,13 @@ echo. >> "%LOG%"
 echo ======================================================== >> "%LOG%"
 echo Inicio: %date% %time% >> "%LOG%"
 
+REM  Mantener despiertos los proyectos Supabase. Va ANTES del backup: si algun
+REM  proyecto estuviera pausado, esto lo deja registrado con un mensaje claro
+REM  en vez de que el backup falle con un error de red sin explicacion.
+echo --- Comprobando proyectos Supabase --- >> "%LOG%"
+node scripts\mantener-despierto.mjs >> "%LOG%" 2>&1
+
+echo --- Backup --- >> "%LOG%"
 node scripts\backup-datos.mjs >> "%LOG%" 2>&1
 set CODIGO=%ERRORLEVEL%
 

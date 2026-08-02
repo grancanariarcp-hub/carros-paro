@@ -1,5 +1,10 @@
 // Configuración de Sentry para el navegador del usuario.
 // Se inicializa cuando carga la app en el cliente.
+//
+// Se llamaba sentry.client.config.ts. Next lo cargaba mediante el plugin de
+// webpack, un mecanismo que desaparece con Turbopack — el compilador al que
+// Next está migrando. Con este nombre lo carga el propio framework, así que
+// seguirá funcionando cuando ese cambio llegue.
 
 import * as Sentry from '@sentry/nextjs'
 
@@ -29,3 +34,13 @@ Sentry.init({
   // No envíes nada si no hay DSN (desarrollo local sin .env)
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
 })
+
+/**
+ * Instrumenta los cambios de página del enrutador.
+ *
+ * Sin esto, Sentry trata cada navegación interna como parte de la carga
+ * inicial, así que un error al abrir la ficha de un carro aparecía atribuido a
+ * la pantalla anterior. Con el hook, cada pantalla se mide y se atribuye por
+ * separado, que es lo que hace útil el rastro cuando algo falla.
+ */
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
