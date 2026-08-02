@@ -302,6 +302,23 @@
   }
 
   /* ============================================================
+     DISTINTIVO DE VERSIÓN
+     Discreto a propósito: informa sin competir con el nombre del
+     usuario, que es lo que se lee primero.
+  ============================================================ */
+  .version-badge {
+    @apply inline-flex items-center flex-shrink-0 whitespace-nowrap
+           px-1.5 py-0.5 rounded-md
+           text-[0.6rem] font-semibold tracking-wider
+           bg-gray-100 text-gray-400;
+    /* Cifras de ancho fijo: el distintivo no "baila" al cambiar de versión. */
+    font-variant-numeric: tabular-nums;
+  }
+  .version-badge-oscuro {
+    @apply bg-white/10 text-gray-400;
+  }
+
+  /* ============================================================
      TABLAS RESPONSIVE
      Una tabla ancha nunca debe ensanchar la página: se desplaza
      dentro de su propio contenedor. En móvil el usuario arrastra

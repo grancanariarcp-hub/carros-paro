@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import type { Carro, Perfil } from '@/lib/types'
+import VersionApp from '@/components/VersionApp'
 
 export default function AuditorPage() {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -162,6 +163,7 @@ export default function AuditorPage() {
             <div className="flex items-center gap-1.5 mt-0.5">
               <button onClick={() => router.push('/perfil')} className="font-semibold text-sm truncate hover:underline text-left">{perfil?.nombre}</button>
               <span className="badge bg-blue-100 text-blue-800 text-xs flex-shrink-0">{perfil?.rol}</span>
+              <VersionApp />
             </div>
           </div>
         </div>

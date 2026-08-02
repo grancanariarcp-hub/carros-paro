@@ -1,6 +1,6 @@
 {
   "name": "carros-paro",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3002",
@@ -18,7 +18,7 @@
     "date-fns": "^3.6.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
-    "next": "^14.2.35",
+    "next": "^15.5.22",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1"

@@ -4,9 +4,13 @@ import { cookies } from 'next/headers'
 /**
  * Cliente de Supabase para Server Components y Route Handlers (SSR).
  * Lee y escribe cookies para mantener la sesión sincronizada con el navegador.
+ *
+ * Es asíncrona desde Next 15: `cookies()` pasó a devolver una promesa. Hoy
+ * nadie la llama (la app resuelve los datos en cliente), pero se deja migrada
+ * para que funcione el día que se use.
  */
-export function createServerSupabaseClient() {
-  const cookieStore = cookies()
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies()
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

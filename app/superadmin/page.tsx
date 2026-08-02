@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import VersionApp from '@/components/VersionApp'
 
 // =====================================================================
 // Tipos
@@ -356,6 +357,7 @@ export default function SuperAdminPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0, flexShrink: 0 }}>
           <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '9rem' }}>{perfil?.nombre}</button>
+          <VersionApp tono="oscuro" />
           <button onClick={cerrarSesion} style={{ fontSize: '0.72rem', color: '#6b7280', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.75rem', cursor: 'pointer' }}>Salir</button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import type { Perfil, Carro } from '@/lib/types'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
+import VersionApp from '@/components/VersionApp'
 
 export default function SupervisorPage() {
   const [perfil, setPerfil] = useState<Perfil|null>(null)
@@ -117,6 +118,7 @@ export default function SupervisorPage() {
             <div className="flex items-center gap-1.5 mt-0.5">
               <button onClick={() => router.push('/perfil')} className="font-semibold text-sm truncate hover:underline text-left">{perfil?.nombre}</button>
               <span className="badge bg-teal-100 text-teal-800 text-xs flex-shrink-0">Supervisor</span>
+              <VersionApp />
             </div>
           </div>
         </div>

@@ -3,6 +3,12 @@ const { withSentryConfig } = require('@sentry/nextjs')
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {},
+  env: {
+    // Fuente única de la versión: package.json. Se congela en el build, así
+    // que lo que ve el usuario es exactamente la versión desplegada. Para
+    // subirla basta con cambiar "version" en package.json.
+    NEXT_PUBLIC_APP_VERSION: require('./package.json').version,
+  },
 }
 
 // Wrapper de Sentry: instrumenta el build, sube sourcemaps a Sentry

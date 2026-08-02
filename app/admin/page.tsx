@@ -7,6 +7,7 @@ import { estadoColor, formatFechaHora, formatFecha, rolLabel, diasHastaControl }
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
+import VersionApp from '@/components/VersionApp'
 import type { Carro, Perfil, Inspeccion } from '@/lib/types'
 
 export default function AdminPage() {
@@ -145,6 +146,7 @@ export default function AdminPage() {
               <span className={`badge text-xs flex-shrink-0 ${perfil?.rol === 'calidad' ? 'bg-teal-100 text-teal-800' : 'bg-purple-100 text-purple-800'}`}>
                 {perfil?.rol === 'calidad' ? 'Calidad' : 'Admin'}
               </span>
+              <VersionApp />
             </div>
           </div>
         </div>
