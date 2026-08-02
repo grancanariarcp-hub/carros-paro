@@ -69,8 +69,10 @@ function semaforo(stats: HospitalStats): 'verde' | 'amarillo' | 'rojo' {
 
 const S = {
   page:   { minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', sans-serif" } as React.CSSProperties,
-  topbar: { background: '#080c14', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 2rem', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50 } as React.CSSProperties,
-  body:   { maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' } as React.CSSProperties,
+  // clamp() da espaciado fluido en estilos inline, donde no caben media
+  // queries: se estrecha en móvil y crece hasta el máximo en PC.
+  topbar: { background: '#080c14', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 clamp(0.875rem, 4vw, 2rem)', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 50 } as React.CSSProperties,
+  body:   { maxWidth: '1200px', margin: '0 auto', padding: 'clamp(1rem, 4vw, 2rem) clamp(0.875rem, 4vw, 1.5rem)' } as React.CSSProperties,
   input:  { width: '100%', padding: '0.6rem 0.75rem', border: '1.5px solid #e5e7eb', borderRadius: '6px', fontSize: '0.8rem', fontFamily: "'Inter', sans-serif", color: '#111827', outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
   label:  { display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#374151', marginBottom: '0.3rem' } as React.CSSProperties,
   btnPri: { padding: '0.6rem 1.25rem', background: '#111827', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" } as React.CSSProperties,
@@ -346,12 +348,14 @@ export default function SuperAdminPage() {
     <div style={S.page}>
       {/* Topbar */}
       <div style={S.topbar}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', letterSpacing: '0.08em' }}>ÁSTOR</span>
-          <span style={{ fontSize: '0.6rem', color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500 }}>Superadmin · CRITIC SL</span>
+        {/* La barra mide 56px fijos: en vez de desbordar, lo prescindible
+            (subtítulo y nombre de usuario) se recorta con puntos suspensivos. */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', minWidth: 0 }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', letterSpacing: '0.08em', flexShrink: 0 }}>ÁSTOR</span>
+          <span style={{ fontSize: '0.6rem', color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Superadmin · CRITIC SL</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer' }}>{perfil?.nombre}</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0, flexShrink: 0 }}>
+          <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '9rem' }}>{perfil?.nombre}</button>
           <button onClick={cerrarSesion} style={{ fontSize: '0.72rem', color: '#6b7280', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.75rem', cursor: 'pointer' }}>Salir</button>
         </div>
       </div>
@@ -359,7 +363,7 @@ export default function SuperAdminPage() {
       <div style={S.body}>
 
         {/* Resumen global */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '0.75rem', marginBottom: '2rem' }}>
+        <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
           {[
             { label: 'Hospitales', value: globalStats.hospitales, color: '#111827' },
             { label: 'Activos', value: globalStats.activos, color: '#16a34a' },
@@ -377,7 +381,10 @@ export default function SuperAdminPage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', marginBottom: '1.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '4px', width: 'fit-content', gap: '2px' }}>
+        {/* Las 4 pestañas suman ~480px: en móvil desbordaban y arrastraban
+            la página entera en horizontal. Ahora se desplazan sobre sí
+            mismas y en PC siguen viéndose igual (maxWidth fit-content). */}
+        <div style={{ display: 'flex', marginBottom: '1.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '4px', width: 'fit-content', maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', gap: '2px' }}>
           {([
             ['hospitales', `Hospitales (${hospitalesStats.length})`],
             ['nuevo_hospital', '+ Nuevo hospital'],
@@ -387,6 +394,7 @@ export default function SuperAdminPage() {
             <button key={t} onClick={() => setTab(t as Tab)} style={{
               padding: '0.45rem 1rem', borderRadius: '5px', border: 'none', cursor: 'pointer',
               fontSize: '0.78rem', fontWeight: 600, fontFamily: "'Inter', sans-serif",
+              whiteSpace: 'nowrap', flexShrink: 0,
               background: tab === t ? '#111827' : 'transparent',
               color: tab === t ? 'white' : '#6b7280',
             }}>{l}</button>
@@ -410,22 +418,27 @@ export default function SuperAdminPage() {
               return (
                 <div key={h.id} style={{ background: 'white', border: `1px solid #e5e7eb`, borderRadius: '12px', overflow: 'hidden' }}>
                   {/* Cabecera del hospital */}
-                  <div style={{ padding: '1.25rem 1.5rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'center', borderLeft: `4px solid ${colorBorde}`, background: isOpen ? '#fafafa' : 'white', cursor: 'pointer' }}
+                  <div style={{ padding: 'clamp(0.875rem, 3vw, 1.25rem) clamp(0.875rem, 3vw, 1.5rem)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '1rem', alignItems: 'center', borderLeft: `4px solid ${colorBorde}`, background: isOpen ? '#fafafa' : 'white', cursor: 'pointer' }}
                     onClick={() => setHospitalDetalle(isOpen ? null : h.id)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {/* minWidth:0 permite que este bloque encoja por debajo de
+                        su contenido; sin él, el nombre del hospital empuja la
+                        tarjeta y desborda la pantalla en móvil. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0 }}>
                       {/* Semáforo */}
                       <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: colorBorde, flexShrink: 0, boxShadow: `0 0 8px ${colorBorde}60` }}></div>
                       {h.logo_url
                         ? <img src={h.logo_url} alt={h.nombre} style={{ height: '28px', objectFit: 'contain', flexShrink: 0 }} />
                         : <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: h.color_primario, flexShrink: 0 }}></div>}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '3px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '3px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827' }}>{h.nombre}</span>
                           <span style={{ fontSize: '0.58rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '3px', background: planColor[h.plan] + '15', color: planColor[h.plan] }}>{planLabel[h.plan]}</span>
                           <span style={{ fontSize: '0.58rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '3px', background: h.activo ? '#dcfce7' : '#fee2e2', color: h.activo ? '#16a34a' : '#dc2626' }}>{h.activo ? 'Activo' : 'Inactivo'}</span>
                         </div>
                         {/* Mini métricas */}
-                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.72rem', color: '#6b7280' }}>
+                        {/* Seis métricas en una línea suman ~600px: sin
+                            flexWrap desbordaban la pantalla entera. */}
+                        <div style={{ display: 'flex', gap: '0.35rem 1rem', fontSize: '0.72rem', color: '#6b7280', flexWrap: 'wrap' }}>
                           <span>🟢 {h.carrosOperativos}/{h.totalCarros} carros</span>
                           {h.carrosNoOperativos > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>🔴 {h.carrosNoOperativos} no op.</span>}
                           {h.totalAlertas > 0 && <span style={{ color: '#d97706', fontWeight: 700 }}>⚠️ {h.totalAlertas} alertas</span>}
@@ -445,7 +458,7 @@ export default function SuperAdminPage() {
                     <div style={{ borderTop: '1px solid #e5e7eb', padding: '1.5rem' }}>
 
                       {/* KPIs detalle */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                      <div className="metrics-grid" style={{ marginBottom: '1.5rem' }}>
                         {[
                           { label: 'Operativos', value: h.carrosOperativos, color: '#16a34a', bg: '#f0fdf4' },
                           { label: 'Condicionales', value: h.carrosCondicionales, color: '#d97706', bg: '#fffbeb' },
@@ -485,15 +498,15 @@ export default function SuperAdminPage() {
                       {/* Editor inline */}
                       {editandoHospital?.id === h.id && (
                         <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                            {editandoHospital.logo_url && <img src={editandoHospital.logo_url} alt="logo" style={{ height: '36px', objectFit: 'contain' }} />}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                            {editandoHospital.logo_url && <img src={editandoHospital.logo_url} alt="logo" style={{ height: '36px', objectFit: 'contain', maxWidth: '100%' }} />}
                             <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                               onChange={e => { const f = e.target.files?.[0]; if (f) subirLogo(f, editandoHospital.id) }} />
                             <button onClick={() => fileInputRef.current?.click()} disabled={subiendoLogo} style={S.btnPri}>
                               {subiendoLogo ? 'Subiendo...' : editandoHospital.logo_url ? 'Cambiar logo' : 'Subir logo'}
                             </button>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                          <div className="form-grid" style={{ marginBottom: '1rem' }}>
                             {[['Nombre', 'nombre', 'text'], ['Email admin', 'email_admin', 'email'], ['Teléfono', 'telefono', 'tel'], ['Color primario', 'color_primario', 'color']].map(([l, f, t]) => (
                               <div key={f}>
                                 <label style={S.label}>{l}</label>
@@ -512,7 +525,7 @@ export default function SuperAdminPage() {
                               <div><label style={S.label}>Máx. usuarios</label><input type="number" value={editandoHospital.max_usuarios} onChange={e => setEditandoHospital({ ...editandoHospital, max_usuarios: +e.target.value })} style={S.input} /></div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button onClick={guardarEdicionHospital} disabled={guardando} style={S.btnPri}>{guardando ? 'Guardando...' : 'Guardar'}</button>
                             <button onClick={() => setEditandoHospital(null)} style={S.btnSec}>Cancelar</button>
                           </div>
@@ -530,7 +543,7 @@ export default function SuperAdminPage() {
         {tab === 'nuevo_hospital' && (
           <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem', maxWidth: '680px' }}>
             <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', marginBottom: '1.5rem' }}>Nuevo hospital</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-grid">
               {[['Nombre *', 'nombre', 'text', 'Hospital Universitario...'], ['Slug URL *', 'slug', 'text', 'hospital-nombre'], ['Email administrador *', 'email_admin', 'email', 'admin@hospital.es'], ['Teléfono', 'telefono', 'tel', '+34 900 000 000'], ['País', 'pais', 'text', 'España'], ['Color primario', 'color_primario', 'color', '']].map(([l, f, t, p]) => (
                 <div key={f}>
                   <label style={S.label}>{l}</label>
@@ -547,7 +560,7 @@ export default function SuperAdminPage() {
                 </select>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button onClick={crearHospital} disabled={guardando} style={S.btnPri}>{guardando ? 'Creando...' : 'Crear hospital'}</button>
               <button onClick={() => setTab('hospitales')} style={S.btnSec}>Cancelar</button>
             </div>
@@ -558,8 +571,10 @@ export default function SuperAdminPage() {
         {tab === 'usuarios' && (
           <>
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Buscar por nombre o email..." value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} style={{ ...S.input, width: '260px' }} />
-              <select value={filtroHospital} onChange={e => setFiltroHospital(e.target.value)} style={{ ...S.input, width: '220px', background: 'white' }}>
+              {/* Anchos fluidos (flex-basis) en vez de fijos: en móvil se
+                  estiran al ancho disponible y en PC mantienen su tamaño. */}
+              <input placeholder="Buscar por nombre o email..." value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} style={{ ...S.input, flex: '1 1 15rem', minWidth: 0 }} />
+              <select value={filtroHospital} onChange={e => setFiltroHospital(e.target.value)} style={{ ...S.input, flex: '1 1 13rem', minWidth: 0, background: 'white' }}>
                 <option value="todos">Todos los hospitales</option>
                 {hospitalesStats.map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
               </select>
@@ -568,8 +583,11 @@ export default function SuperAdminPage() {
               </button>
               <span style={{ fontSize: '0.78rem', color: '#9ca3af' }}>{usuariosFiltrados.length} usuarios</span>
             </div>
-            <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            {/* overflowX en lugar de hidden: con 6 columnas, en móvil se
+                recortaban "Estado" y "Acciones" y los botones Editar /
+                Desactivar quedaban inalcanzables. */}
+            <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain' }}>
+              <table style={{ width: '100%', minWidth: '46rem', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f3f4f6', background: '#fafafa' }}>
                     {['Nombre', 'Email', 'Hospital', 'Rol', 'Estado', 'Acciones'].map(h => (
@@ -623,8 +641,8 @@ export default function SuperAdminPage() {
             )}
             {solicitudes.map(s => (
               <div key={s.id} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '1.25rem 1.5rem', borderLeft: '4px solid #d97706' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, color: '#111827', marginBottom: '4px' }}>{s.nombre}</div>
                     <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>{s.email}</div>
                     <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>Centro: <strong>{s.hospital_nombre}</strong></div>
@@ -681,7 +699,7 @@ export default function SuperAdminPage() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button onClick={modalUsuario === 'nuevo' ? crearUsuario : actualizarUsuario} disabled={guardando} style={S.btnPri}>
                 {guardando ? 'Guardando...' : modalUsuario === 'nuevo' ? 'Crear usuario' : 'Guardar cambios'}
               </button>

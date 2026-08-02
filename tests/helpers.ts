@@ -3,14 +3,16 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 
 /**
- * Carga las variables del archivo .env.local en process.env si no están ya
- * presentes (vitest no las carga por defecto como Next.js).
+ * Carga variables de entorno en process.env (vitest no las carga por defecto
+ * como hace Next.js).
+ *
+ * Orden de prioridad: `.env.test` antes que `.env.local`. Así los tests
+ * apuntan al proyecto de desarrollo aunque .env.local tenga producción, que
+ * es lo normal porque es el archivo del que vive la app.
  */
-function loadEnvLocal() {
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
+function loadEnvFile(nombre: string) {
   try {
-    const path = join(process.cwd(), '.env.local')
-    const content = readFileSync(path, 'utf-8')
+    const content = readFileSync(join(process.cwd(), nombre), 'utf-8')
     for (const raw of content.split(/\r?\n/)) {
       const line = raw.trim()
       if (!line || line.startsWith('#')) continue
@@ -21,11 +23,14 @@ function loadEnvLocal() {
       if (!process.env[key]) process.env[key] = value
     }
   } catch {
-    // si .env.local no existe, dejamos que falle más tarde con un mensaje claro
+    // si el archivo no existe seguimos: fallará más tarde con un mensaje claro
   }
 }
 
-loadEnvLocal()
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  loadEnvFile('.env.test')
+  loadEnvFile('.env.local')
+}
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -34,7 +39,47 @@ export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error(
     'Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY. ' +
-    'Asegúrate de tener .env.local configurado apuntando a astor-dev.'
+    'Asegúrate de tener .env.local configurado apuntando a un entorno de desarrollo.'
+  )
+}
+
+/**
+ * SEGURO ANTI-PRODUCCIÓN
+ *
+ * Esta suite NO es de solo lectura: `setupFixture` crea hospitales, usuarios
+ * en auth.users, servicios y carros, y los borra al terminar. Si el proceso
+ * falla dentro de `beforeAll`, el teardown no llega a ejecutarse y quedan
+ * filas huérfanas.
+ *
+ * Como los tests leen la URL de .env.local — el mismo archivo que usa la app
+ * para funcionar — basta con tener configurada la producción para que un
+ * `npm test` escriba en la base de datos real del hospital. Ocurrió el
+ * 2026-08-02: quedó un "Hospital Test B" huérfano en producción.
+ *
+ * De ahí este corte. Para ejecutar los tests, apunta .env.local a un proyecto
+ * de desarrollo o a Supabase local (`npx supabase start`).
+ */
+const REF_PRODUCCION = 'agpawdoibqdptgdkcktv'
+
+const refActual = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname.split('.')[0]
+  } catch {
+    return ''
+  }
+})()
+
+if (refActual === REF_PRODUCCION && process.env.PERMITIR_TESTS_EN_PRODUCCION !== 'si') {
+  throw new Error(
+    '\n\n' +
+    '  ⛔ TESTS ABORTADOS: .env.local apunta a PRODUCCIÓN\n\n' +
+    `     proyecto detectado : ${refActual}\n` +
+    `     URL                : ${SUPABASE_URL}\n\n` +
+    '     Esta suite CREA Y BORRA hospitales, usuarios y carros. Ejecutarla\n' +
+    '     contra producción corrompe los datos reales del hospital.\n\n' +
+    '     Apunta .env.local a un proyecto de desarrollo, o levanta Supabase\n' +
+    '     en local con `npx supabase start`.\n\n' +
+    '     Si de verdad sabes lo que haces:  PERMITIR_TESTS_EN_PRODUCCION=si npm test\n'
   )
 }
 

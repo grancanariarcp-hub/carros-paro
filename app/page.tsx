@@ -71,7 +71,7 @@ export default function LoginPage() {
       }
 
       // Llamar a la Edge Function que autentica por código de empleado
-      const res = await fetch('https://agpawdoibqdptgdkcktv.supabase.co/functions/v1/login-por-codigo', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/login-por-codigo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codigo: codigoLimpio }),

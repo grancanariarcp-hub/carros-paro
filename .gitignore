@@ -34,12 +34,16 @@ yarn-error.log*
 .env*.local
 .env.production
 .env.development
+.env.test
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
+
+# Copias de seguridad (datos reales: firmas, logos, dumps) — NUNCA commitear
+backups/
 
 # Supabase CLI
 supabase/.temp/

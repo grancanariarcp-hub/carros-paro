@@ -7,6 +7,20 @@
     @apply text-gray-900 antialiased;
     font-family: system-ui, -apple-system, sans-serif;
     background: #d0d8e8;
+    /* Emails, URLs y códigos de barras largos son cadenas sin espacios:
+       sin esto ensanchan su contenedor y con él la página entera. */
+    overflow-wrap: break-word;
+  }
+
+  /* Guardia anti-desbordamiento. Nada de esto debe poder ensanchar la
+     página en un móvil, ni aunque una página nueva se olvide de acotarlo.
+     No usamos `overflow-x: hidden` en body a propósito: rompería los
+     elementos `position: sticky` (topbar, cabeceras de tabla). */
+  img, video, canvas, iframe, svg, table {
+    max-width: 100%;
+  }
+  img, video {
+    height: auto;
   }
 }
 
@@ -272,5 +286,59 @@
   .stats-grid {
     @apply grid grid-cols-3 gap-2
            md:gap-3;
+  }
+  /* Rejilla de métricas (KPIs). auto-fit reparte las columnas que quepan:
+     2 en un móvil de 320px, 7 en un monitor. Sin breakpoints y sin que
+     haya que tocarla al añadir o quitar métricas. */
+  .metrics-grid {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  }
+  /* Rejilla de formulario: una columna en móvil, dos desde tablet.
+     A dos columnas en un teléfono los campos quedan inservibles. */
+  .form-grid {
+    @apply grid grid-cols-1 gap-4
+           md:grid-cols-2;
+  }
+
+  /* ============================================================
+     TABLAS RESPONSIVE
+     Una tabla ancha nunca debe ensanchar la página: se desplaza
+     dentro de su propio contenedor. En móvil el usuario arrastra
+     la tabla; en tablet y PC cabe entera y el scroll no aparece.
+     Envolver siempre así:
+       <div className="table-wrap"><table className="table-base">
+  ============================================================ */
+  .table-wrap {
+    @apply w-full overflow-x-auto rounded-xl border border-gray-200 bg-white;
+    -webkit-overflow-scrolling: touch;   /* inercia en iOS */
+    overscroll-behavior-x: contain;      /* no arrastra la página detrás */
+  }
+  .table-base {
+    @apply w-full border-collapse text-xs
+           md:text-sm;
+    /* Por debajo de esto las columnas se aplastan y el texto se parte:
+       mejor desplazar que comprimir. */
+    min-width: 34rem;
+  }
+  .table-base thead th {
+    @apply bg-gray-50 text-left font-semibold text-gray-500 whitespace-nowrap
+           px-3 py-2 border-b border-gray-200
+           md:px-4;
+  }
+  .table-base tbody td {
+    @apply px-3 py-2 border-b border-gray-100 align-middle
+           md:px-4;
+  }
+  .table-base tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  /* Columna que puede crecer sin límite (nombres, descripciones). */
+  .table-base .col-flexible {
+    @apply min-w-[10rem];
+  }
+  /* Acciones al final de la fila: nunca se parten. */
+  .table-base .col-acciones {
+    @apply whitespace-nowrap text-right;
   }
 }

@@ -5,8 +5,12 @@ import { Toaster } from 'react-hot-toast'
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Se permite el zoom a propósito. Bloquearlo (maximumScale:1 +
+  // userScalable:false) impedía ampliar tablas densas o textos pequeños,
+  // y en una app clínica que se usa a pie de carro eso estorba de verdad.
+  // Además incumple el criterio WCAG 1.4.4 (redimensionar texto).
+  maximumScale: 5,
+  userScalable: true,
   themeColor: '#1d4ed8',
 }
 
