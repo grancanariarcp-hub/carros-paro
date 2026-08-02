@@ -680,12 +680,21 @@ function ModalAgregarEquipo({
         descripcion: `Equipo reasignado a carro ${carroNombre}`, resultado: 'ok',
       })
       if (eq.indispensable && (eq.carro_id || eq.servicio_id)) {
-        await supabase.rpc('crear_alerta_con_notificaciones', {
+        // Se comprueba el error: sin esto la llamada fallaba en silencio por
+        // la sobrecarga duplicada de la función (ver migración
+        // 20260803001000) y el mensaje decía "Alerta enviada" igualmente.
+        const { error: alertaError } = await supabase.rpc('crear_alerta_con_notificaciones', {
           p_hospital_id: hospitalId, p_tipo: 'equipo_indispensable_movido',
           p_severidad: 'alta', p_titulo: `Equipo indispensable movido: ${eq.nombre}`,
           p_mensaje: `El equipo "${eq.nombre}"${eq.numero_censo ? ` (censo ${eq.numero_censo})` : ''} marcado como INDISPENSABLE ha sido movido a ${carroNombre}.`,
           p_carro_id: eq.carro_id, p_servicio_id: eq.servicio_id,
         })
+        if (alertaError) {
+          console.error('[materiales] no se pudo crear la alerta:', alertaError.message)
+          toast.error('Equipo reasignado, pero falló el aviso. Comunícalo al responsable.')
+          onCreado()
+          return
+        }
       }
       toast.success(eq.indispensable ? '✓ Reasignado. Alerta enviada.' : '✓ Equipo reasignado')
       onCreado()
