@@ -139,13 +139,28 @@ ${datos.length === 0 ? `
 ` : `
 <table>
   <thead><tr>
-    <th>Fecha y hora</th><th>Carro</th><th>Servicio</th><th>Tipo</th><th>Resultado</th><th>Auditor</th>
+    <th>Fecha y hora</th><th>Carro</th><th>Servicio</th><th>Tipo</th><th>Resultado</th><th>Auditor</th><th>Firma</th>
   </tr></thead>
   <tbody>
     ${datos.map(ins => {
       const r = ins.resultado
       const badge = r === 'operativo' ? 'badge-op' : r === 'condicional' ? 'badge-cond' : 'badge-nop'
       const label = r === 'operativo' ? 'Operativo' : r === 'condicional' ? 'Condicional' : 'No operativo'
+
+      // Estado de la firma. Que una inspección haya sido enmendada tiene que
+      // constar en el documento impreso: es el que se le enseña a un auditor
+      // externo, y verlo solo dentro de la app no sirve de nada allí.
+      const i = ins as any
+      const firma = !i.firmado_en
+        ? '<span style="color:#9ca3af">Sin firmar</span>'
+        : i.modificado_en
+          ? `Firmada ${new Date(i.firmado_en).toLocaleDateString('es-ES')}`
+            + `<br><span style="color:#b45309;font-weight:600">Modificada `
+            + `${new Date(i.modificado_en).toLocaleDateString('es-ES')}`
+            + (i.veces_reabierta > 1 ? ` (${i.veces_reabierta}×)` : '')
+            + '</span>'
+          : `Firmada ${new Date(i.firmado_en).toLocaleDateString('es-ES')}`
+
       return `<tr>
         <td>${new Date(ins.fecha).toLocaleString('es-ES')}</td>
         <td><strong>${ins.carros?.codigo}</strong></td>
@@ -153,6 +168,7 @@ ${datos.length === 0 ? `
         <td>${ins.tipo?.replace('_', ' ')}</td>
         <td><span class="${badge}">${label}</span></td>
         <td>${ins.perfiles?.nombre || '—'}</td>
+        <td style="font-size:11px">${firma}</td>
       </tr>`
     }).join('')}
   </tbody>
