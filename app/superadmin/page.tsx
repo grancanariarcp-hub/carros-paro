@@ -348,12 +348,14 @@ export default function SuperAdminPage() {
     <div style={S.page}>
       {/* Topbar */}
       <div style={S.topbar}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', letterSpacing: '0.08em' }}>ÁSTOR</span>
-          <span style={{ fontSize: '0.6rem', color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500 }}>Superadmin · CRITIC SL</span>
+        {/* La barra mide 56px fijos: en vez de desbordar, lo prescindible
+            (subtítulo y nombre de usuario) se recorta con puntos suspensivos. */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', minWidth: 0 }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', letterSpacing: '0.08em', flexShrink: 0 }}>ÁSTOR</span>
+          <span style={{ fontSize: '0.6rem', color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Superadmin · CRITIC SL</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer' }}>{perfil?.nombre}</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0, flexShrink: 0 }}>
+          <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '9rem' }}>{perfil?.nombre}</button>
           <button onClick={cerrarSesion} style={{ fontSize: '0.72rem', color: '#6b7280', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.75rem', cursor: 'pointer' }}>Salir</button>
         </div>
       </div>
@@ -416,22 +418,27 @@ export default function SuperAdminPage() {
               return (
                 <div key={h.id} style={{ background: 'white', border: `1px solid #e5e7eb`, borderRadius: '12px', overflow: 'hidden' }}>
                   {/* Cabecera del hospital */}
-                  <div style={{ padding: '1.25rem 1.5rem', display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'center', borderLeft: `4px solid ${colorBorde}`, background: isOpen ? '#fafafa' : 'white', cursor: 'pointer' }}
+                  <div style={{ padding: 'clamp(0.875rem, 3vw, 1.25rem) clamp(0.875rem, 3vw, 1.5rem)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '1rem', alignItems: 'center', borderLeft: `4px solid ${colorBorde}`, background: isOpen ? '#fafafa' : 'white', cursor: 'pointer' }}
                     onClick={() => setHospitalDetalle(isOpen ? null : h.id)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {/* minWidth:0 permite que este bloque encoja por debajo de
+                        su contenido; sin él, el nombre del hospital empuja la
+                        tarjeta y desborda la pantalla en móvil. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0 }}>
                       {/* Semáforo */}
                       <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: colorBorde, flexShrink: 0, boxShadow: `0 0 8px ${colorBorde}60` }}></div>
                       {h.logo_url
                         ? <img src={h.logo_url} alt={h.nombre} style={{ height: '28px', objectFit: 'contain', flexShrink: 0 }} />
                         : <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: h.color_primario, flexShrink: 0 }}></div>}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '3px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '3px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827' }}>{h.nombre}</span>
                           <span style={{ fontSize: '0.58rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '3px', background: planColor[h.plan] + '15', color: planColor[h.plan] }}>{planLabel[h.plan]}</span>
                           <span style={{ fontSize: '0.58rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '3px', background: h.activo ? '#dcfce7' : '#fee2e2', color: h.activo ? '#16a34a' : '#dc2626' }}>{h.activo ? 'Activo' : 'Inactivo'}</span>
                         </div>
                         {/* Mini métricas */}
-                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.72rem', color: '#6b7280' }}>
+                        {/* Seis métricas en una línea suman ~600px: sin
+                            flexWrap desbordaban la pantalla entera. */}
+                        <div style={{ display: 'flex', gap: '0.35rem 1rem', fontSize: '0.72rem', color: '#6b7280', flexWrap: 'wrap' }}>
                           <span>🟢 {h.carrosOperativos}/{h.totalCarros} carros</span>
                           {h.carrosNoOperativos > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>🔴 {h.carrosNoOperativos} no op.</span>}
                           {h.totalAlertas > 0 && <span style={{ color: '#d97706', fontWeight: 700 }}>⚠️ {h.totalAlertas} alertas</span>}
@@ -491,8 +498,8 @@ export default function SuperAdminPage() {
                       {/* Editor inline */}
                       {editandoHospital?.id === h.id && (
                         <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                            {editandoHospital.logo_url && <img src={editandoHospital.logo_url} alt="logo" style={{ height: '36px', objectFit: 'contain' }} />}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                            {editandoHospital.logo_url && <img src={editandoHospital.logo_url} alt="logo" style={{ height: '36px', objectFit: 'contain', maxWidth: '100%' }} />}
                             <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                               onChange={e => { const f = e.target.files?.[0]; if (f) subirLogo(f, editandoHospital.id) }} />
                             <button onClick={() => fileInputRef.current?.click()} disabled={subiendoLogo} style={S.btnPri}>
@@ -518,7 +525,7 @@ export default function SuperAdminPage() {
                               <div><label style={S.label}>Máx. usuarios</label><input type="number" value={editandoHospital.max_usuarios} onChange={e => setEditandoHospital({ ...editandoHospital, max_usuarios: +e.target.value })} style={S.input} /></div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button onClick={guardarEdicionHospital} disabled={guardando} style={S.btnPri}>{guardando ? 'Guardando...' : 'Guardar'}</button>
                             <button onClick={() => setEditandoHospital(null)} style={S.btnSec}>Cancelar</button>
                           </div>
@@ -553,7 +560,7 @@ export default function SuperAdminPage() {
                 </select>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button onClick={crearHospital} disabled={guardando} style={S.btnPri}>{guardando ? 'Creando...' : 'Crear hospital'}</button>
               <button onClick={() => setTab('hospitales')} style={S.btnSec}>Cancelar</button>
             </div>
@@ -634,8 +641,8 @@ export default function SuperAdminPage() {
             )}
             {solicitudes.map(s => (
               <div key={s.id} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '1.25rem 1.5rem', borderLeft: '4px solid #d97706' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, color: '#111827', marginBottom: '4px' }}>{s.nombre}</div>
                     <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>{s.email}</div>
                     <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>Centro: <strong>{s.hospital_nombre}</strong></div>
@@ -692,7 +699,7 @@ export default function SuperAdminPage() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
               <button onClick={modalUsuario === 'nuevo' ? crearUsuario : actualizarUsuario} disabled={guardando} style={S.btnPri}>
                 {guardando ? 'Guardando...' : modalUsuario === 'nuevo' ? 'Crear usuario' : 'Guardar cambios'}
               </button>
