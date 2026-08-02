@@ -3,6 +3,7 @@
 // Cron: día 1 de cada mes a las 8:00 UTC
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { rechazarSiNoEsInterna } from '../_shared/auth.ts'
 
 const SUPABASE_URL   = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -16,7 +17,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 // =====================================================================
 // Handler
 // =====================================================================
-Deno.serve(async () => {
+// No recibía `req` en absoluto, así que no había forma de comprobar quién
+// llamaba. Y no lleva parámetros: bastaba con hacer POST a la URL para
+// disparar el envío de informes por correo a todos los hospitales activos.
+Deno.serve(async (req) => {
+  const noAutorizado = rechazarSiNoEsInterna(req)
+  if (noAutorizado) return noAutorizado
+
   try {
     const ahora   = new Date()
     const inicio  = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1).toISOString()
