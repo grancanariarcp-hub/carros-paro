@@ -34,7 +34,47 @@ export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error(
     'Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY. ' +
-    'Asegúrate de tener .env.local configurado apuntando a astor-dev.'
+    'Asegúrate de tener .env.local configurado apuntando a un entorno de desarrollo.'
+  )
+}
+
+/**
+ * SEGURO ANTI-PRODUCCIÓN
+ *
+ * Esta suite NO es de solo lectura: `setupFixture` crea hospitales, usuarios
+ * en auth.users, servicios y carros, y los borra al terminar. Si el proceso
+ * falla dentro de `beforeAll`, el teardown no llega a ejecutarse y quedan
+ * filas huérfanas.
+ *
+ * Como los tests leen la URL de .env.local — el mismo archivo que usa la app
+ * para funcionar — basta con tener configurada la producción para que un
+ * `npm test` escriba en la base de datos real del hospital. Ocurrió el
+ * 2026-08-02: quedó un "Hospital Test B" huérfano en producción.
+ *
+ * De ahí este corte. Para ejecutar los tests, apunta .env.local a un proyecto
+ * de desarrollo o a Supabase local (`npx supabase start`).
+ */
+const REF_PRODUCCION = 'agpawdoibqdptgdkcktv'
+
+const refActual = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname.split('.')[0]
+  } catch {
+    return ''
+  }
+})()
+
+if (refActual === REF_PRODUCCION && process.env.PERMITIR_TESTS_EN_PRODUCCION !== 'si') {
+  throw new Error(
+    '\n\n' +
+    '  ⛔ TESTS ABORTADOS: .env.local apunta a PRODUCCIÓN\n\n' +
+    `     proyecto detectado : ${refActual}\n` +
+    `     URL                : ${SUPABASE_URL}\n\n` +
+    '     Esta suite CREA Y BORRA hospitales, usuarios y carros. Ejecutarla\n' +
+    '     contra producción corrompe los datos reales del hospital.\n\n' +
+    '     Apunta .env.local a un proyecto de desarrollo, o levanta Supabase\n' +
+    '     en local con `npx supabase start`.\n\n' +
+    '     Si de verdad sabes lo que haces:  PERMITIR_TESTS_EN_PRODUCCION=si npm test\n'
   )
 }
 
