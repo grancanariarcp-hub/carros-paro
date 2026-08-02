@@ -5,6 +5,7 @@
 // Conectamos a postgres directamente (no vía PostgREST) — ver send-push para
 // la explicación. Direct postgres usa role `postgres` que bypassa RLS.
 import postgres from 'npm:postgres@3.4.4'
+import { rechazarSiNoEsInterna } from '../_shared/auth.ts'
 
 const DATABASE_URL    = Deno.env.get('SUPABASE_DB_URL')!
 const RESEND_API_KEY  = Deno.env.get('RESEND_API_KEY')!
@@ -15,6 +16,10 @@ const APP_URL         = Deno.env.get('APP_URL')    || 'https://app.astormanager.
 const sql = postgres(DATABASE_URL, { prepare: false })
 
 Deno.serve(async (req) => {
+  // Solo la base de datos debe poder invocarla (ver _shared/auth.ts).
+  const noAutorizado = rechazarSiNoEsInterna(req)
+  if (noAutorizado) return noAutorizado
+
   try {
     const body = await req.json()
     const { alerta_id } = body

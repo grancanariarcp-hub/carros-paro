@@ -19,6 +19,7 @@
 //     aparecen aunque se haga `notify pgrst, 'reload schema'` ni restart.
 //   - postgres directo usa el role `postgres` (BYPASSRLS = true) — todo simple.
 import postgres from 'npm:postgres@3.4.4'
+import { rechazarSiNoEsInterna } from '../_shared/auth.ts'
 
 const DATABASE_URL = Deno.env.get('SUPABASE_DB_URL')!
 const APP_URL      = Deno.env.get('APP_URL') || 'https://app.astormanager.com'
@@ -29,6 +30,10 @@ const sql = postgres(DATABASE_URL, { prepare: false })
 // Handler principal
 // ============================================================================
 Deno.serve(async (req) => {
+  // Solo la base de datos debe poder invocarla (ver _shared/auth.ts).
+  const noAutorizado = rechazarSiNoEsInterna(req)
+  if (noAutorizado) return noAutorizado
+
   try {
     const { alerta_id } = await req.json()
     if (!alerta_id) return resp({ ok: false, error: 'alerta_id requerido' }, 400)
