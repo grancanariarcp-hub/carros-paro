@@ -122,17 +122,30 @@ describe('Desactivar servicios', () => {
     // Desactivar el servicio de otro centro le dejaría los carros sin
     // clasificar y a sus supervisores sin ver nada.
     const svc = serviceClient()
-    const { data: servB } = await svc.from('servicios')
-      .insert({ nombre: 'Servicio prueba B', hospital_id: fx.hospitales.B, activo: true, es_plantilla: false })
+    const NOMBRE = 'Servicio prueba B'
+
+    // Hay UNIQUE (hospital_id, nombre): sin limpiar antes, la segunda
+    // ejecución del test choca con la fila que dejó la primera y falla por
+    // donde no toca. El teardown del fixture no borra servicios.
+    await svc.from('servicios').delete()
+      .eq('hospital_id', fx.hospitales.B).eq('nombre', NOMBRE)
+
+    const { data: servB, error: eInsert } = await svc.from('servicios')
+      .insert({ nombre: NOMBRE, hospital_id: fx.hospitales.B, activo: true, es_plantilla: false })
       .select().single()
+    expect(eInsert, eInsert?.message).toBeNull()
 
-    const sb = await clientForUser(fx.users.adminA as any)
-    await sb.from('servicios').update({ activo: false }).eq('id', servB!.id)
+    try {
+      const sb = await clientForUser(fx.users.adminA as any)
+      await sb.from('servicios').update({ activo: false }).eq('id', servB!.id)
 
-    // RLS no da error en un UPDATE bloqueado: simplemente no afecta a ninguna
-    // fila, así que hay que mirar el dato.
-    const { data } = await svc.from('servicios').select('activo').eq('id', servB!.id).single()
-    expect(data!.activo, 'un admin desactivó el servicio de otro hospital').toBe(true)
+      // RLS no da error en un UPDATE bloqueado: simplemente no afecta a
+      // ninguna fila, así que hay que mirar el dato.
+      const { data } = await svc.from('servicios').select('activo').eq('id', servB!.id).single()
+      expect(data!.activo, 'un admin desactivó el servicio de otro hospital').toBe(true)
+    } finally {
+      await svc.from('servicios').delete().eq('id', servB!.id)
+    }
   }, 40_000)
 })
 
