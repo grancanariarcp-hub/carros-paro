@@ -124,7 +124,7 @@ describe('Desactivar servicios', () => {
     const svc = serviceClient()
     const NOMBRE = 'Servicio prueba B'
 
-    // Hay UNIQUE (hospital_id, nombre): sin limpiar antes, la segunda
+    // Hay un índice único por hospital y nombre: sin limpiar antes, la segunda
     // ejecución del test choca con la fila que dejó la primera y falla por
     // donde no toca. El teardown del fixture no borra servicios.
     await svc.from('servicios').delete()
@@ -145,6 +145,89 @@ describe('Desactivar servicios', () => {
       expect(data!.activo, 'un admin desactivó el servicio de otro hospital').toBe(true)
     } finally {
       await svc.from('servicios').delete().eq('id', servB!.id)
+    }
+  }, 40_000)
+})
+
+describe('Crear servicios propios', () => {
+  /** Borra por nombre en un hospital, para no arrastrar restos entre pruebas. */
+  async function limpiar(hospitalId: string, nombre: string) {
+    await serviceClient().from('servicios').delete()
+      .eq('hospital_id', hospitalId).eq('nombre', nombre)
+  }
+
+  it('el administrador crea un servicio que no está en el catálogo', async () => {
+    // Ningún catálogo cubre las unidades propias de cada centro; sin poder
+    // crearlas, sus carros se quedan sin clasificar.
+    const NOMBRE = 'Hospital de Dia Prueba'
+    await limpiar(fx.hospitales.A, NOMBRE)
+
+    try {
+      const sb = await clientForUser(fx.users.adminA as any)
+      const { error } = await sb.from('servicios').insert({
+        nombre: NOMBRE, hospital_id: fx.hospitales.A, activo: true, es_plantilla: false,
+      })
+      expect(error, error?.message).toBeNull()
+
+      const { data } = await serviceClient().from('servicios')
+        .select('hospital_id, es_plantilla')
+        .eq('hospital_id', fx.hospitales.A).eq('nombre', NOMBRE).single()
+      expect(data!.es_plantilla, 'un admin metió un servicio en el catálogo global').toBe(false)
+    } finally {
+      await limpiar(fx.hospitales.A, NOMBRE)
+    }
+  }, 40_000)
+
+  it('NO puede crear un servicio en otro hospital', async () => {
+    const NOMBRE = 'Colado en B'
+    await limpiar(fx.hospitales.B, NOMBRE)
+
+    try {
+      const sb = await clientForUser(fx.users.adminA as any)
+      const { error } = await sb.from('servicios').insert({
+        nombre: NOMBRE, hospital_id: fx.hospitales.B, activo: true, es_plantilla: false,
+      })
+      expect(error, 'un admin creó un servicio en el hospital de otro').toBeTruthy()
+    } finally {
+      await limpiar(fx.hospitales.B, NOMBRE)
+    }
+  }, 30_000)
+
+  it('NO puede añadir al catálogo compartido', async () => {
+    // Si cada centro pudiera, el pool se llenaría de nombres locales que no le
+    // sirven a nadie más. Ampliar el catálogo es cosa del superadmin.
+    const NOMBRE = 'Plantilla colada'
+    try {
+      const sb = await clientForUser(fx.users.adminA as any)
+      const { error } = await sb.from('servicios').insert({
+        nombre: NOMBRE, hospital_id: null, activo: true, es_plantilla: true,
+      })
+      expect(error, 'un admin amplió el catálogo global').toBeTruthy()
+    } finally {
+      await serviceClient().from('servicios').delete().eq('nombre', NOMBRE)
+    }
+  }, 30_000)
+
+  it('rechaza un nombre repetido aunque cambie mayúsculas o espacios', async () => {
+    // "UCI" y "uci " son el mismo servicio para quien lo lee en un
+    // desplegable; con los dos, los informes se parten en dos trozos.
+    const NOMBRE = 'Unidad Repetida'
+    await limpiar(fx.hospitales.A, NOMBRE)
+
+    try {
+      const sb = await clientForUser(fx.users.adminA as any)
+      const { error: primero } = await sb.from('servicios').insert({
+        nombre: NOMBRE, hospital_id: fx.hospitales.A, activo: true, es_plantilla: false,
+      })
+      expect(primero, primero?.message).toBeNull()
+
+      const { error: segundo } = await sb.from('servicios').insert({
+        nombre: '  unidad REPETIDA ', hospital_id: fx.hospitales.A, activo: true, es_plantilla: false,
+      })
+      expect(segundo?.code, 'se coló un servicio duplicado').toBe('23505')
+    } finally {
+      await serviceClient().from('servicios').delete()
+        .eq('hospital_id', fx.hospitales.A).ilike('nombre', '%unidad repetida%')
     }
   }, 40_000)
 })

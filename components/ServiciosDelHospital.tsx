@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import SelectorCatalogoServicios from './SelectorCatalogoServicios'
+import CrearServicio from './CrearServicio'
 
 interface Servicio {
   id: string
@@ -161,11 +162,21 @@ export default function ServiciosDelHospital({
             <div className="panel-hospital-vacio">Ningún servicio coincide con «{busqueda}».</div>
           )}
 
-          <div style={{ marginTop: '0.75rem' }}>
+          {/* Dos caminos: adoptar del catálogo (lo habitual) o crear uno
+              propio (unidades que no existen en ningún otro centro). */}
+          <div className="panel-hospital-acciones">
             {!eligiendo ? (
-              <button onClick={() => setEligiendo(true)} className="sa-btn sa-btn-sec sa-btn-mini">
-                + Añadir del catálogo
-              </button>
+              <>
+                <button onClick={() => setEligiendo(true)} className="sa-btn sa-btn-sec sa-btn-mini">
+                  + Añadir del catálogo
+                </button>
+                <CrearServicio
+                  hospitalId={hospitalId}
+                  nombresQueYaTiene={servicios.map(s => s.nombre)}
+                  puedeAmpliarCatalogo
+                  alCrear={cargar}
+                />
+              </>
             ) : (
               <SelectorCatalogoServicios
                 hospitalId={hospitalId}

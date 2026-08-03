@@ -91,7 +91,14 @@ export default function ServiciosPage() {
       hospital_id: perfil?.hospital_id,
       activo: true,
     })
-    if (error) { toast.error('Error al crear el servicio'); setGuardando(false); return }
+    if (error) {
+      // 23505 = ya existe ese nombre en el hospital. Puede estar desactivado y
+      // por eso no verse en la lista; decirlo evita que lo intente tres veces.
+      toast.error(error.code === '23505'
+        ? `Ya existe un servicio "${form.nombre.trim()}" (quizá desactivado)`
+        : 'Error al crear el servicio')
+      setGuardando(false); return
+    }
     toast.success(`Servicio "${form.nombre}" creado`)
     setForm({ nombre: '', descripcion: '', color: '#1d4ed8' })
     setMostrando('lista')
@@ -107,7 +114,12 @@ export default function ServiciosPage() {
       descripcion: editando.descripcion?.trim() || null,
       color: editando.color,
     }).eq('id', editando.id)
-    if (error) { toast.error('Error al guardar'); setGuardando(false); return }
+    if (error) {
+      toast.error(error.code === '23505'
+        ? `Ya existe otro servicio "${editando.nombre.trim()}" (quizá desactivado)`
+        : 'Error al guardar')
+      setGuardando(false); return
+    }
     toast.success('Servicio actualizado')
     setEditando(null)
     setMostrando('lista')

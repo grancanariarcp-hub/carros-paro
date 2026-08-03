@@ -475,6 +475,51 @@
   }
 
   /* ============================================================
+     ALTA DE UN SERVICIO NUEVO
+     Formulario en línea dentro del panel plegable: abrir un modal
+     para dos campos rompe el hilo de lo que se estaba haciendo.
+  ============================================================ */
+  /* Los botones van en fila; al desplegarse un formulario o el catálogo,
+     ocupan el ancho completo en vez de aplastarse contra el botón vecino. */
+  .panel-hospital-acciones {
+    @apply flex flex-wrap gap-2 mt-3;
+  }
+  .panel-hospital-acciones > *:not(button) {
+    flex: 1 0 100%;
+  }
+
+  .crear-servicio {
+    @apply rounded-lg p-2.5 flex flex-col;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+  }
+  .crear-servicio-titulo {
+    @apply font-semibold text-gray-700 mb-1.5;
+    font-size: 0.72rem;
+  }
+  .crear-servicio-error {
+    @apply mt-1;
+    font-size: 0.68rem;
+    color: #b45309;
+  }
+  .crear-servicio-catalogo {
+    @apply flex items-start gap-2 mt-2.5 cursor-pointer text-gray-700;
+    font-size: 0.72rem;
+  }
+  .crear-servicio-catalogo input[type="checkbox"] {
+    @apply w-4 h-4 flex-shrink-0 cursor-pointer;
+    margin-top: 0.05rem;
+  }
+  /* La explicación baja de línea en móvil para no partir la casilla. */
+  .crear-servicio-pista {
+    @apply block text-gray-400;
+    font-size: 0.66rem;
+  }
+  .crear-servicio-botones {
+    @apply flex gap-2 flex-wrap mt-2.5;
+  }
+
+  /* ============================================================
      ENLACE DE RECUPERACIÓN DE CONTRASEÑA
      Se muestra en el sitio del botón, sin modal: el administrador
      necesita verlo y copiarlo, no navegar a otra parte.
