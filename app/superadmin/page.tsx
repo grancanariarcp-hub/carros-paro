@@ -228,7 +228,12 @@ export default function SuperAdminPage() {
   }
 
   async function toggleActivo(h: HospitalStats) {
-    await supabase.from('hospitales').update({ activo: !h.activo }).eq('id', h.id)
+    // Desactivar corta el acceso a todo un centro. Si la escritura falla y no
+    // se comprueba, la pantalla dice "desactivado" y el hospital sigue dentro.
+    const { error } = await supabase.from('hospitales')
+      .update({ activo: !h.activo }).eq('id', h.id)
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+
     toast.success(h.activo ? 'Hospital desactivado' : 'Hospital activado')
     await cargarHospitalesConStats()
   }
@@ -280,12 +285,23 @@ export default function SuperAdminPage() {
       if (authError) throw authError
       if (!authData.user) throw new Error('No se pudo crear el usuario')
 
-      await supabase.from('perfiles').insert({
+      // Si el perfil no se crea, queda una cuenta que puede iniciar sesión pero
+      // sin rol ni hospital: la aplicación no sabe quién es y no la deja pasar
+      // de la pantalla inicial. Sin comprobarlo, aquí se anunciaba "usuario
+      // creado" y el problema aparecía días después, al intentar entrar.
+      const { error: ePerfil } = await supabase.from('perfiles').insert({
         id: authData.user.id, nombre: formUsuario.nombre, email: formUsuario.email,
         rol: formUsuario.rol, hospital_id: formUsuario.hospital_id,
         servicio_id: formUsuario.servicio_id || null, activo: formUsuario.activo,
         codigo_empleado: formUsuario.codigo_empleado?.trim() || null,
       })
+      if (ePerfil) {
+        throw new Error(
+          `La cuenta se creó pero no su perfil (${ePerfil.message}). ` +
+          'Esa persona aún no puede usar la aplicación: revisa el hospital y el servicio y vuelve a intentarlo.'
+        )
+      }
+
       toast.success(`Usuario "${formUsuario.nombre}" creado`)
       setModalUsuario(null)
       setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '', recibir_alertas: false })
@@ -324,7 +340,13 @@ export default function SuperAdminPage() {
   }
 
   async function toggleUsuarioActivo(u: any) {
-    await supabase.from('perfiles').update({ activo: !u.activo }).eq('id', u.id)
+    // Desactivar un usuario es quitarle el acceso. Sin comprobar el error, la
+    // pantalla diría que se hizo y la persona seguiría pudiendo entrar, que es
+    // lo peor que puede pasar con este botón.
+    const { error } = await supabase.from('perfiles')
+      .update({ activo: !u.activo }).eq('id', u.id)
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+
     toast.success(u.activo ? 'Usuario desactivado' : 'Usuario activado')
     await cargarUsuarios()
   }

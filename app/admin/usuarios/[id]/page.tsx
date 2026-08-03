@@ -141,7 +141,18 @@ export default function FichaUsuarioPage() {
 
   async function toggleActivo() {
     const nuevoEstado = !usuario?.activo
-    await supabase.from('perfiles').update({ activo: nuevoEstado }).eq('id', usuarioId)
+
+    // Un UPDATE bloqueado por RLS no da error, simplemente no afecta a nada.
+    // Se pide la fila de vuelta para no anunciar un cambio que no ocurrió.
+    const { data, error } = await supabase.from('perfiles')
+      .update({ activo: nuevoEstado }).eq('id', usuarioId).select('id')
+
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    if (!data?.length) {
+      toast.error('No tienes permiso para cambiar el estado de este usuario')
+      return
+    }
+
     toast.success(nuevoEstado ? 'Usuario activado' : 'Usuario desactivado')
     await cargarDatos()
   }

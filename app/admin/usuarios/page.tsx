@@ -108,7 +108,19 @@ export default function AdminUsuariosPage() {
   }
 
   async function toggleActivo(u: any) {
-    await supabase.from('perfiles').update({ activo: !u.activo }).eq('id', u.id)
+    // Se pide de vuelta la fila cambiada, no solo el error. Cuando RLS bloquea
+    // un UPDATE no da error: no toca nada y sigue como si tal cosa. Sin esta
+    // comprobación, la pantalla diría "usuario desactivado" y esa persona
+    // seguiría pudiendo entrar.
+    const { data, error } = await supabase.from('perfiles')
+      .update({ activo: !u.activo }).eq('id', u.id).select('id')
+
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    if (!data?.length) {
+      toast.error('No tienes permiso para cambiar el estado de este usuario')
+      return
+    }
+
     toast.success(u.activo ? 'Usuario desactivado' : 'Usuario activado')
     await cargarDatos()
   }

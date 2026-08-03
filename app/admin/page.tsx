@@ -55,7 +55,15 @@ export default function AdminPage() {
   }
 
   async function marcarAlertaResuelta(id: string) {
-    await supabase.from('alertas').update({ resuelta: true }).eq('id', id)
+    // Estas alertas avisan de carros no operativos. Si la escritura falla y no
+    // se comprueba, la alerta desaparece de la pantalla de quien la cerró pero
+    // sigue abierta: se da por atendido algo que nadie ha atendido.
+    const { data, error } = await supabase.from('alertas')
+      .update({ resuelta: true }).eq('id', id).select('id')
+
+    if (error) { toast.error('No se pudo cerrar la alerta: ' + error.message); return }
+    if (!data?.length) { toast.error('No tienes permiso para cerrar esta alerta'); return }
+
     setAlertas(prev => prev.filter(a => a.id !== id))
     toast.success('Alerta marcada como resuelta')
   }

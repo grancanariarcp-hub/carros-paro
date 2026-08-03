@@ -92,12 +92,15 @@ export default function PlantillasPage() {
         { nombre: 'Observaciones', tipo: 'observaciones', icono: '📝', orden: 4, obligatoria: false },
       ]
 
-      await supabase.from('plantilla_secciones').insert(
+      // Se comprueba: una plantilla sin secciones es una lista de comprobación
+      // que no comprueba nada, y quien la use creería estar pasando el control.
+      const { error: eSecciones } = await supabase.from('plantilla_secciones').insert(
         seccionesDefault.map(s => ({ ...s, plantilla_id: nueva.id }))
       )
+      if (eSecciones) throw eSecciones
 
       // Crear configuración de informe por defecto
-      await supabase.from('plantilla_informes').insert({
+      const { error: eInforme } = await supabase.from('plantilla_informes').insert({
         plantilla_id: nueva.id,
         mostrar_logo: true,
         mostrar_firma: true,
@@ -109,6 +112,11 @@ export default function PlantillasPage() {
         envio_automatico: false,
         cuando_enviar: 'no_operativo',
       })
+      // El informe sí puede esperar: la plantilla ya sirve para pasar
+      // controles y su configuración se ajusta después desde la ficha.
+      if (eInforme) {
+        toast.error('Plantilla creada, pero no se pudo preparar el informe: ' + eInforme.message)
+      }
 
       toast.success(`Plantilla "${form.nombre}" creada`)
       setCreando(false)
@@ -126,7 +134,10 @@ export default function PlantillasPage() {
       toast.error('No puedes desactivar la plantilla base')
       return
     }
-    await supabase.from('plantillas').update({ activo: !p.activo }).eq('id', p.id)
+    const { error } = await supabase.from('plantillas')
+      .update({ activo: !p.activo }).eq('id', p.id)
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+
     toast.success(p.activo ? 'Plantilla desactivada' : 'Plantilla activada')
     await cargarDatos()
   }

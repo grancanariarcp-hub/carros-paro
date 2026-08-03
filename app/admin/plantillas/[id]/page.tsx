@@ -190,7 +190,14 @@ export default function EditorPlantillaPage() {
 
   async function eliminarSeccion(seccionId: string) {
     if (!confirm('¿Eliminar esta sección y todos sus ítems?')) return
-    await supabase.from('plantilla_secciones').update({ activo: false }).eq('id', seccionId)
+
+    // Se comprueba el error antes de quitarla de la pantalla. Si no, quien
+    // edita ve la sección desaparecer y cree que la lista de comprobación ha
+    // cambiado, cuando sigue igual: los controles seguirían pidiendo lo mismo.
+    const { error } = await supabase.from('plantilla_secciones')
+      .update({ activo: false }).eq('id', seccionId)
+    if (error) { toast.error('No se pudo eliminar: ' + error.message); return }
+
     setSecciones(prev => prev.filter(s => s.id !== seccionId))
     toast.success('Sección eliminada')
   }
@@ -199,14 +206,26 @@ export default function EditorPlantillaPage() {
     const idx = secciones.findIndex(s => s.id === seccionId)
     if (direccion === 'arriba' && idx === 0) return
     if (direccion === 'abajo' && idx === secciones.length - 1) return
+
+    const previas = secciones
     const newSecs = [...secciones]
     const swapIdx = direccion === 'arriba' ? idx - 1 : idx + 1
     ;[newSecs[idx], newSecs[swapIdx]] = [newSecs[swapIdx], newSecs[idx]]
     newSecs[idx].orden = idx + 1
     newSecs[swapIdx].orden = swapIdx + 1
     setSecciones(newSecs)
-    await supabase.from('plantilla_secciones').update({ orden: idx + 1 }).eq('id', newSecs[idx].id)
-    await supabase.from('plantilla_secciones').update({ orden: swapIdx + 1 }).eq('id', newSecs[swapIdx].id)
+
+    // Son dos escrituras: si la segunda falla, quedan dos secciones con el
+    // mismo orden y la lista sale desordenada al recargar. Se deshace el
+    // movimiento en pantalla para que se vea lo que hay guardado de verdad.
+    const [a, b] = await Promise.all([
+      supabase.from('plantilla_secciones').update({ orden: idx + 1 }).eq('id', newSecs[idx].id),
+      supabase.from('plantilla_secciones').update({ orden: swapIdx + 1 }).eq('id', newSecs[swapIdx].id),
+    ])
+    if (a.error || b.error) {
+      setSecciones(previas)
+      toast.error('No se pudo cambiar el orden: ' + (a.error || b.error)!.message)
+    }
   }
 
   // ================================================================
@@ -246,12 +265,19 @@ export default function EditorPlantillaPage() {
 
   async function eliminarItem(seccionId: string, itemId: string) {
     if (!confirm('¿Eliminar este ítem?')) return
-    await supabase.from('plantilla_items').update({ activo: false }).eq('id', itemId)
+
+    // Igual que con las secciones: si esto falla en silencio, quien edita cree
+    // que el ítem ya no se comprueba y sigue comprobándose.
+    const { error } = await supabase.from('plantilla_items')
+      .update({ activo: false }).eq('id', itemId)
+    if (error) { toast.error('No se pudo eliminar: ' + error.message); return }
+
     setSecciones(prev => prev.map(s =>
       s.id === seccionId
         ? { ...s, items: s.items.filter(i => i.id !== itemId) }
         : s
     ))
+    toast.success('Ítem eliminado')
   }
 
   async function moverItem(seccionId: string, itemId: string, direccion: 'arriba' | 'abajo') {
@@ -260,14 +286,23 @@ export default function EditorPlantillaPage() {
     const idx = seccion.items.findIndex(i => i.id === itemId)
     if (direccion === 'arriba' && idx === 0) return
     if (direccion === 'abajo' && idx === seccion.items.length - 1) return
+
+    const previas = secciones
     const newItems = [...seccion.items]
     const swapIdx = direccion === 'arriba' ? idx - 1 : idx + 1
     ;[newItems[idx], newItems[swapIdx]] = [newItems[swapIdx], newItems[idx]]
     newItems[idx].orden = idx + 1
     newItems[swapIdx].orden = swapIdx + 1
     setSecciones(prev => prev.map(s => s.id === seccionId ? { ...s, items: newItems } : s))
-    await supabase.from('plantilla_items').update({ orden: idx + 1 }).eq('id', newItems[idx].id)
-    await supabase.from('plantilla_items').update({ orden: swapIdx + 1 }).eq('id', newItems[swapIdx].id)
+
+    const [a, b] = await Promise.all([
+      supabase.from('plantilla_items').update({ orden: idx + 1 }).eq('id', newItems[idx].id),
+      supabase.from('plantilla_items').update({ orden: swapIdx + 1 }).eq('id', newItems[swapIdx].id),
+    ])
+    if (a.error || b.error) {
+      setSecciones(previas)
+      toast.error('No se pudo cambiar el orden: ' + (a.error || b.error)!.message)
+    }
   }
 
   if (loading) return (

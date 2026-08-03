@@ -75,7 +75,19 @@ export default function SupervisorUsuariosPage() {
   }
 
   async function toggleActivo(u: any) {
-    await supabase.from('perfiles').update({ activo: !u.activo }).eq('id', u.id)
+    // Un supervisor tiene permisos más estrechos que un administrador, así que
+    // aquí es especialmente probable que RLS bloquee el cambio. Y un UPDATE
+    // bloqueado no da error: no toca nada. Se pide la fila de vuelta para
+    // saber si de verdad cambió algo.
+    const { data, error } = await supabase.from('perfiles')
+      .update({ activo: !u.activo }).eq('id', u.id).select('id')
+
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    if (!data?.length) {
+      toast.error('No tienes permiso para cambiar el estado de este usuario')
+      return
+    }
+
     toast.success(u.activo ? 'Usuario desactivado' : 'Usuario activado')
     await cargarDatos()
   }
