@@ -89,7 +89,7 @@ export default function SuperAdminPage() {
   const [editandoHospital, setEditandoHospital] = useState<any>(null)
   const [guardando, setGuardando]       = useState(false)
   const [modalUsuario, setModalUsuario] = useState<any>(null)
-  const [formUsuario, setFormUsuario]   = useState({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '' })
+  const [formUsuario, setFormUsuario]   = useState({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '', recibir_alertas: false })
   const [formHospital, setFormHospital] = useState({ nombre: '', slug: '', email_admin: '', telefono: '', plan: 'basico', max_carros: 15, max_usuarios: 5, color_primario: '#1d4ed8', pais: 'España' })
   const [filtroHospital, setFiltroHospital] = useState('todos')
   const [busquedaUsuario, setBusquedaUsuario] = useState('')
@@ -272,7 +272,7 @@ export default function SuperAdminPage() {
       })
       toast.success(`Usuario "${formUsuario.nombre}" creado`)
       setModalUsuario(null)
-      setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '' })
+      setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: '', servicio_id: '', activo: true, codigo_empleado: '', recibir_alertas: false })
       await cargarUsuarios()
     } catch (err: any) {
       toast.error(err.message || 'Error al crear usuario')
@@ -288,6 +288,7 @@ export default function SuperAdminPage() {
       nombre: formUsuario.nombre, rol: formUsuario.rol,
       hospital_id: formUsuario.hospital_id, servicio_id: formUsuario.servicio_id || null,
       activo: formUsuario.activo, codigo_empleado: formUsuario.codigo_empleado?.trim() || null,
+      recibir_alertas: formUsuario.recibir_alertas,
     }).eq('id', modalUsuario.id)
     toast.success('Usuario actualizado')
     setModalUsuario(null)
@@ -581,7 +582,7 @@ export default function SuperAdminPage() {
                 <option value="todos">Todos los hospitales</option>
                 {hospitalesStats.map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
               </select>
-              <button onClick={() => { setModalUsuario('nuevo'); setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: filtroHospital !== 'todos' ? filtroHospital : '', servicio_id: '', activo: true, codigo_empleado: '' }) }} className="sa-btn sa-btn-pri">
+              <button onClick={() => { setModalUsuario('nuevo'); setFormUsuario({ nombre: '', email: '', rol: 'auditor', hospital_id: filtroHospital !== 'todos' ? filtroHospital : '', servicio_id: '', activo: true, codigo_empleado: '', recibir_alertas: false }) }} className="sa-btn sa-btn-pri">
                 + Nuevo usuario
               </button>
               <span style={{ fontSize: '0.78rem', color: '#9ca3af' }}>{usuariosFiltrados.length} usuarios</span>
@@ -593,7 +594,7 @@ export default function SuperAdminPage() {
               <table style={{ width: '100%', minWidth: '46rem', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f3f4f6', background: '#fafafa' }}>
-                    {['Nombre', 'Email', 'Hospital', 'Rol', 'Estado', 'Acciones'].map(h => (
+                    {['Nombre', 'Email', 'Hospital', 'Rol', 'Estado', 'Avisos', 'Acciones'].map(h => (
                       <th key={h} style={{ textAlign: 'left', padding: '0.75rem', fontSize: '0.65rem', fontWeight: 700, color: '#9ca3af', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{h}</th>
                     ))}
                   </tr>
@@ -613,9 +614,18 @@ export default function SuperAdminPage() {
                       <td style={{ padding: '0.75rem' }}>
                         <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '4px', background: u.activo ? '#dcfce7' : '#fee2e2', color: u.activo ? '#16a34a' : '#dc2626' }}>{u.activo ? 'Activo' : 'Inactivo'}</span>
                       </td>
+                      {/* Quién se enteraría de un carro no operativo. Sin esta
+                          columna había que abrir ficha por ficha, y así nadie
+                          reparó en que casi ningún usuario lo tenía activado. */}
+                      <td style={{ padding: '0.75rem' }}>
+                        <span title={u.recibir_alertas ? 'Recibe avisos' : 'NO recibe avisos'}
+                          style={{ fontSize: '0.9rem', opacity: u.recibir_alertas ? 1 : 0.35 }}>
+                          {u.recibir_alertas ? '🔔' : '🔕'}
+                        </span>
+                      </td>
                       <td style={{ padding: '0.75rem' }}>
                         <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <button onClick={() => { setModalUsuario(u); setFormUsuario({ nombre: u.nombre, email: u.email, rol: u.rol, hospital_id: u.hospital_id || '', servicio_id: u.servicio_id || '', activo: u.activo, codigo_empleado: u.codigo_empleado || '' }) }}
+                          <button onClick={() => { setModalUsuario(u); setFormUsuario({ nombre: u.nombre, email: u.email, rol: u.rol, hospital_id: u.hospital_id || '', servicio_id: u.servicio_id || '', activo: u.activo, codigo_empleado: u.codigo_empleado || '', recibir_alertas: !!u.recibir_alertas }) }}
                             className="sa-btn sa-btn-sec sa-btn-mini">Editar</button>
                           <button onClick={() => toggleUsuarioActivo(u)}
                             className="sa-btn sa-btn-sec sa-btn-mini" style={{ color: u.activo ? '#dc2626' : '#16a34a' }}>
@@ -693,6 +703,15 @@ export default function SuperAdminPage() {
                 <label className="sa-label">Código de empleado <span style={{ color: '#9ca3af', fontWeight: 400 }}>(QR / código de barras)</span></label>
                 <input className="sa-input" placeholder="Código asignado por RRHH" value={formUsuario.codigo_empleado || ''} onChange={e => setFormUsuario(f => ({ ...f, codigo_empleado: e.target.value }))} />
                 <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '4px' }}>Permite acceder escaneando la tarjeta de empleado</div>
+              </div>
+              {/* Viene desactivado de fábrica, así que un usuario nuevo no
+                  recibe nada hasta que alguien se lo enciende aquí. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px' }}>
+                <input type="checkbox" checked={formUsuario.recibir_alertas} onChange={e => setFormUsuario(f => ({ ...f, recibir_alertas: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#111827' }}>Recibir avisos de alertas</div>
+                  <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>Email y notificación cuando un carro queda no operativo</div>
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px' }}>
                 <input type="checkbox" checked={formUsuario.activo} onChange={e => setFormUsuario(f => ({ ...f, activo: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
