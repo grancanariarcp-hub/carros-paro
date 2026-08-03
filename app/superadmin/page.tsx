@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import VersionApp from '@/components/VersionApp'
 import BotonResetPassword from '@/components/BotonResetPassword'
+import ServiciosDelHospital from '@/components/ServiciosDelHospital'
 
 // =====================================================================
 // Tipos
@@ -314,7 +315,17 @@ export default function SuperAdminPage() {
     const { error } = await supabase.from('perfiles')
       .update({ recibir_alertas: !u.recibir_alertas }).eq('id', u.id)
 
-    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    if (error) {
+      // El error de Postgres es el nombre de la restricción, que no le dice
+      // nada a nadie. Se traduce a lo que hay que hacer: un supervisor sin
+      // servicio asignado incumple perfiles_servicio_coherente, así que
+      // CUALQUIER cambio en su ficha falla hasta que se le asigne uno.
+      const falta = error.message.includes('perfiles_servicio_coherente')
+      toast.error(falta
+        ? `${u.nombre} es supervisor y no tiene servicio asignado. Pulsa "Editar" y elígele uno; hasta entonces su ficha no se puede modificar.`
+        : 'No se pudo cambiar: ' + error.message)
+      return
+    }
     toast.success(u.recibir_alertas
       ? `${u.nombre} ya no recibirá avisos`
       : `${u.nombre} recibirá los avisos`)
@@ -495,6 +506,11 @@ export default function SuperAdminPage() {
                             <div style={{ fontSize: '0.65rem', color: '#9ca3af', marginTop: '2px', fontWeight: 600 }}>{kpi.label}</div>
                           </div>
                         ))}
+                      </div>
+
+                      {/* Servicios del hospital */}
+                      <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid #e5e7eb' }}>
+                        <ServiciosDelHospital hospitalId={h.id} hospitalNombre={h.nombre} />
                       </div>
 
                       {/* Barra de cumplimiento */}

@@ -122,7 +122,15 @@ export default function AdminUsuariosPage() {
     const { error } = await supabase.from('perfiles')
       .update({ recibir_alertas: !u.recibir_alertas }).eq('id', u.id)
 
-    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    if (error) {
+      // Ver la nota equivalente en superadmin: el nombre de la restricción no
+      // le dice nada a nadie, así que se traduce a la acción concreta.
+      const falta = error.message.includes('perfiles_servicio_coherente')
+      toast.error(falta
+        ? `${u.nombre} es supervisor y no tiene servicio asignado. Edítalo y elígele uno; hasta entonces su ficha no se puede modificar.`
+        : 'No se pudo cambiar: ' + error.message)
+      return
+    }
     toast.success(u.recibir_alertas
       ? `${u.nombre} ya no recibirá avisos`
       : `${u.nombre} recibirá los avisos`)
