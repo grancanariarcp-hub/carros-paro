@@ -245,67 +245,62 @@ export default function ControlPage() {
         // No bloqueamos el guardado si falla la subida de la firma
       }
 
-      // Guardar inspección con firma
-      const { data: insp, error: inspError } = await supabase.from('inspecciones').insert({
-        carro_id: carroId,
-        tipo,
-        resultado,
-        auditor_id: perfil?.id,
-        numero_censo_desf: desfForm.numero_censo,
-        modelo_desf: desfForm.modelo,
-        fecha_mantenimiento_desf: desfForm.fecha_mantenimiento,
-        precinto_retirado: precintoRetirado.numero || null,
-        precinto_colocado: precintoColocado.numero || null,
-        foto_precinto_retirado: urlFotoPrecintoRetirado,
-        foto_precinto_colocado: urlFotoPrecintoColocado,
-        // Datos de firma
-        firma_url: firmaUrl,
-        firmante_nombre: datosFirma.nombre,
-        firmante_cargo: datosFirma.cargo || null,
-        firmado_en: datosFirma.firmadoEn.toISOString(),
-        firmante_usuario_id: perfil?.id || null,
-      }).select().single()
-
-      if (inspError) throw inspError
-
-      // Guardar items
-      const itemsArr = Object.values(items).map(i => ({
-        inspeccion_id: insp.id,
-        material_id: i.material_id,
-        cantidad_ok: i.cantidad_ok,
-        estado_ok: i.estado_ok,
-        tiene_falla: i.tiene_falla,
-        tipo_falla: i.tiene_falla ? i.tipo_falla : null,
-        descripcion_falla: i.descripcion_falla || null,
-        foto_url: i.foto_url || null,
-        fecha_vencimiento: i.fecha_vencimiento || null,
-      }))
-      await supabase.from('items_inspeccion').insert(itemsArr)
-
-      // Actualizar carro
+      // Guardar el control entero de una vez.
+      //
+      // Antes esto eran seis escrituras sueltas y solo se miraba el error de
+      // la primera. Si fallaban los ítems quedaba una inspección firmada y sin
+      // detalle, imposible de arreglar porque lo firmado es inmutable; y si
+      // fallaba el carro, se caía del calendario en silencio. La pantalla
+      // decía "guardado" igualmente. Ahora o entra todo o no entra nada, y el
+      // error llega a quien está delante del carro.
       const proximo = tipo !== 'post_uso'
         ? proximoControl(carro?.frecuencia_control || 'mensual')
         : carro?.proximo_control
-      await supabase.from('carros').update({
-        estado: resultado,
-        ultimo_control: new Date().toISOString(),
-        ultimo_tipo_control: tipo,
-        proximo_control: proximo,
-      }).eq('id', carroId)
 
-      // Actualizar desfibrilador
-      const desfData = {
-        numero_censo: desfForm.numero_censo,
-        modelo: desfForm.modelo,
-        marca: desfForm.marca || null,
-        fecha_ultimo_mantenimiento: desfForm.fecha_ultimo_mantenimiento || null,
-        fecha_mantenimiento: desfForm.fecha_mantenimiento,
-      }
-      if (desf) {
-        await supabase.from('desfibriladores').update(desfData).eq('id', desf.id)
-      } else {
-        await supabase.from('desfibriladores').insert({ carro_id: carroId, ...desfData })
-      }
+      const { data: inspId, error: inspError } = await supabase.rpc('registrar_control', {
+        p_carro_id: carroId,
+        p_tipo: tipo,
+        p_resultado: resultado,
+        p_items: Object.values(items).map(i => ({
+          material_id: i.material_id,
+          cantidad_ok: i.cantidad_ok,
+          estado_ok: i.estado_ok,
+          tiene_falla: i.tiene_falla,
+          tipo_falla: i.tiene_falla ? i.tipo_falla : null,
+          descripcion_falla: i.descripcion_falla || null,
+          foto_url: i.foto_url || null,
+          fecha_vencimiento: i.fecha_vencimiento || null,
+        })),
+        p_proximo_control: proximo,
+        p_firma: {
+          nombre: datosFirma.nombre,
+          cargo: datosFirma.cargo || null,
+          url: firmaUrl,
+          firmado_en: datosFirma.firmadoEn.toISOString(),
+        },
+        p_desfibrilador: {
+          numero_censo: desfForm.numero_censo,
+          modelo: desfForm.modelo,
+          marca: desfForm.marca || null,
+          fecha_ultimo_mantenimiento: desfForm.fecha_ultimo_mantenimiento || null,
+          fecha_mantenimiento: desfForm.fecha_mantenimiento,
+        },
+        p_precintos: {
+          retirado: precintoRetirado.numero || null,
+          colocado: precintoColocado.numero || null,
+          foto_retirado: urlFotoPrecintoRetirado,
+          foto_colocado: urlFotoPrecintoColocado,
+        },
+        p_detalle_log: {
+          firmante: datosFirma.nombre,
+          firmante_cargo: datosFirma.cargo || null,
+          firma_capturada: !!firmaUrl,
+          precinto_retirado: precintoRetirado.numero || null,
+          precinto_colocado: precintoColocado.numero || null,
+        },
+      })
+
+      if (inspError) throw inspError
 
       // Alerta si no operativo.
       //
@@ -338,24 +333,12 @@ export default function ControlPage() {
         }
       }
 
-      // Log auditoría
-      await supabase.from('log_auditoria').insert({
-        usuario_id: perfil?.id,
-        accion: 'control_realizado',
-        tabla_afectada: 'inspecciones',
-        registro_id: insp.id,
-        detalle: {
-          tipo, resultado, carro_codigo: carro?.codigo,
-          firmante: datosFirma.nombre,
-          firmante_cargo: datosFirma.cargo || null,
-          firma_capturada: !!firmaUrl,
-          precinto_retirado: precintoRetirado.numero || null,
-          precinto_colocado: precintoColocado.numero || null,
-        }
-      })
+      // La auditoría la deja registrar_control dentro de la misma transacción,
+      // con el hospital incluido: sin él la entrada no salía al filtrar por
+      // centro, que es como se consulta el registro.
 
       setMostrarFirma(false)
-      router.push(`/carro/${carroId}/resultado/${insp.id}`)
+      router.push(`/carro/${carroId}/resultado/${inspId}`)
     } catch (err: any) {
       toast.error('Error al guardar: ' + err.message)
       setGuardando(false)

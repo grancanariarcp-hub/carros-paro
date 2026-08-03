@@ -1,10 +1,13 @@
 /**
- * El guardado de un control, de punta a punta.
+ * Reglas de la base alrededor de un control, y el aviso de carro no operativo.
  *
- * Reproduce la secuencia que ejecuta app/carro/[id]/control/[tipo]/page.tsx al
- * firmar: inspección → items → actualizar carro → alerta si sale no operativo.
- * Es la ruta que más se usa y la que más caro sale que se rompa, y hasta ahora
- * no la vigilaba nada.
+ * OJO: la pantalla ya NO guarda así. Desde que el control se escribe en una
+ * sola transacción, la ruta real es la función registrar_control, y quien la
+ * vigila es tests/control-atomico.test.ts. Estas pruebas reproducen la
+ * secuencia por su cuenta, así que pueden pasar mientras la aplicación falla:
+ * sirven para fijar las reglas de la base (aislamiento, restricciones) y el
+ * aviso de "no operativo", que sigue lanzándose desde el cliente a propósito
+ * —un fallo del aviso no debe tirar atrás un control ya firmado.
  *
  * De escribir estas pruebas salió un fallo real: la alerta de "carro no
  * operativo" se creaba con un insert directo sin hospital_id, y las funciones
