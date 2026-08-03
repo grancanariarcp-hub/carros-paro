@@ -98,6 +98,44 @@ describe('Catálogo — sin duplicados', () => {
   }, 40_000)
 })
 
+describe('Desactivar servicios', () => {
+  it('el administrador puede desactivar un servicio de su hospital', async () => {
+    const plantilla = await unaPlantilla()
+    const sb = await clientForUser(fx.users.adminA as any)
+    await sb.rpc('copiar_servicios_a_hospital', {
+      p_hospital_id: fx.hospitales.A, p_servicio_ids: [plantilla.id],
+    })
+
+    const svc = serviceClient()
+    const { data: copia } = await svc.from('servicios')
+      .select('id').eq('hospital_id', fx.hospitales.A).eq('nombre', plantilla.nombre).single()
+
+    const { error } = await sb.from('servicios')
+      .update({ activo: false }).eq('id', copia!.id)
+    expect(error, error?.message).toBeNull()
+
+    const { data } = await svc.from('servicios').select('activo').eq('id', copia!.id).single()
+    expect(data!.activo).toBe(false)
+  }, 40_000)
+
+  it('NO puede desactivar un servicio de otro hospital', async () => {
+    // Desactivar el servicio de otro centro le dejaría los carros sin
+    // clasificar y a sus supervisores sin ver nada.
+    const svc = serviceClient()
+    const { data: servB } = await svc.from('servicios')
+      .insert({ nombre: 'Servicio prueba B', hospital_id: fx.hospitales.B, activo: true, es_plantilla: false })
+      .select().single()
+
+    const sb = await clientForUser(fx.users.adminA as any)
+    await sb.from('servicios').update({ activo: false }).eq('id', servB!.id)
+
+    // RLS no da error en un UPDATE bloqueado: simplemente no afecta a ninguna
+    // fila, así que hay que mirar el dato.
+    const { data } = await svc.from('servicios').select('activo').eq('id', servB!.id).single()
+    expect(data!.activo, 'un admin desactivó el servicio de otro hospital').toBe(true)
+  }, 40_000)
+})
+
 describe('Catálogo — visibilidad', () => {
   it('cualquier usuario autenticado ve el catálogo', async () => {
     // Sin verlo no hay de dónde elegir. Son nombres genéricos de servicios
