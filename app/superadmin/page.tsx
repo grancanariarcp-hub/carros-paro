@@ -7,6 +7,7 @@ import VersionApp from '@/components/VersionApp'
 import BotonResetPassword from '@/components/BotonResetPassword'
 import ServiciosDelHospital from '@/components/ServiciosDelHospital'
 import PlantillasDispositivoDelHospital from '@/components/PlantillasDispositivoDelHospital'
+import PlantillasCarroDelHospital from '@/components/PlantillasCarroDelHospital'
 
 // =====================================================================
 // Tipos
@@ -539,6 +540,7 @@ export default function SuperAdminPage() {
                       <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid #e5e7eb' }}>
                         <ServiciosDelHospital hospitalId={h.id} hospitalNombre={h.nombre} />
                         <PlantillasDispositivoDelHospital hospitalId={h.id} />
+                        <PlantillasCarroDelHospital hospitalId={h.id} />
                       </div>
 
                       {/* Barra de cumplimiento */}

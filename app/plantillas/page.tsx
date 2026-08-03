@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import { rutaPadre } from '@/lib/navigation'
+import SelectorCatalogoPlantillas from '@/components/SelectorCatalogoPlantillas'
 
 interface Plantilla {
   id: string
@@ -238,6 +239,17 @@ export default function PlantillasPage() {
             La plantilla base se aplica a todos los carros salvo que tengan una asignada específicamente.
           </div>
         </div>
+
+        {/* Partir de una plantilla ya preparada evita montar decenas de ítems
+            a mano, que es donde se cuelan los olvidos. */}
+        {perfil?.hospital_id && (
+          <div className="mb-3">
+            <SelectorCatalogoPlantillas
+              hospitalId={perfil.hospital_id}
+              onAdoptada={cargarDatos}
+            />
+          </div>
+        )}
 
         {/* Lista de plantillas */}
         {plantillas.length === 0 && !creando && (
