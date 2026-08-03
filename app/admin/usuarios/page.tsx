@@ -155,6 +155,33 @@ export default function AdminUsuariosPage() {
           </div>
         </div>
 
+        {/* Aviso si nadie recibe alertas.
+            `recibir_alertas` viene desactivado de fábrica, así que un hospital
+            recién dado de alta no avisa a nadie de que un carro ha quedado no
+            operativo. Y sin este banner no hay forma de darse cuenta salvo
+            abriendo las fichas una a una — que es exactamente lo que pasó. */}
+        {(() => {
+          const conAlertas = usuarios.filter(u => u.activo && u.recibir_alertas)
+          if (conAlertas.length > 0) return null
+          return (
+            <div className="card" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
+              <div className="flex items-start gap-2">
+                <span className="text-lg leading-none">⚠️</span>
+                <div>
+                  <div className="text-sm font-bold text-red-800">
+                    Nadie recibe los avisos
+                  </div>
+                  <div className="text-xs text-red-700 mt-1 leading-snug">
+                    Ningún usuario activo tiene las alertas encendidas. Si un carro
+                    se declara no operativo, el aviso no llegará a nadie. Entra en
+                    la ficha de quien deba recibirlos y activa «Recibir alertas».
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         <input className="input" placeholder="Buscar por nombre o email..."
           value={busqueda} onChange={e => setBusqueda(e.target.value)} />
 
@@ -171,8 +198,15 @@ export default function AdminUsuariosPage() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-gray-900 truncate">{u.nombre}</div>
                 <div className="text-xs text-gray-400 truncate">{u.email}</div>
-                <div className="text-xs text-gray-400">
-                  {u.rol} {(u.servicios as any)?.nombre ? `· ${(u.servicios as any).nombre}` : ''}
+                <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+                  <span>{u.rol} {(u.servicios as any)?.nombre ? `· ${(u.servicios as any).nombre}` : ''}</span>
+                  {/* Visible de un vistazo: quién se enteraría de una alerta. */}
+                  {u.activo && (
+                    <span className={u.recibir_alertas ? 'text-green-600' : 'text-gray-300'}
+                      title={u.recibir_alertas ? 'Recibe avisos de alertas' : 'NO recibe avisos'}>
+                      {u.recibir_alertas ? '🔔' : '🔕'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
