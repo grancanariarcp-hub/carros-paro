@@ -95,11 +95,24 @@ export default function SuperAdminPage() {
   const [filtroHospital, setFiltroHospital] = useState('todos')
   const [busquedaUsuario, setBusquedaUsuario] = useState('')
   const [subiendoLogo, setSubiendoLogo] = useState(false)
+  // Servicios del hospital elegido en el modal de usuario. Se recargan al
+  // cambiar de hospital: los servicios son propios de cada centro.
+  const [serviciosDelHospital, setServiciosDelHospital] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => { cargarTodo() }, [])
+
+  // Carga los servicios del hospital seleccionado en el modal de usuario.
+  useEffect(() => {
+    if (!formUsuario.hospital_id) { setServiciosDelHospital([]); return }
+    supabase.from('servicios')
+      .select('id, nombre')
+      .eq('hospital_id', formUsuario.hospital_id)
+      .eq('activo', true).is('deleted_at', null).order('nombre')
+      .then(({ data }) => setServiciosDelHospital(data || []))
+  }, [formUsuario.hospital_id])
 
   // ================================================================
   // Carga de datos
@@ -285,16 +298,27 @@ export default function SuperAdminPage() {
   async function actualizarUsuario() {
     if (!modalUsuario?.id) return
     setGuardando(true)
-    await supabase.from('perfiles').update({
+    const { error } = await supabase.from('perfiles').update({
       nombre: formUsuario.nombre, rol: formUsuario.rol,
       hospital_id: formUsuario.hospital_id, servicio_id: formUsuario.servicio_id || null,
       activo: formUsuario.activo, codigo_empleado: formUsuario.codigo_empleado?.trim() || null,
       recibir_alertas: formUsuario.recibir_alertas,
     }).eq('id', modalUsuario.id)
+
+    setGuardando(false)
+
+    // Sin esto decía "Usuario actualizado" aunque el guardado hubiera fallado.
+    if (error) {
+      const faltaServicio = error.message.includes('perfiles_servicio_coherente')
+      toast.error(faltaServicio
+        ? 'Un supervisor necesita servicio asignado. Elige uno en el desplegable.'
+        : 'No se pudo guardar: ' + error.message)
+      return
+    }
+
     toast.success('Usuario actualizado')
     setModalUsuario(null)
     await cargarUsuarios()
-    setGuardando(false)
   }
 
   async function toggleUsuarioActivo(u: any) {
@@ -741,6 +765,33 @@ export default function SuperAdminPage() {
                 <select value={formUsuario.rol} onChange={e => setFormUsuario(f => ({ ...f, rol: e.target.value }))} className="sa-input" style={{ background: 'white' }}>
                   {ROLES_SUPERADMIN.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
+              </div>
+              <div>
+                {/* Faltaba este selector: el campo estaba en el formulario pero
+                    no había control, así que desde superadmin no había forma de
+                    asignar servicio — y sin él un supervisor ni ve sus carros
+                    ni admite ningún cambio en su ficha. */}
+                <label className="sa-label">
+                  Servicio {formUsuario.rol === 'supervisor' && <span style={{ color: '#dc2626' }}>*</span>}
+                </label>
+                <select value={formUsuario.servicio_id}
+                  onChange={e => setFormUsuario(f => ({ ...f, servicio_id: e.target.value }))}
+                  className="sa-input" style={{ background: 'white' }}
+                  disabled={!formUsuario.hospital_id}>
+                  <option value="">Sin servicio asignado</option>
+                  {serviciosDelHospital.map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: '0.7rem', color: formUsuario.rol === 'supervisor' && !formUsuario.servicio_id ? '#dc2626' : '#9ca3af', marginTop: '4px' }}>
+                  {!formUsuario.hospital_id
+                    ? 'Elige primero un hospital'
+                    : serviciosDelHospital.length === 0
+                      ? 'Ese hospital no tiene servicios. Añádelos desde su ficha, en la pestaña Hospitales.'
+                      : formUsuario.rol === 'supervisor'
+                        ? 'Un supervisor necesita servicio: solo verá los carros del suyo'
+                        : 'Opcional para este rol'}
+                </div>
               </div>
               <div>
                 <label className="sa-label">Código de empleado <span style={{ color: '#9ca3af', fontWeight: 400 }}>(QR / código de barras)</span></label>
