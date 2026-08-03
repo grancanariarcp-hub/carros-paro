@@ -307,13 +307,35 @@ export default function ControlPage() {
         await supabase.from('desfibriladores').insert({ carro_id: carroId, ...desfData })
       }
 
-      // Alerta si no operativo
+      // Alerta si no operativo.
+      //
+      // Vía RPC y no con un insert directo. El insert no pasaba hospital_id ni
+      // severidad, y eso rompía el aviso justo cuando más importa:
+      //   - sin hospital_id, las Edge Functions de email y push no encuentran
+      //     destinatarios, porque los buscan por hospital. Nadie se enteraba.
+      //   - la severidad caía al 'media' por defecto en vez de 'critica'.
+      //   - no se creaban filas en `notificaciones`, así que la campana de la
+      //     app tampoco avisaba.
+      // Además hospital_id es NOT NULL según las migraciones, así que en un
+      // entorno reconstruido el insert fallaba en seco.
       if (resultado === 'no_operativo') {
-        await supabase.from('alertas').insert({
-          carro_id: carroId,
-          tipo: 'carro_no_operativo',
-          mensaje: `Carro ${carro?.codigo} declarado NO OPERATIVO en control del ${new Date().toLocaleDateString('es')}`,
+        const { error: alertaError } = await supabase.rpc('crear_alerta_con_notificaciones', {
+          p_hospital_id: carro?.hospital_id,
+          p_tipo:        'carro_no_operativo',
+          p_severidad:   'critica',
+          p_titulo:      `Carro ${carro?.codigo} NO OPERATIVO`,
+          p_mensaje:     `Carro ${carro?.codigo} declarado NO OPERATIVO en control del ${new Date().toLocaleDateString('es')}`,
+          p_carro_id:    carroId,
+          p_servicio_id: carro?.servicio_id ?? null,
         })
+
+        // No se aborta el guardado: el control ya está firmado y perderlo sería
+        // peor. Pero se avisa, porque un carro no operativo del que nadie
+        // recibe aviso es exactamente el fallo que esta app existe para evitar.
+        if (alertaError) {
+          console.error('[control] no se pudo crear la alerta:', alertaError.message)
+          toast.error('Control guardado, pero falló el aviso de carro no operativo. Avisa al responsable.')
+        }
       }
 
       // Log auditoría

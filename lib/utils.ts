@@ -29,12 +29,27 @@ export function formatFechaHora(fecha?: string): string {
   catch { return '—' }
 }
 
+/**
+ * Fecha en formato YYYY-MM-DD usando el calendario LOCAL, no UTC.
+ *
+ * `toISOString()` convierte a UTC antes de recortar, así que en Canarias
+ * (UTC+1 en verano) un control guardado a las 00:30 se convertía en las 23:30
+ * del día anterior y el próximo control quedaba programado un día antes de lo
+ * debido. Los controles de turno de noche se hacen justo a esas horas.
+ */
+function fechaLocalISO(d: Date): string {
+  const anio = d.getFullYear()
+  const mes  = String(d.getMonth() + 1).padStart(2, '0')
+  const dia  = String(d.getDate()).padStart(2, '0')
+  return `${anio}-${mes}-${dia}`
+}
+
 export function proximoControl(tipo: string, desde?: Date): string {
   const base = desde || new Date()
-  if (tipo === 'mensual') return addMonths(base, 1).toISOString().split('T')[0]
-  if (tipo === 'semanal') return addWeeks(base, 1).toISOString().split('T')[0]
-  if (tipo === 'quincenal') return addWeeks(base, 2).toISOString().split('T')[0]
-  return base.toISOString().split('T')[0]
+  if (tipo === 'mensual') return fechaLocalISO(addMonths(base, 1))
+  if (tipo === 'semanal') return fechaLocalISO(addWeeks(base, 1))
+  if (tipo === 'quincenal') return fechaLocalISO(addWeeks(base, 2))
+  return fechaLocalISO(base)
 }
 
 export function estadoColor(estado?: string) {

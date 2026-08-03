@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import { rutaPadre } from '@/lib/navigation'
+import SelectorCatalogoServicios from '@/components/SelectorCatalogoServicios'
 
 interface Servicio {
   id: string
@@ -90,7 +91,14 @@ export default function ServiciosPage() {
       hospital_id: perfil?.hospital_id,
       activo: true,
     })
-    if (error) { toast.error('Error al crear el servicio'); setGuardando(false); return }
+    if (error) {
+      // 23505 = ya existe ese nombre en el hospital. Puede estar desactivado y
+      // por eso no verse en la lista; decirlo evita que lo intente tres veces.
+      toast.error(error.code === '23505'
+        ? `Ya existe un servicio "${form.nombre.trim()}" (quizá desactivado)`
+        : 'Error al crear el servicio')
+      setGuardando(false); return
+    }
     toast.success(`Servicio "${form.nombre}" creado`)
     setForm({ nombre: '', descripcion: '', color: '#1d4ed8' })
     setMostrando('lista')
@@ -106,7 +114,12 @@ export default function ServiciosPage() {
       descripcion: editando.descripcion?.trim() || null,
       color: editando.color,
     }).eq('id', editando.id)
-    if (error) { toast.error('Error al guardar'); setGuardando(false); return }
+    if (error) {
+      toast.error(error.code === '23505'
+        ? `Ya existe otro servicio "${editando.nombre.trim()}" (quizá desactivado)`
+        : 'Error al guardar')
+      setGuardando(false); return
+    }
     toast.success('Servicio actualizado')
     setEditando(null)
     setMostrando('lista')
@@ -287,6 +300,18 @@ export default function ServiciosPage() {
               <div className="text-xs text-gray-500 mt-0.5">Carros</div>
             </div>
           </div>
+
+          {/* Traer servicios del catálogo. Crear uno a mano seguía siendo
+              posible, pero teclear treinta nombres que ya existen en el
+              catálogo es trabajo regalado — y con erratas distintas en cada
+              hospital, los informes dejan de ser comparables. */}
+          {hospital?.id && (
+            <SelectorCatalogoServicios
+              hospitalId={hospital.id}
+              nombresQueYaTiene={servicios.map(s => s.nombre)}
+              onAnadidos={() => cargarServicios(perfil?.hospital_id)}
+            />
+          )}
 
           {servicios.length === 0 && (
             <div className="card text-center py-10">
