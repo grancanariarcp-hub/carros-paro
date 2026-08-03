@@ -95,7 +95,21 @@ async function createTestUser(
  * Devuelve un cliente Supabase autenticado como ese user, listo para
  * ejecutar queries con su rol/hospital.
  */
+/**
+ * Sesiones ya iniciadas, por email.
+ *
+ * Sin esto cada prueba hacía su propio login y el suite entero acababa
+ * pidiendo más de cien: Supabase corta por límite de peticiones y fallan
+ * pruebas que no tienen nada que ver con lo que se está comprobando. Con la
+ * caché, cada usuario inicia sesión una vez por archivo (vitest corre los
+ * archivos en procesos separados) y además el suite es más rápido.
+ */
+const sesiones = new Map<string, SupabaseClient>()
+
 export async function clientForUser(user: TestUser): Promise<SupabaseClient> {
+  const cacheada = sesiones.get(user.email)
+  if (cacheada) return cacheada
+
   const sb = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
@@ -103,7 +117,14 @@ export async function clientForUser(user: TestUser): Promise<SupabaseClient> {
     email: user.email, password: user.password,
   })
   if (error) throw new Error(`signin ${user.rol}: ${error.message}`)
+
+  sesiones.set(user.email, sb)
   return sb
+}
+
+/** El fixture borra los usuarios al terminar; sus sesiones ya no valen. */
+export function olvidarSesiones() {
+  sesiones.clear()
 }
 
 /**
@@ -208,6 +229,7 @@ export async function setupFixture(): Promise<TestFixture> {
  */
 export async function teardownFixture(fx: TestFixture) {
   const service = serviceClient()
+  olvidarSesiones()
 
   // 1) Borrar carros con nuestro prefijo en A
   await service.from('carros').delete().like('codigo', `${TEST_PREFIX}%`)

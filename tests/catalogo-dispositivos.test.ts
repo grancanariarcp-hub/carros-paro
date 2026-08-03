@@ -170,6 +170,47 @@ describe('Adopción de modelos del catálogo', () => {
     }
   }, 40_000)
 
+  it('un aparato NO puede apuntar a la plantilla privada de otro hospital', async () => {
+    // La clave foránea comprueba que la plantilla existe, no de quién es. Sin
+    // el disparador, el aparato quedaría con un modelo que su hospital no ve.
+    const n = nombre('Privada de B para equipo')
+    await limpiar(n)
+    const svc = serviceClient()
+    const { data: plantillaB } = await svc.from('plantillas_dispositivo')
+      .insert({ nombre: n, hospital_id: fx.hospitales.B }).select().single()
+
+    try {
+      const { error } = await svc.from('equipos').insert({
+        nombre: 'ZZ Equipo de prueba', hospital_id: fx.hospitales.A,
+        plantilla_id: plantillaB!.id, activo: true,
+      })
+      expect(error, 'un equipo se enlazó a la plantilla privada de otro hospital').toBeTruthy()
+      expect(error?.message).toMatch(/otro hospital/i)
+    } finally {
+      await svc.from('equipos').delete().eq('nombre', 'ZZ Equipo de prueba')
+      await limpiar(n)
+    }
+  }, 40_000)
+
+  it('un aparato SÍ puede apuntar a una plantilla del catálogo compartido', async () => {
+    const n = nombre('Compartida para equipo')
+    await limpiar(n)
+    const svc = serviceClient()
+    const { data: plantilla } = await svc.from('plantillas_dispositivo')
+      .insert({ nombre: n, hospital_id: null }).select().single()
+
+    try {
+      const { error } = await svc.from('equipos').insert({
+        nombre: 'ZZ Equipo de prueba', hospital_id: fx.hospitales.A,
+        plantilla_id: plantilla!.id, activo: true,
+      })
+      expect(error, error?.message).toBeNull()
+    } finally {
+      await svc.from('equipos').delete().eq('nombre', 'ZZ Equipo de prueba')
+      await limpiar(n)
+    }
+  }, 40_000)
+
   it('NO puede adoptar modelos para otro hospital', async () => {
     const n = nombre('Adopcion ajena')
     await limpiar(n)

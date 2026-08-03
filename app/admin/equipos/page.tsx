@@ -139,8 +139,11 @@ export default function EquiposPage() {
     fecha_ultima_calibracion: '', fecha_proxima_calibracion: '',
     empresa_mantenimiento: '', contacto_mantenimiento: '',
     numero_contrato: '', frecuencia_mantenimiento: '', observaciones: '',
+    // De qué modelo del catálogo salió. Vacío si se dio de alta a mano.
+    plantilla_id: '',
   }
   const [form, setForm] = useState(formInicial)
+  const [plantillas, setPlantillas] = useState<any[]>([])
 
   const { categorias } = useCategorias(perfil?.hospital_id || null)
 
@@ -167,8 +170,58 @@ export default function EquiposPage() {
       cargarEquipos(p.hospital_id),
       cargarServicios(p.hospital_id),
       cargarCarros(p.hospital_id),
+      cargarPlantillas(p.hospital_id),
     ])
     setLoading(false)
+  }
+
+  /**
+   * Modelos que este hospital puede usar: los suyos propios más los que ha
+   * adoptado del catálogo compartido. El catálogo entero no: un centro con
+   * cuatro aparatos no debería elegir entre cien modelos.
+   */
+  async function cargarPlantillas(hospitalId: string) {
+    const { data: adoptadas } = await supabase
+      .from('plantillas_dispositivo_hospital')
+      .select('plantilla_id').eq('hospital_id', hospitalId)
+
+    const ids = (adoptadas || []).map(a => a.plantilla_id)
+    let q = supabase.from('plantillas_dispositivo')
+      .select('id, nombre, marca, modelo, categoria_id, frecuencia_mantenimiento, requiere_calibracion')
+      .is('deleted_at', null).eq('activo', true).order('nombre')
+
+    // Sin adopciones, `in` con lista vacía no filtra nada en PostgREST, así que
+    // hay que pedir solo las propias en lugar de encadenar el `or`.
+    q = ids.length
+      ? q.or(`hospital_id.eq.${hospitalId},id.in.(${ids.join(',')})`)
+      : q.eq('hospital_id', hospitalId)
+
+    const { data } = await q
+    setPlantillas(data || [])
+  }
+
+  /**
+   * Rellena lo que es igual en todas las unidades del modelo. Lo que cambia de
+   * un aparato a otro —serie, censo, ubicación— se sigue escribiendo a mano.
+   */
+  function aplicarPlantilla(id: string) {
+    if (!id) { setForm(f => ({ ...f, plantilla_id: '' })); return }
+    const p = plantillas.find(x => x.id === id)
+    if (!p) return
+
+    const catNombre = categorias.find(c => c.id === p.categoria_id)?.nombre || ''
+    setForm(f => ({
+      ...f,
+      plantilla_id: id,
+      // El nombre solo se propone si aún está en blanco: si el usuario ya
+      // escribió "Desfibrilador de Urgencias", pisárselo sería una faena.
+      nombre: f.nombre.trim() || p.nombre,
+      marca:  p.marca  || '',
+      modelo: p.modelo || '',
+      categoria_id: p.categoria_id || f.categoria_id,
+      categoria: catNombre || f.categoria,
+      frecuencia_mantenimiento: p.frecuencia_mantenimiento || f.frecuencia_mantenimiento,
+    }))
   }
 
   async function cargarEquipos(hospitalId: string) {
@@ -221,6 +274,8 @@ export default function EquiposPage() {
     ]
     fechas.forEach(f => { if (!payload[f]) payload[f] = null })
     delete payload.categoria_id_local
+    // Cadena vacía no vale para una clave foránea.
+    payload.plantilla_id = form.plantilla_id || null
 
     const { data: nuevo, error } = await supabase.from('equipos').insert(payload).select('id').single()
     if (error) { toast.error('Error al guardar: ' + error.message); setGuardando(false); return }
@@ -302,6 +357,29 @@ export default function EquiposPage() {
           <div className="card border-blue-100 bg-blue-50">
             <div className="section-title mb-3 text-blue-800">Registrar nuevo equipo</div>
             <div className="flex flex-col gap-3">
+              {/* Partir de un modelo ahorra teclear marca, modelo y categoría, y
+                  —más importante— evita que el mismo aparato acabe escrito de
+                  seis maneras distintas entre centros. */}
+              {plantillas.length > 0 && (
+                <div>
+                  <label className="label">Partir de un modelo del catálogo</label>
+                  <select className="input" value={form.plantilla_id}
+                    onChange={e => aplicarPlantilla(e.target.value)}>
+                    <option value="">Sin modelo — rellenar a mano</option>
+                    {plantillas.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {[p.nombre, [p.marca, p.modelo].filter(Boolean).join(' ')]
+                          .filter(Boolean).join(' · ')}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-xs text-gray-400 mt-1 leading-snug">
+                    Rellena marca, modelo y categoría. La serie, el censo y la
+                    ubicación son de cada aparato y siguen a mano.
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="label">Nombre *</label>
                 <input className="input" placeholder="Ej: Monitor/Desfibrilador UCI-01"
