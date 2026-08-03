@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import VersionApp from '@/components/VersionApp'
 import BotonResetPassword from '@/components/BotonResetPassword'
 import ServiciosDelHospital from '@/components/ServiciosDelHospital'
+import PlantillasDispositivoDelHospital from '@/components/PlantillasDispositivoDelHospital'
 
 // =====================================================================
 // Tipos
@@ -532,9 +533,12 @@ export default function SuperAdminPage() {
                         ))}
                       </div>
 
-                      {/* Servicios del hospital */}
+                      {/* Configuración del hospital: secciones plegables, todas
+                          cerradas de entrada. Con treinta y pico entradas cada
+                          una, abrirlas sepultaría el resto de la ficha. */}
                       <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid #e5e7eb' }}>
                         <ServiciosDelHospital hospitalId={h.id} hospitalNombre={h.nombre} />
+                        <PlantillasDispositivoDelHospital hospitalId={h.id} />
                       </div>
 
                       {/* Barra de cumplimiento */}

@@ -473,6 +473,28 @@
   .panel-fila-vacio {
     @apply text-gray-300 italic;
   }
+  /* Marca y modelo bajo el nombre: identifican el aparato sin robarle
+     protagonismo ni ensanchar la fila en un móvil. */
+  .panel-fila-detalle {
+    @apply block truncate text-gray-400;
+    font-size: 0.66rem;
+  }
+  .panel-fila-etiqueta {
+    @apply rounded px-1 py-0.5 text-gray-500;
+    background: #f3f4f6;
+    font-size: 0.6rem;
+  }
+
+  /* Dos campos por fila en pantallas anchas; apilados en móvil, donde partir
+     un campo en dos columnas lo deja inservible. */
+  .crear-plantilla-fila {
+    @apply grid gap-2;
+    grid-template-columns: 1fr;
+    margin-top: 0.4rem;
+  }
+  @media (min-width: 480px) {
+    .crear-plantilla-fila { grid-template-columns: 1fr 1fr; }
+  }
 
   /* ============================================================
      ALTA DE UN SERVICIO NUEVO
