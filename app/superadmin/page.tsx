@@ -302,6 +302,25 @@ export default function SuperAdminPage() {
     await cargarUsuarios()
   }
 
+  /**
+   * Activa o desactiva los avisos desde la propia campana del listado.
+   *
+   * Era solo un indicador y la gente pincha en ella —es lo natural—, así que
+   * obligar a entrar en "Editar" para algo que se cambia de un vistazo era
+   * fricción sin motivo. Se comprueba el error: si la política RLS rechazara
+   * el cambio, la campana volvería a su sitio sin decir nada.
+   */
+  async function toggleAvisos(u: any) {
+    const { error } = await supabase.from('perfiles')
+      .update({ recibir_alertas: !u.recibir_alertas }).eq('id', u.id)
+
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    toast.success(u.recibir_alertas
+      ? `${u.nombre} ya no recibirá avisos`
+      : `${u.nombre} recibirá los avisos`)
+    await cargarUsuarios()
+  }
+
   async function gestionarSolicitud(id: string, estado: 'aprobada' | 'rechazada') {
     await supabase.from('solicitudes_registro').update({
       estado, gestionado_por: perfil?.id, gestionado_en: new Date().toISOString(),
@@ -618,10 +637,18 @@ export default function SuperAdminPage() {
                           columna había que abrir ficha por ficha, y así nadie
                           reparó en que casi ningún usuario lo tenía activado. */}
                       <td style={{ padding: '0.75rem' }}>
-                        <span title={u.recibir_alertas ? 'Recibe avisos' : 'NO recibe avisos'}
-                          style={{ fontSize: '0.9rem', opacity: u.recibir_alertas ? 1 : 0.35 }}>
+                        <button
+                          onClick={() => toggleAvisos(u)}
+                          title={u.recibir_alertas
+                            ? `${u.nombre} recibe los avisos — pulsa para desactivar`
+                            : `${u.nombre} NO recibe avisos — pulsa para activar`}
+                          style={{
+                            fontSize: '1rem', lineHeight: 1, cursor: 'pointer',
+                            background: 'transparent', border: 'none', padding: '0.25rem',
+                            opacity: u.recibir_alertas ? 1 : 0.35,
+                          }}>
                           {u.recibir_alertas ? '🔔' : '🔕'}
-                        </span>
+                        </button>
                       </td>
                       <td style={{ padding: '0.75rem' }}>
                         <div style={{ display: 'flex', gap: '0.4rem' }}>

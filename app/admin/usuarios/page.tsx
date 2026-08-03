@@ -113,6 +113,22 @@ export default function AdminUsuariosPage() {
     await cargarDatos()
   }
 
+  /**
+   * Activa o desactiva los avisos desde la campana del listado, sin entrar en
+   * la ficha. Es donde la gente pincha y donde se ve el estado del hospital
+   * entero de un vistazo.
+   */
+  async function toggleAvisos(u: any) {
+    const { error } = await supabase.from('perfiles')
+      .update({ recibir_alertas: !u.recibir_alertas }).eq('id', u.id)
+
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return }
+    toast.success(u.recibir_alertas
+      ? `${u.nombre} ya no recibirá avisos`
+      : `${u.nombre} recibirá los avisos`)
+    await cargarDatos()
+  }
+
   function resetForm() {
     setForm({ nombre: '', email: '', rol: 'auditor', servicio_id: '', activo: true, codigo_empleado: '' })
   }
@@ -202,10 +218,15 @@ export default function AdminUsuariosPage() {
                   <span>{u.rol} {(u.servicios as any)?.nombre ? `· ${(u.servicios as any).nombre}` : ''}</span>
                   {/* Visible de un vistazo: quién se enteraría de una alerta. */}
                   {u.activo && (
-                    <span className={u.recibir_alertas ? 'text-green-600' : 'text-gray-300'}
-                      title={u.recibir_alertas ? 'Recibe avisos de alertas' : 'NO recibe avisos'}>
+                    <button
+                      onClick={() => toggleAvisos(u)}
+                      className="leading-none p-0.5 -m-0.5"
+                      style={{ opacity: u.recibir_alertas ? 1 : 0.35 }}
+                      title={u.recibir_alertas
+                        ? `${u.nombre} recibe los avisos — pulsa para desactivar`
+                        : `${u.nombre} NO recibe avisos — pulsa para activar`}>
                       {u.recibir_alertas ? '🔔' : '🔕'}
-                    </span>
+                    </button>
                   )}
                 </div>
               </div>

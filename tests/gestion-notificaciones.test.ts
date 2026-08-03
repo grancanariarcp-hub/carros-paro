@@ -68,6 +68,31 @@ describe('Activar notificaciones — quién puede', () => {
   }, 30_000)
 })
 
+describe('Activar notificaciones — el superadmin', () => {
+  it('puede activarlas a usuarios de CUALQUIER hospital', async () => {
+    // Se comprueba aparte del administrador porque la política que lo permite
+    // es otra rama (es_superadmin()), y podría fallar sin que se notara: en el
+    // panel de superadmin la campana no daría error, simplemente no cambiaría.
+    const svc = serviceClient()
+    const superadmin = fx.users.calidadA
+    await svc.from('perfiles').update({ rol: 'superadmin' }).eq('id', superadmin.id)
+    await svc.from('perfiles').update({ recibir_alertas: false }).eq('id', fx.users.supervisorB1.id)
+
+    try {
+      const sb = await clientForUser(superadmin as any)
+      const { error } = await sb.from('perfiles')
+        .update({ recibir_alertas: true }).eq('id', fx.users.supervisorB1.id)
+      expect(error, error?.message).toBeNull()
+
+      const { data } = await svc.from('perfiles')
+        .select('recibir_alertas').eq('id', fx.users.supervisorB1.id).single()
+      expect(data!.recibir_alertas, 'el superadmin no pudo activarlas en otro hospital').toBe(true)
+    } finally {
+      await svc.from('perfiles').update({ rol: 'calidad' }).eq('id', superadmin.id)
+    }
+  }, 30_000)
+})
+
 describe('Valor de fábrica', () => {
   it('un usuario nuevo NO recibe alertas hasta que alguien se lo active', async () => {
     // No es un descuido sino el diseño: nadie empieza a recibir correos sin
