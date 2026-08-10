@@ -9,6 +9,31 @@ tercero (1.1.**1**) cuando solo son correcciones.
 
 ---
 
+## 1.2.0 — 11 de agosto de 2026
+
+### Aprobar una solicitud ahora da de alta a la persona
+
+Antes, «Aprobar» solo marcaba la solicitud como aprobada: no creaba la cuenta,
+no creaba el perfil y no avisaba a nadie. Como la bandeja solo muestra las
+pendientes, la solicitud desaparecía de la vista y quien la había pedido seguía
+sin poder entrar, sin que nadie tuviera forma de notarlo.
+
+Al aprobar se elige hospital y rol —el centro que escribe el solicitante es
+texto libre y no basta para asignar a nadie—, se crea la cuenta con el correo
+ya confirmado y se devuelve un enlace de un solo uso para entregarle.
+
+Si algo falla, la solicitud **sigue pendiente** y se puede reintentar, en lugar
+de desaparecer sin que nadie haya sido dado de alta.
+
+### Correcciones
+
+- **Cuentas que no podían entrar.** Los usuarios creados desde la aplicación
+  quedaban con el correo sin confirmar, y sin confirmar Supabase no deja
+  iniciar sesión: figuraban como usuarios de pleno derecho y no podían pasar de
+  la pantalla de acceso. Afectaba a dos personas reales.
+
+---
+
 ## 1.1.0 — 3 de agosto de 2026
 
 ### Un control se guarda entero o no se guarda

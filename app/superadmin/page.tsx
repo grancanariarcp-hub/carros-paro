@@ -8,6 +8,7 @@ import BotonResetPassword from '@/components/BotonResetPassword'
 import ServiciosDelHospital from '@/components/ServiciosDelHospital'
 import PlantillasDispositivoDelHospital from '@/components/PlantillasDispositivoDelHospital'
 import PlantillasCarroDelHospital from '@/components/PlantillasCarroDelHospital'
+import AprobarSolicitud from '@/components/AprobarSolicitud'
 
 // =====================================================================
 // Tipos
@@ -381,9 +382,17 @@ export default function SuperAdminPage() {
   }
 
   async function gestionarSolicitud(id: string, estado: 'aprobada' | 'rechazada') {
-    await supabase.from('solicitudes_registro').update({
+    // Solo rechaza. Aprobar da de alta a una persona de verdad —cuenta, perfil
+    // y enlace de acceso— y eso lo hace AprobarSolicitud contra la Edge
+    // Function. Antes, aprobar solo marcaba esta fila: la solicitud
+    // desaparecía de la bandeja y nadie quedaba dado de alta.
+    const { data, error } = await supabase.from('solicitudes_registro').update({
       estado, gestionado_por: perfil?.id, gestionado_en: new Date().toISOString(),
-    }).eq('id', id)
+    }).eq('id', id).select('id')
+
+    if (error) { toast.error('No se pudo rechazar: ' + error.message); return }
+    if (!data?.length) { toast.error('No tienes permiso sobre esa solicitud'); return }
+
     toast.success(estado === 'aprobada' ? 'Aprobada' : 'Rechazada')
     await cargarSolicitudes()
   }
@@ -759,7 +768,7 @@ export default function SuperAdminPage() {
                     <div style={{ fontSize: '0.68rem', color: '#9ca3af', marginTop: '4px' }}>{new Date(s.creado_en).toLocaleString('es-ES')}</div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                    <button onClick={() => gestionarSolicitud(s.id, 'aprobada')} className="sa-btn sa-btn-pri" style={{ background: '#16a34a', fontSize: '0.75rem' }}>Aprobar</button>
+                    <AprobarSolicitud solicitud={s} alAprobar={cargarSolicitudes} />
                     <button onClick={() => gestionarSolicitud(s.id, 'rechazada')} className="sa-btn sa-btn-sec" style={{ color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.75rem' }}>Rechazar</button>
                   </div>
                 </div>
