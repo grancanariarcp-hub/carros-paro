@@ -9,6 +9,7 @@ import ServiciosDelHospital from '@/components/ServiciosDelHospital'
 import PlantillasDispositivoDelHospital from '@/components/PlantillasDispositivoDelHospital'
 import PlantillasCarroDelHospital from '@/components/PlantillasCarroDelHospital'
 import AprobarSolicitud from '@/components/AprobarSolicitud'
+import AvisoSinDestinatarios from '@/components/AvisoSinDestinatarios'
 
 // =====================================================================
 // Tipos
@@ -569,6 +570,7 @@ export default function SuperAdminPage() {
                           cerradas de entrada. Con treinta y pico entradas cada
                           una, abrirlas sepultaría el resto de la ficha. */}
                       <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid #e5e7eb' }}>
+                        <AvisoSinDestinatarios hospitalId={h.id} />
                         <ServiciosDelHospital hospitalId={h.id} hospitalNombre={h.nombre} />
                         <PlantillasDispositivoDelHospital hospitalId={h.id} />
                         <PlantillasCarroDelHospital hospitalId={h.id} />

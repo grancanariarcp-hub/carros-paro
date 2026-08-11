@@ -9,6 +9,7 @@ import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import type { Carro, Perfil } from '@/lib/types'
 import VersionApp from '@/components/VersionApp'
+import ControlesPendientes from '@/components/ControlesPendientes'
 
 export default function AuditorPage() {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -185,6 +186,7 @@ export default function AuditorPage() {
       </div>
 
       <div className="content">
+        <ControlesPendientes />
         {/* Escáner prominente */}
         <div className="card border-blue-100 bg-blue-50">
           <div className="section-title mb-2 text-blue-800">Escanear carro o equipo</div>

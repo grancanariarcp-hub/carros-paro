@@ -9,6 +9,7 @@ import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import VersionApp from '@/components/VersionApp'
 import type { Carro, Perfil, Inspeccion } from '@/lib/types'
+import ControlesPendientes from '@/components/ControlesPendientes'
 
 export default function AdminPage() {
   const [tab, setTab] = useState<'resumen'|'alertas'|'carros'|'usuarios'|'informes'>('resumen')
@@ -190,6 +191,7 @@ export default function AdminPage() {
       </div>
 
       <div className="content">
+        <ControlesPendientes />
 
         {/* ============ TAB RESUMEN ============ */}
         {tab === 'resumen' && <>

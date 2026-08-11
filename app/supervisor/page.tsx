@@ -7,6 +7,7 @@ import { estadoColor, formatFecha, diasHastaControl } from '@/lib/utils'
 import type { Perfil, Carro } from '@/lib/types'
 import { useHospitalTheme } from '@/lib/useHospitalTheme'
 import VersionApp from '@/components/VersionApp'
+import ControlesPendientes from '@/components/ControlesPendientes'
 
 export default function SupervisorPage() {
   const [perfil, setPerfil] = useState<Perfil|null>(null)
@@ -138,6 +139,7 @@ export default function SupervisorPage() {
       </div>
 
       <div className="content">
+        <ControlesPendientes />
 
         {/* SEMÁFORO GENERAL */}
         <div className="card" style={{

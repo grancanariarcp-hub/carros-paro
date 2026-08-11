@@ -542,6 +542,64 @@
   }
 
   /* ============================================================
+     CONTROLES SIN ENVIAR
+     Un control guardado en el dispositivo es un control invisible:
+     quien lo firmó se va convencido de haberlo registrado. Por eso
+     se avisa en ámbar —hay algo a medias— y no en rojo, que haría
+     pensar en un fallo cuando el control está a salvo.
+  ============================================================ */
+  .pendientes {
+    @apply rounded-xl p-3 flex flex-col gap-2 mb-3;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+  }
+  .pendientes-cabecera {
+    @apply flex items-center gap-2 text-sm;
+    color: #92400e;
+  }
+  .pendientes-punto {
+    @apply w-2 h-2 rounded-full flex-shrink-0;
+    background: #d97706;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pendientes-punto { animation: latido 2s ease-in-out infinite; }
+  }
+  @keyframes latido {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+  }
+  .pendientes-texto {
+    @apply text-xs leading-snug;
+    color: #a16207;
+  }
+  .pendientes-lista {
+    @apply flex flex-col gap-1 list-none p-0 m-0;
+    font-size: 0.75rem;
+    color: #78350f;
+  }
+  .pendientes-lista li {
+    @apply flex items-center gap-2 flex-wrap;
+  }
+  .pendientes-cuando {
+    @apply text-xs;
+    color: #b45309;
+    font-variant-numeric: tabular-nums;
+  }
+  .pendientes-error {
+    @apply flex items-center gap-1.5 w-full;
+    font-size: 0.68rem;
+    color: #b91c1c;
+  }
+  .pendientes-error button {
+    @apply underline cursor-pointer;
+    color: #b91c1c;
+    background: none;
+    border: none;
+    font-size: 0.68rem;
+    padding: 0;
+  }
+
+  /* ============================================================
      APROBAR UNA SOLICITUD DE REGISTRO
      Hay que elegir hospital y rol antes de dar de alta, así que
      el botón se despliega en un formulario ahí mismo. Ocupa el

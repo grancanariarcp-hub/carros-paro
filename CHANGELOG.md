@@ -9,6 +9,53 @@ tercero (1.1.**1**) cuando solo son correcciones.
 
 ---
 
+## 1.5.0 — 11 de agosto de 2026
+
+*Incluye la 1.4.0, publicada el mismo día: el cierre del almacén de evidencias
+se desplegó aparte para que las imágenes no dejaran de verse en ningún momento.*
+
+### Los controles ya no se pierden sin cobertura
+
+El trabajo se hace a pie de carro, en pasillos y sótanos donde la wifi falla. Y
+desde que el control se guarda en una sola transacción, una caída de red al
+firmar no dejaba media inspección: no dejaba ninguna. Quien acababa de revisar
+cuarenta ítems los perdía enteros.
+
+Ahora el control se guarda en el propio dispositivo y se envía solo en cuanto
+vuelve la red. En la pantalla de inicio aparece cuántos quedan sin enviar, para
+que nadie se vaya creyendo que registró algo que sigue en su móvil.
+
+### Aviso semanal de lo que caduca
+
+Cada lunes por la mañana, quien lleva un servicio recibe qué le caduca en los
+próximos 30 días y en qué carro está. Lo ya caducado se marca como crítico: un
+medicamento vencido dentro de un carro de parada no se descubre en el informe
+mensual, se descubre en la parada.
+
+No se repite mientras el aviso anterior siga sin atender, porque una bandeja
+con lo mismo cinco veces se deja de mirar.
+
+### Seguridad
+
+- **Las firmas manuscritas ya no se descargan sin sesión.** El almacén de
+  evidencias estaba marcado como público, y eso se salta las políticas de
+  acceso. Ahora las imágenes se piden con enlace firmado, y cada hospital solo
+  ve las suyas.
+- **Las fotos de incidencia no se veían nunca.** Se guardan en un almacén
+  privado pero se pedían como públicas. Arreglado de paso.
+- El catálogo compartido ya solo se lee con la sesión iniciada.
+
+### Correcciones
+
+- **Nadie recibía los avisos.** Las alertas llegan solo a quien las tiene
+  activadas, y en producción no las tenía nadie: cero de nueve usuarios. El
+  sistema funcionaba entero sin avisar a ninguna persona. Ahora la ficha del
+  hospital lo dice cuando pasa.
+- El registro de auditoría se poda al pasar cinco años, para que no crezca sin
+  fin. Sigue siendo inmutable para todo lo demás.
+
+---
+
 ## 1.3.0 — 11 de agosto de 2026
 
 ### El centro se elige de una lista

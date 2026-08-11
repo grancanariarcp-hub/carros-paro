@@ -10,6 +10,7 @@ import type { Carro, Cajon, Material, Perfil, Desfibrilador } from '@/lib/types'
 import { rutaPadre } from '@/lib/navigation'
 import { compressFotoIncidencia } from '@/lib/image-utils'
 import ImagenEvidencia from '@/components/ImagenEvidencia'
+import { guardarPendiente } from '@/lib/controles-pendientes'
 
 interface ItemState {
   material_id: string
@@ -261,7 +262,7 @@ export default function ControlPage() {
         ? proximoControl(carro?.frecuencia_control || 'mensual')
         : carro?.proximo_control
 
-      const { data: inspId, error: inspError } = await supabase.rpc('registrar_control', {
+      const argumentos = {
         p_carro_id: carroId,
         p_tipo: tipo,
         p_resultado: resultado,
@@ -302,9 +303,42 @@ export default function ControlPage() {
           precinto_retirado: precintoRetirado.numero || null,
           precinto_colocado: precintoColocado.numero || null,
         },
-      })
+      }
 
-      if (inspError) throw inspError
+      const { data: inspId, error: inspError } = await supabase.rpc('registrar_control', argumentos)
+
+      // Sin cobertura, el control se queda en el dispositivo y se envia solo
+      // cuando vuelva la red.
+      //
+      // El trabajo se hace en pasillos y sotanos donde la wifi falla, y desde
+      // que el guardado es atomico una caida al firmar no deja media
+      // inspeccion: no deja ninguna. Quien acaba de revisar cuarenta items los
+      // perdia enteros y acababa rellenandolo de memoria en el despacho, que
+      // destruye justo el valor que esto promete.
+      //
+      // Solo se guarda cuando el fallo es de RED. Si la base rechaza el
+      // control —falta un permiso, el carro no es de su hospital— reintentarlo
+      // mas tarde daria el mismo resultado, y guardarlo haria creer que se
+      // envio algo que nunca va a entrar.
+      if (inspError) {
+        const esDeRed = !navigator.onLine ||
+          /fetch|network|failed to fetch|conexi/i.test(inspError.message ?? '')
+
+        if (esDeRed) {
+          const guardado = await guardarPendiente(argumentos, {
+            id: carroId,
+            codigo: carro?.codigo ?? 'sin codigo',
+          })
+
+          if (guardado) {
+            toast.success('Sin conexion: el control quedo guardado y se enviara solo', { duration: 6000 })
+            setMostrarFirma(false)
+            router.push('/')
+            return
+          }
+        }
+        throw inspError
+      }
 
       // Alerta si no operativo.
       //
