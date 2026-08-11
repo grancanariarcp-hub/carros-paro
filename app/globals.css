@@ -708,6 +708,24 @@
   }
 
   /* ============================================================
+     PIE DE UN LISTADO POR TANDAS
+     Dice siempre cuántas se están viendo. Sin ese número, un
+     listado recortado y uno completo se ven igual, y quien busca
+     algo de hace dos años se va convencido de que no existe.
+  ============================================================ */
+  .cargar-mas {
+    @apply flex items-center justify-between gap-3 flex-wrap pt-3 mt-1
+           border-t border-gray-100;
+  }
+  .cargar-mas-cuenta {
+    @apply text-xs text-gray-400;
+    font-variant-numeric: tabular-nums;
+  }
+  .cargar-mas .btn-secondary {
+    @apply w-auto py-1.5 px-3 text-xs;
+  }
+
+  /* ============================================================
      CONTROLES SIN ENVIAR
      Un control guardado en el dispositivo es un control invisible:
      quien lo firmó se va convencido de haberlo registrado. Por eso
