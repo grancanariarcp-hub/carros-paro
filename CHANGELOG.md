@@ -9,6 +9,30 @@ tercero (1.1.**1**) cuando solo son correcciones.
 
 ---
 
+## 1.5.1 — 11 de agosto de 2026
+
+### Ninguna escritura vuelve a fallar en silencio
+
+Quedaban 16 sitios donde la aplicación escribía en la base sin comprobar si
+había salido bien. Ahora son cero. Las que importaban:
+
+- La **fecha de caducidad** que se corrige a pie de carro. De ella cuelga el
+  aviso semanal: si no se guardaba, el lunes se avisaba de una caducidad
+  equivocada o no se avisaba de una real.
+- El **mantenimiento de un equipo**: quedaba en el historial, pero el aparato
+  seguía figurando como vencido.
+- La **baja de los avisos push**: la suscripción seguía viva y la persona
+  seguía recibiendo avisos que creía haber desactivado.
+
+### Las pantallas de plantillas dejan de estar duplicadas
+
+Tres pantallas existían dos veces, byte a byte: 1.472 líneas repetidas. Cada
+cambio había que hacerlo dos veces y acabarían divergiendo sin que nadie lo
+notara. Las dos rutas siguen ahí —cada rol entra por un sitio— pero la pantalla
+vive en un solo lugar.
+
+---
+
 ## 1.5.0 — 11 de agosto de 2026
 
 *Incluye la 1.4.0, publicada el mismo día: el cierre del almacén de evidencias

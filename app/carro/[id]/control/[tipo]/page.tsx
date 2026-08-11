@@ -119,9 +119,15 @@ export default function ControlPage() {
 
   async function actualizarFechaVto(matId: string, fecha: string) {
     updateItem(matId, 'fecha_vencimiento', fecha)
-    await supabase.from('materiales')
+
+    // De esta fecha cuelga el aviso semanal de vencimientos. Si la escritura
+    // falla en silencio, quien la corrigio a pie de carro cree que ya esta, y
+    // el lunes se avisa de una caducidad equivocada, o no se avisa de una real.
+    const { error } = await supabase.from('materiales')
       .update({ fecha_vencimiento: fecha || null })
       .eq('id', matId)
+
+    if (error) toast.error('No se pudo guardar la fecha de caducidad: ' + error.message)
   }
 
   function toggleFalla(matId: string) {

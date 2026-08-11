@@ -287,11 +287,17 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
     })
     if (error) { toast.error('Error al registrar mantenimiento'); setGuardando(false); return }
 
-    await supabase.from('equipos')
+    // El mantenimiento ya consta en el historial, pero si esto falla el equipo
+    // sigue figurando como vencido y volvera a saltar en las alertas.
+    const { error: eFecha } = await supabase.from('equipos')
       .update({ fecha_ultimo_mantenimiento: formMant.fecha })
       .eq('id', equipo.id)
 
-    toast.success('Mantenimiento registrado')
+    if (eFecha) {
+      toast.error('Mantenimiento registrado, pero el equipo sigue marcado como vencido: ' + eFecha.message)
+    } else {
+      toast.success('Mantenimiento registrado')
+    }
     setFormMant(formMantInicial)
     setMostrarFormMant(false)
     await cargarTodo()
@@ -318,7 +324,9 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
       // almacenado, pero el almacen es privado: para mostrarla hay que pasarla
       // por urlVisible() de lib/evidencias. Ver ImagenEvidencia.
       const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
-      await supabase.from('equipos').update({ foto_url: url.publicUrl }).eq('id', equipo.id)
+      const { error: eFoto } = await supabase.from('equipos')
+        .update({ foto_url: url.publicUrl }).eq('id', equipo.id)
+      if (eFoto) { toast.error('La foto se subio pero no se asocio al equipo: ' + eFoto.message); return }
       toast.success('Foto actualizada')
       await cargarTodo()
     } catch (err: any) {

@@ -674,11 +674,15 @@ function ModalAgregarEquipo({
         carro_id: carroId, cajon_id: form.cajon_id || null, servicio_id: servicioId,
       }).eq('id', eq.id)
       if (error) throw error
-      await supabase.from('historial_mantenimientos').insert({
+      // El equipo ya esta reasignado; que falte su linea en el historial no
+      // justifica deshacerlo, pero si decirlo: es el rastro de por que ese
+      // aparato esta hoy donde esta.
+      const { error: eHist } = await supabase.from('historial_mantenimientos').insert({
         equipo_id: eq.id, tipo: 'reasignacion',
         fecha: new Date().toISOString().split('T')[0],
         descripcion: `Equipo reasignado a carro ${carroNombre}`, resultado: 'ok',
       })
+      if (eHist) toast.error('Reasignado, pero sin dejar rastro en el historial: ' + eHist.message)
       if (eq.indispensable && (eq.carro_id || eq.servicio_id)) {
         // Se comprueba el error: sin esto la llamada fallaba en silencio por
         // la sobrecarga duplicada de la función (ver migración

@@ -81,7 +81,10 @@ export default function NuevoUsuarioPage() {
 
       // Log de auditoría
       const { data: { user: adminUser } } = await supabase.auth.getUser()
-      await supabase.from('log_auditoria').insert({
+      // La auditoria no bloquea el alta —el usuario ya existe— pero se mira:
+      // asi es como se descubrio que llevaba tiempo fallando en silencio por
+      // un valor que incumplia una restriccion.
+      const { error: eLog } = await supabase.from('log_auditoria').insert({
         usuario_id: adminUser?.id,
         hospital_id: perfil?.hospital_id,
         accion: 'usuario_creado',
@@ -91,14 +94,19 @@ export default function NuevoUsuarioPage() {
         resultado: 'exito',
       })
 
+      if (eLog) console.error('[nuevo-usuario] no se pudo auditar:', eLog.message)
+
       // Notificación interna
       if (perfil?.hospital_id) {
-        await supabase.from('notificaciones').insert({
+        const { error: eAviso } = await supabase.from('notificaciones').insert({
           hospital_id: perfil.hospital_id,
           tipo: 'usuario_creado',
           titulo: 'Nuevo usuario creado',
           mensaje: `${form.nombre} (${ROLES.find(r => r.value === form.rol)?.label}) ha sido añadido al sistema.`,
         })
+        // El usuario ya existe; que nadie se entere por la campana no
+        // justifica deshacerlo, pero si decirlo.
+        if (eAviso) toast.error('Usuario creado, pero no se avisó al equipo: ' + eAviso.message)
       }
 
       toast.success(`Usuario ${form.nombre} creado correctamente`)

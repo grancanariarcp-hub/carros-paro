@@ -104,10 +104,20 @@ export async function desactivarPush(usuarioId: string): Promise<{ ok: boolean; 
 
   const supabase = createClient()
   if (sub) {
-    await supabase.from('web_push_subscriptions')
+    // Si esto falla en silencio, la suscripción sigue viva en el servidor y la
+    // persona sigue recibiendo avisos que creía haber desactivado.
+    const { error } = await supabase.from('web_push_subscriptions')
       .delete()
       .eq('usuario_id', usuarioId)
       .eq('endpoint', sub.endpoint)
+
+    if (error) {
+      return { ok: false, error: 'No se pudo dar de baja el aviso: ' + error.message }
+    }
+
+    // El navegador se da de baja después: si se hiciera antes y fallara el
+    // borrado, quedaría una suscripción muerta en la base que nadie puede
+    // limpiar, porque ya no hay endpoint con el que encontrarla.
     await sub.unsubscribe()
   }
   return { ok: true }

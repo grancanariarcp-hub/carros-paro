@@ -263,7 +263,9 @@ export default function SuperAdminPage() {
     await supabase.storage.from('logos').remove([nombre])
     await supabase.storage.from('logos').upload(nombre, file, { upsert: true, contentType: file.type })
     const { data: url } = supabase.storage.from('logos').getPublicUrl(nombre)
-    await supabase.from('hospitales').update({ logo_url: url.publicUrl + '?t=' + Date.now() }).eq('id', hospitalId)
+    const { error: eLogo } = await supabase.from('hospitales')
+      .update({ logo_url: url.publicUrl + '?t=' + Date.now() }).eq('id', hospitalId)
+    if (eLogo) { toast.error('El logo se subio pero no se asocio al hospital: ' + eLogo.message); setSubiendoLogo(false); return }
     setEditandoHospital((p: any) => ({ ...p, logo_url: url.publicUrl }))
     toast.success('Logo actualizado')
     await cargarHospitalesConStats()
