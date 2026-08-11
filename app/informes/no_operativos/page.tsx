@@ -6,6 +6,8 @@ import { formatFechaHora } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { rutaPadre } from '@/lib/navigation'
 import { informeHeaderHTML } from '@/components/InformeHeader'
+import ImagenEvidencia from '@/components/ImagenEvidencia'
+import { urlsVisibles } from '@/lib/evidencias'
 
 
 function nombreArchivoPDF(codigo: string, tipo: string): string {
@@ -81,6 +83,15 @@ export default function InformeNoOperativosPage() {
   }
 
   async function generarPDF() {
+    // El almacen de evidencias es privado. Se firman todas de una vez antes de
+    // montar el HTML: de una en una serian decenas de viajes y el PDF tardaria
+    // en aparecer.
+    const firmadas = await urlsVisibles(
+      supabase,
+      datos.flatMap(({ itemsFallos }: any) => (itemsFallos as any[]).map(i => i.foto_url)),
+    )
+    const verFoto = (u: string | null) => (u ? firmadas.get(u) ?? u : null)
+
     const fecha = new Date().toLocaleDateString('es-ES')
     const nombreHospital = hospital?.nombre || 'Hospital'
     const headerHTML = informeHeaderHTML({
@@ -124,7 +135,7 @@ datos.map(({ carro, inspecciones, itemsFallos }: any) => `
       <div><strong>Último control:</strong> ${carro.ultimo_control ? new Date(carro.ultimo_control).toLocaleString('es-ES') : '—'}</div>
     </div>
     <div style="font-weight:bold;margin-bottom:8px;color:#dc2626">Fallos graves:</div>
-    ${(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => `<div class="fallo-item"><strong>${i.materiales?.nombre || '—'}</strong>${i.descripcion_falla ? `<br>${i.descripcion_falla}` : ''}${i.foto_url ? `<br><img class="foto" src="${i.foto_url}"/>` : ''}</div>`).join('')}
+    ${(itemsFallos as any[]).filter((i: any) => i.tipo_falla === 'grave').map((i: any) => `<div class="fallo-item"><strong>${i.materiales?.nombre || '—'}</strong>${i.descripcion_falla ? `<br>${i.descripcion_falla}` : ''}${i.foto_url ? `<br><img class="foto" src="${verFoto(i.foto_url)}"/>` : ''}</div>`).join('')}
     <div style="font-weight:bold;margin:12px 0 6px;color:#64748b">Historial:</div>
     ${(inspecciones as any[]).map((ins: any) => `<div class="hist-item">${new Date(ins.fecha).toLocaleString('es-ES')} · ${ins.tipo?.replace('_', ' ')} · ${ins.perfiles?.nombre || '—'}</div>`).join('')}
   </div>
@@ -184,7 +195,7 @@ datos.map(({ carro, inspecciones, itemsFallos }: any) => `
                   <div key={i.id} className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg">
                     <div className="text-xs font-semibold">{i.materiales?.nombre}</div>
                     {i.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{i.descripcion_falla}</div>}
-                    {i.foto_url && <img src={i.foto_url} alt="evidencia" className="mt-2 w-full h-28 object-cover rounded-lg border border-red-200"/>}
+                    {i.foto_url && <ImagenEvidencia src={i.foto_url} alt="evidencia" className="mt-2 w-full h-28 object-cover rounded-lg border border-red-200"/>}
                   </div>
                 ))}
               </div>

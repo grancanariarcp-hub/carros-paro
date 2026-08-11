@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import EscanerCodigoBarras from '@/components/EscanerCodigoBarras'
 import { compressFotoIncidencia, ratioCompresion } from '@/lib/image-utils'
+import ImagenEvidencia from '@/components/ImagenEvidencia'
 
 // =====================================================================
 // Tipos
@@ -313,6 +314,9 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
         upsert: true, contentType: archivo.type,
       })
       if (error) throw error
+      // Se guarda con forma de enlace publico por coherencia con lo ya
+      // almacenado, pero el almacen es privado: para mostrarla hay que pasarla
+      // por urlVisible() de lib/evidencias. Ver ImagenEvidencia.
       const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
       await supabase.from('equipos').update({ foto_url: url.publicUrl }).eq('id', equipo.id)
       toast.success('Foto actualizada')
@@ -607,7 +611,7 @@ export default function FichaEquipo({ equipoId, rol, onVolver }: Props) {
           <div className="flex gap-3 mb-3">
             <div className="w-20 h-20 rounded-xl border border-gray-100 overflow-hidden flex-shrink-0 bg-gray-50 flex items-center justify-center">
               {equipo.foto_url
-                ? <img src={equipo.foto_url} alt={equipo.nombre} className="w-full h-full object-cover" />
+                ? <ImagenEvidencia src={equipo.foto_url} alt={equipo.nombre} className="w-full h-full object-cover" />
                 : <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={2} />
                   </svg>

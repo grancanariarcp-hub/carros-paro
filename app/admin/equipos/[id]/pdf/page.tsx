@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname, useParams } from 'next/navigation'
 import { rutaPadre } from '@/lib/navigation'
 import InformeHeader from '@/components/InformeHeader'
+import { urlVisible } from '@/lib/evidencias'
 
 // =====================================================================
 // Tipos
@@ -110,7 +111,11 @@ export default function FichaEquipoPDFPage() {
         .eq('hospital_id', hospitalId).eq('tipo', 'historial_auditorias').maybeSingle() : Promise.resolve({ data: null }),
       supabase.rpc('generar_codigo_informe', { tipo_inf: 'historial_auditorias' }),
     ])
-    setEquipo(eqRes.data)
+    // La foto vive en un almacen privado: sin firmar el enlace, el PDF sale
+    // con un hueco donde deberia estar el equipo.
+    const eq = eqRes.data
+    if (eq?.foto_url) eq.foto_url = await urlVisible(supabase, eq.foto_url)
+    setEquipo(eq)
     setHistorial(histRes.data || [])
     setHospitalConfig(cfgRes.data)
     setPlantillaInforme(plRes.data)

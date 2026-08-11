@@ -6,6 +6,7 @@ import { formatFechaHora, formatFecha } from '@/lib/utils'
 import type { Inspeccion, ItemInspeccion } from '@/lib/types'
 import { rutaPadre } from '@/lib/navigation'
 import ReabrirInspeccion from '@/components/ReabrirInspeccion'
+import ImagenEvidencia from '@/components/ImagenEvidencia'
 
 export default function ResultadoPage() {
   const [insp, setInsp] = useState<Inspeccion | null>(null)
@@ -210,7 +211,7 @@ export default function ResultadoPage() {
             <div className="section-title mb-3">Firma digital</div>
             <div className="flex items-start gap-3">
               <div className="flex-1">
-                <img
+                <ImagenEvidencia
                   src={inspAny.firma_url}
                   alt="Firma digital"
                   className="w-full border border-gray-200 rounded-xl bg-white"
@@ -271,7 +272,7 @@ export default function ResultadoPage() {
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{(f.materiales as any)?.nombre}</div>
                     {f.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>}
-                    {f.foto_url && <img src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg" />}
+                    {f.foto_url && <ImagenEvidencia src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg" />}
                   </div>
                 </div>
               </div>
@@ -290,7 +291,7 @@ export default function ResultadoPage() {
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{(f.materiales as any)?.nombre}</div>
                     {f.descripcion_falla && <div className="text-xs text-gray-500 mt-0.5">{f.descripcion_falla}</div>}
-                    {f.foto_url && <img src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg" />}
+                    {f.foto_url && <ImagenEvidencia src={f.foto_url} alt="evidencia" className="mt-2 w-full h-24 object-cover rounded-lg" />}
                   </div>
                 </div>
               </div>

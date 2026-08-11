@@ -9,6 +9,7 @@ import FirmaDigital, { type DatosFirma } from '@/components/FirmaDigital'
 import type { Carro, Cajon, Material, Perfil, Desfibrilador } from '@/lib/types'
 import { rutaPadre } from '@/lib/navigation'
 import { compressFotoIncidencia } from '@/lib/image-utils'
+import ImagenEvidencia from '@/components/ImagenEvidencia'
 
 interface ItemState {
   material_id: string
@@ -167,6 +168,9 @@ export default function ControlPage() {
       contentType: archivo.type,
     })
     if (!data) return null
+    // Se guarda con forma de enlace publico por coherencia con lo ya
+    // almacenado, pero el almacen es privado: para mostrarla hay que pasarla
+    // por urlVisible() de lib/evidencias. Ver ImagenEvidencia.
     const { data: url } = supabase.storage.from('evidencias').getPublicUrl(path)
     return url.publicUrl
   }
@@ -452,7 +456,7 @@ export default function ControlPage() {
               <label className="label">Foto del precinto retirado <span className="text-gray-400">(opcional)</span></label>
               {precintoRetirado.foto_url ? (
                 <div className="relative">
-                  <img src={precintoRetirado.foto_url} alt="precinto retirado"
+                  <ImagenEvidencia src={precintoRetirado.foto_url} alt="precinto retirado"
                     className="w-full h-28 object-cover rounded-xl border border-amber-200" />
                   <button onClick={() => setPrecintoRetirado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
                     className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center">✕</button>
@@ -571,7 +575,7 @@ export default function ControlPage() {
                           <div className="label mb-1">Fotografía de evidencia</div>
                           {item.foto_url ? (
                             <div className="relative">
-                              <img src={item.foto_url} alt="evidencia"
+                              <ImagenEvidencia src={item.foto_url} alt="evidencia"
                                 className="w-full h-28 object-cover rounded-xl border border-red-200" />
                               <button onClick={() => { updateItem(mat.id, 'foto_url', ''); updateItem(mat.id, 'foto_file', undefined) }}
                                 className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center">✕</button>
@@ -676,7 +680,7 @@ export default function ControlPage() {
               <label className="label">Foto del precinto colocado <span className="text-gray-400">(opcional)</span></label>
               {precintoColocado.foto_url ? (
                 <div className="relative">
-                  <img src={precintoColocado.foto_url} alt="precinto colocado"
+                  <ImagenEvidencia src={precintoColocado.foto_url} alt="precinto colocado"
                     className="w-full h-28 object-cover rounded-xl border border-blue-200" />
                   <button onClick={() => setPrecintoColocado(prev => ({ ...prev, foto_file: undefined, foto_url: '' }))}
                     className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center">✕</button>
