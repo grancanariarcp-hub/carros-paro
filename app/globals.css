@@ -393,6 +393,172 @@
     .sa-input, .sa-btn { min-height: 0; }
   }
 
+  /* ------------------------------------------------------------
+     Piezas de la consola que estaban escritas en línea.
+     Un estilo en línea no admite media queries, así que nada
+     podía adaptarse a la pantalla sin reescribir el componente
+     —que es justo el fallo de móvil que hubo que corregir— y
+     cada retoque había que repetirlo en cada sitio donde
+     estuviera copiado.
+     Lo que SIGUE en línea es lo que depende de datos: el color
+     de un plan, el de un semáforo. Eso ahí está bien.
+  ------------------------------------------------------------ */
+  .sa-seccion {
+    @apply flex flex-col;
+    gap: 1rem;
+  }
+  .sa-fila-botones {
+    @apply flex flex-wrap;
+    gap: 0.5rem;
+  }
+
+  /* Cifras de cabecera. auto-fit para que en móvil caigan a dos
+     columnas en vez de encogerse hasta ser ilegibles. */
+  .sa-metricas {
+    @apply grid;
+    grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  .sa-metrica {
+    @apply text-center;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .sa-metrica-valor {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .sa-metrica-etiqueta {
+    font-size: 0.62rem;
+    color: #9ca3af;
+    margin-top: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Las cuatro pestañas suman ~480px. En móvil se desplazan sobre
+     sí mismas en vez de arrastrar la página entera en horizontal. */
+  .sa-pestanas {
+    @apply flex;
+    margin-bottom: 1.5rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 4px;
+    width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    gap: 2px;
+  }
+  .sa-pestana {
+    @apply cursor-pointer whitespace-nowrap flex-shrink-0;
+    padding: 0.45rem 1rem;
+    border-radius: 5px;
+    border: none;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    background: transparent;
+    color: #6b7280;
+  }
+  .sa-pestana-activa {
+    background: #111827;
+    color: white;
+  }
+
+  .sa-tarjeta {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .sa-vacio {
+    @apply text-center;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 3rem;
+    color: #9ca3af;
+  }
+  .sa-titulo-bloque {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Barra superior. Mide 56px fijos: en vez de desbordar, lo
+     prescindible —el subtítulo, el nombre— se recorta. */
+  .sa-marca {
+    @apply flex items-baseline min-w-0;
+    gap: 0.75rem;
+  }
+  .sa-marca-nombre {
+    @apply flex-shrink-0;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: white;
+    letter-spacing: 0.08em;
+  }
+  .sa-marca-sub {
+    @apply truncate;
+    font-size: 0.6rem;
+    color: #9ca3af;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .sa-topbar-acciones {
+    @apply flex items-center min-w-0 flex-shrink-0;
+    gap: clamp(0.5rem, 2vw, 1rem);
+  }
+  .sa-topbar-usuario {
+    @apply truncate cursor-pointer;
+    font-size: 0.78rem;
+    color: #d1d5db;
+    background: transparent;
+    border: none;
+    max-width: 9rem;
+  }
+  .sa-topbar-boton {
+    @apply cursor-pointer whitespace-nowrap;
+    font-size: 0.72rem;
+    color: #9ca3af;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    padding: 0.35rem 0.7rem;
+  }
+  .sa-topbar-boton:hover { color: #e5e7eb; }
+
+  /* Filas y textos que se repetían por toda la consola. */
+  .sa-fila {
+    @apply flex items-center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: #f9fafb;
+    border-radius: 8px;
+  }
+  .sa-texto-suave  { font-size: 0.78rem; color: #6b7280; }
+  .sa-texto-menor  { font-size: 0.7rem;  color: #9ca3af; }
+  .sa-texto-fuerte { font-size: 0.8rem;  font-weight: 600; color: #111827; }
+  .sa-texto-alerta { color: #dc2626; font-weight: 700; }
+  .sa-casilla      { width: 16px; height: 16px; }
+  .sa-cargando {
+    @apply min-h-screen flex items-center justify-center;
+    background: #f9fafb;
+    color: #9ca3af;
+    font-size: 0.85rem;
+  }
+
   /* ============================================================
      PANEL DEL HOSPITAL (superadmin)
      Secciones plegables —servicios, plantillas de dispositivo,

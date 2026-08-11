@@ -67,16 +67,24 @@ export default function PerfilPage() {
       setServicio(sv)
     }
 
-    // Estadísticas de actividad
-    const { data: inspecciones } = await supabase.from('inspecciones')
-      .select('id, fecha, firma_url')
-      .eq('auditor_id', user.id)
-      .order('fecha', { ascending: false })
+    // Estadísticas de actividad.
+    //
+    // Se piden los CONTEOS, no las filas. Antes se descargaba el historial
+    // entero de esa persona para saber cuántos controles había hecho: con unos
+    // años de uso son miles de filas viajando para calcular tres números.
+    const [{ count: controles }, { count: firmados }, { data: ultima }] = await Promise.all([
+      supabase.from('inspecciones').select('id', { count: 'exact', head: true })
+        .eq('auditor_id', user.id),
+      supabase.from('inspecciones').select('id', { count: 'exact', head: true })
+        .eq('auditor_id', user.id).not('firma_url', 'is', null),
+      supabase.from('inspecciones').select('fecha')
+        .eq('auditor_id', user.id).order('fecha', { ascending: false }).limit(1),
+    ])
 
     setStats({
-      controles: inspecciones?.length || 0,
-      firmados: inspecciones?.filter(i => i.firma_url).length || 0,
-      ultimoControl: inspecciones?.[0]?.fecha || null,
+      controles: controles || 0,
+      firmados: firmados || 0,
+      ultimoControl: ultima?.[0]?.fecha || null,
     })
 
     setLoading(false)

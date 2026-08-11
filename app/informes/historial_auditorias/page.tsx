@@ -23,6 +23,7 @@ async function descargarPDF(html: string, nombreArchivo: string) {
 
 export default function InformeHistorialPage() {
   const [datos, setDatos] = useState<any[]>([])
+  const [recortado, setRecortado] = useState(false)
   const [perfil, setPerfil] = useState<any>(null)
   const [hospital, setHospital] = useState<any>(null)
   const [hospitalConfig, setHospitalConfig] = useState<any>(null)
@@ -73,10 +74,22 @@ export default function InformeHistorialPage() {
 
   async function buscar(f: typeof filtros, hospitalId?: string) {
     const hId = hospitalId || perfil?.hospital_id
+    // El hospital se filtra EN LA CONSULTA, no despues.
+    //
+    // Antes se pedian 200 inspecciones de cualquier centro y se descartaban en
+    // el navegador las de los demas. Con dos hospitales en marcha eso significa
+    // que un informe podia salir con la mitad de sus controles, o con ninguno,
+    // sin avisar de nada: las 200 se las habia llevado el otro centro. El
+    // informe parecia correcto y estaba incompleto.
+    //
+    // El !inner obliga a que la union con carros filtre de verdad; sin el,
+    // PostgREST devuelve la inspeccion igual con el carro a null.
     let q = supabase.from('inspecciones')
-      .select('*, carros(codigo,nombre,ubicacion,responsable,hospital_id,servicios(nombre)), perfiles(nombre)')
+      .select('*, carros!inner(codigo,nombre,ubicacion,responsable,hospital_id,servicios(nombre)), perfiles(nombre)')
       .order('fecha', { ascending: false })
-      .limit(200)
+      .limit(500)
+
+    if (hId) q = q.eq('carros.hospital_id', hId)
 
     if (f.auditor) q = q.eq('auditor_id', f.auditor)
     if (f.carro) q = q.eq('carro_id', f.carro)
@@ -85,11 +98,10 @@ export default function InformeHistorialPage() {
     if (f.hasta) q = q.lte('fecha', f.hasta + 'T23:59:59')
 
     const { data } = await q
-    // Filtrar por hospital via carro
-    const filtrados = hId
-      ? (data || []).filter((ins: any) => ins.carros?.hospital_id === hId)
-      : (data || [])
-    setDatos(filtrados)
+    setDatos(data || [])
+    // Si vienen justo las 500, el informe esta recortado y hay que decirlo:
+    // un informe incompleto que parece completo es peor que no tenerlo.
+    setRecortado((data?.length ?? 0) >= 500)
   }
 
   function updateFiltro(campo: string, valor: string) {
@@ -227,6 +239,17 @@ ${datos.length === 0 ? `
         <span className="font-semibold text-sm text-right">Historial</span>
       </div>
       <div className="content">
+        {/* Un informe recortado que parece completo es peor que no tenerlo:
+            quien lo firma cree que ahi esta todo lo del periodo. */}
+        {recortado && (
+          <div className="card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
+            <div className="text-xs" style={{ color: '#92400e' }}>
+              <strong>Este informe esta recortado.</strong> Se muestran los 500
+              controles mas recientes que cumplen los filtros. Acota las fechas
+              para que salga el periodo entero.
+            </div>
+          </div>
+        )}
         <div className="card">
           <label className="label">Código del informe (editable)</label>
           <input className="input" value={codigo} onChange={e => setCodigo(e.target.value)} />

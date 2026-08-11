@@ -9,6 +9,39 @@ tercero (1.1.**1**) cuando solo son correcciones.
 
 ---
 
+## 1.6.0 — 11 de agosto de 2026
+
+Pulido para crecer sin sobresaltos. Nada de esto se nota hoy; todo se habría
+notado dentro de un año.
+
+### Los listados se sirven por tandas
+
+El historial de un carro se traía entero. Un carro pasa un control al mes
+durante años: funciona el primer año y deja de funcionar justo cuando la
+herramienta lleva tiempo en uso. Ahora llegan de 25 en 25, con el número de lo
+que se está viendo — un listado recortado y uno completo se veían igual.
+
+### Dos cosas que ya estaban mal, no solo lentas
+
+- **El informe de auditorías podía salir incompleto sin avisar.** Pedía los 200
+  controles más recientes de *cualquier* centro y descartaba después los de los
+  demás. Con dos hospitales activos, un informe podía llegar con la mitad de
+  sus controles, o con ninguno. Ahora el hospital se filtra en la consulta, y
+  si aun así se recorta, el informe lo dice.
+- **Se descargaba el historial entero de una persona para contar tres
+  números.** Ahora se piden los conteos.
+
+### Índices y estilos
+
+- 44 índices en claves foráneas. Sin ellos, borrar un usuario obligaba a
+  recorrer nueve tablas enteras. Se añaden con las tablas pequeñas, porque
+  crearlos ahora es instantáneo y sobre una tabla llena bloquea escrituras.
+- La consola de superadministración pasa de 120 estilos en línea a 85, y los
+  que quedan son ajustes sueltos o dependen del dato. Un estilo en línea no
+  admite media queries: era la causa del fallo de móvil que hubo que corregir.
+
+---
+
 ## 1.5.1 — 11 de agosto de 2026
 
 ### Ninguna escritura vuelve a fallar en silencio

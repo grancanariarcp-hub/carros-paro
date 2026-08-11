@@ -105,15 +105,20 @@ export default function FichaUsuarioPage() {
       setServicios(sv || [])
     }
 
-    // Estadísticas de actividad
-    const { data: inspecciones } = await supabase.from('inspecciones')
-      .select('id, fecha, firma_url')
-      .eq('auditor_id', usuarioId)
-      .order('fecha', { ascending: false })
+    // Se piden los conteos, no las filas: descargar el historial entero de
+    // alguien para calcular tres números deja de funcionar con el tiempo.
+    const [{ count: total }, { count: firmadas }, { data: ultima }] = await Promise.all([
+      supabase.from('inspecciones').select('id', { count: 'exact', head: true })
+        .eq('auditor_id', usuarioId),
+      supabase.from('inspecciones').select('id', { count: 'exact', head: true })
+        .eq('auditor_id', usuarioId).not('firma_url', 'is', null),
+      supabase.from('inspecciones').select('fecha')
+        .eq('auditor_id', usuarioId).order('fecha', { ascending: false }).limit(1),
+    ])
 
-    const totalInspecciones   = inspecciones?.length || 0
-    const inspeccionesFirmadas = inspecciones?.filter(i => i.firma_url).length || 0
-    const ultimaInspeccion    = inspecciones?.[0]?.fecha || null
+    const totalInspecciones    = total || 0
+    const inspeccionesFirmadas = firmadas || 0
+    const ultimaInspeccion     = ultima?.[0]?.fecha || null
 
     setStats({ totalInspecciones, inspeccionesFirmadas, ultimaInspeccion, ultimoAcceso: null })
     setLoading(false)

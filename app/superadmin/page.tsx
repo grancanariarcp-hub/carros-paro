@@ -436,28 +436,28 @@ export default function SuperAdminPage() {
       <div className="sa-topbar">
         {/* La barra mide 56px fijos: en vez de desbordar, lo prescindible
             (subtítulo y nombre de usuario) se recorta con puntos suspensivos. */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', minWidth: 0 }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white', letterSpacing: '0.08em', flexShrink: 0 }}>ÁSTOR</span>
-          <span style={{ fontSize: '0.6rem', color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Superadmin · CRITIC SL</span>
+        <div className="sa-marca">
+          <span className="sa-marca-nombre">ÁSTOR</span>
+          <span className="sa-marca-sub">Superadmin · CRITIC SL</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 1rem)', minWidth: 0, flexShrink: 0 }}>
-          <button onClick={() => router.push('/perfil')} style={{ fontSize: '0.78rem', color: '#d1d5db', background: 'transparent', border: 'none', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '9rem' }}>{perfil?.nombre}</button>
+        <div className="sa-topbar-acciones">
+          <button onClick={() => router.push('/perfil')} className="sa-topbar-usuario">{perfil?.nombre}</button>
           <VersionApp tono="oscuro" />
           {/* La pantalla de auditoría muestra TODOS los hospitales cuando entra
               un superadmin, pero solo estaba enlazada desde el panel de
               administrador de hospital: desde aquí no había forma de llegar. */}
           <button onClick={() => router.push('/admin/auditoria')} title="Registro de auditoría"
-            style={{ fontSize: '0.72rem', color: '#9ca3af', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.6rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            className="sa-topbar-boton">
             🔍 Auditoría
           </button>
-          <button onClick={cerrarSesion} style={{ fontSize: '0.72rem', color: '#6b7280', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '5px', padding: '0.35rem 0.75rem', cursor: 'pointer' }}>Salir</button>
+          <button onClick={cerrarSesion} className="sa-topbar-boton">Salir</button>
         </div>
       </div>
 
       <div className="sa-body">
 
         {/* Resumen global */}
-        <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
+        <div className="sa-metricas">
           {[
             { label: 'Hospitales', value: globalStats.hospitales, color: '#111827' },
             { label: 'Activos', value: globalStats.activos, color: '#16a34a' },
@@ -467,9 +467,11 @@ export default function SuperAdminPage() {
             { label: 'Mant. vencido', value: globalStats.mantVencido, color: globalStats.mantVencido > 0 ? '#dc2626' : '#6b7280' },
             { label: 'Usuarios', value: globalStats.usuarios, color: '#7c3aed' },
           ].map((s, i) => (
-            <div key={i} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '1rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-              <div style={{ fontSize: '0.62rem', color: '#9ca3af', marginTop: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
+            <div key={i} className="sa-metrica">
+              {/* El color sí va en línea: sale del dato (rojo si hay carros no
+                  operativos, gris si no), no de la maquetación. */}
+              <div className="sa-metrica-valor" style={{ color: s.color }}>{s.value}</div>
+              <div className="sa-metrica-etiqueta">{s.label}</div>
             </div>
           ))}
         </div>
@@ -478,26 +480,21 @@ export default function SuperAdminPage() {
         {/* Las 4 pestañas suman ~480px: en móvil desbordaban y arrastraban
             la página entera en horizontal. Ahora se desplazan sobre sí
             mismas y en PC siguen viéndose igual (maxWidth fit-content). */}
-        <div style={{ display: 'flex', marginBottom: '1.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '4px', width: 'fit-content', maxWidth: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', gap: '2px' }}>
+        <div className="sa-pestanas">
           {([
             ['hospitales', `Hospitales (${hospitalesStats.length})`],
             ['nuevo_hospital', '+ Nuevo hospital'],
             ['usuarios', `Usuarios (${usuarios.length})`],
             ['solicitudes', `Solicitudes${solicitudes.length > 0 ? ` (${solicitudes.length})` : ''}`],
           ] as const).map(([t, l]) => (
-            <button key={t} onClick={() => setTab(t as Tab)} style={{
-              padding: '0.45rem 1rem', borderRadius: '5px', border: 'none', cursor: 'pointer',
-              fontSize: '0.78rem', fontWeight: 600, fontFamily: "'Inter', sans-serif",
-              whiteSpace: 'nowrap', flexShrink: 0,
-              background: tab === t ? '#111827' : 'transparent',
-              color: tab === t ? 'white' : '#6b7280',
-            }}>{l}</button>
+            <button key={t} onClick={() => setTab(t as Tab)}
+              className={`sa-pestana${tab === t ? ' sa-pestana-activa' : ''}`}>{l}</button>
           ))}
         </div>
 
         {/* ============ TAB HOSPITALES ============ */}
         {tab === 'hospitales' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="sa-seccion">
             {cargandoStats && (
               <div style={{ textAlign: 'center', padding: '1rem', color: '#9ca3af', fontSize: '0.8rem' }}>
                 Cargando estadísticas...
@@ -534,9 +531,9 @@ export default function SuperAdminPage() {
                             flexWrap desbordaban la pantalla entera. */}
                         <div style={{ display: 'flex', gap: '0.35rem 1rem', fontSize: '0.72rem', color: '#6b7280', flexWrap: 'wrap' }}>
                           <span>🟢 {h.carrosOperativos}/{h.totalCarros} carros</span>
-                          {h.carrosNoOperativos > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>🔴 {h.carrosNoOperativos} no op.</span>}
+                          {h.carrosNoOperativos > 0 && <span className="sa-texto-alerta">🔴 {h.carrosNoOperativos} no op.</span>}
                           {h.totalAlertas > 0 && <span style={{ color: '#d97706', fontWeight: 700 }}>⚠️ {h.totalAlertas} alertas</span>}
-                          {h.equiposMantVencido > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>🔧 {h.equiposMantVencido} mant.</span>}
+                          {h.equiposMantVencido > 0 && <span className="sa-texto-alerta">🔧 {h.equiposMantVencido} mant.</span>}
                           <span>👥 {h.usuariosActivos} usuarios</span>
                           <span style={{ color: h.cumplimiento >= 80 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>📋 {h.cumplimiento}% cumpl.</span>
                         </div>
@@ -590,7 +587,7 @@ export default function SuperAdminPage() {
                       </div>
 
                       {/* Acciones */}
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div className="sa-fila-botones">
                         <button onClick={() => setEditandoHospital({ ...h })} className="sa-btn sa-btn-sec">✏️ Editar</button>
                         <button onClick={() => router.push(`/superadmin/hospital/${h.id}/logos`)} className="sa-btn sa-btn-sec">🎨 Logos</button>
                         <button onClick={() => { setFiltroHospital(h.id); setTab('usuarios') }} className="sa-btn sa-btn-sec">👥 Ver usuarios</button>
@@ -629,7 +626,7 @@ export default function SuperAdminPage() {
                               <div><label className="sa-label">Máx. usuarios</label><input type="number" value={editandoHospital.max_usuarios} onChange={e => setEditandoHospital({ ...editandoHospital, max_usuarios: +e.target.value })} className="sa-input" /></div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <div className="sa-fila-botones">
                             <button onClick={guardarEdicionHospital} disabled={guardando} className="sa-btn sa-btn-pri">{guardando ? 'Guardando...' : 'Guardar'}</button>
                             <button onClick={() => setEditandoHospital(null)} className="sa-btn sa-btn-sec">Cancelar</button>
                           </div>
@@ -646,7 +643,7 @@ export default function SuperAdminPage() {
         {/* ============ TAB NUEVO HOSPITAL ============ */}
         {tab === 'nuevo_hospital' && (
           <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem', maxWidth: '680px' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', marginBottom: '1.5rem' }}>Nuevo hospital</h2>
+            <h2 className="sa-titulo-bloque">Nuevo hospital</h2>
             <div className="form-grid">
               {[['Nombre *', 'nombre', 'text', 'Hospital Universitario...'], ['Slug URL *', 'slug', 'text', 'hospital-nombre'], ['Email administrador *', 'email_admin', 'email', 'admin@hospital.es'], ['Teléfono', 'telefono', 'tel', '+34 900 000 000'], ['País', 'pais', 'text', 'España'], ['Color primario', 'color_primario', 'color', '']].map(([l, f, t, p]) => (
                 <div key={f}>
@@ -765,9 +762,9 @@ export default function SuperAdminPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, color: '#111827', marginBottom: '4px' }}>{s.nombre}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>{s.email}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>Centro: <strong>{s.hospital_nombre}</strong></div>
-                    <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>Rol: <strong>{s.rol_solicitado}</strong></div>
+                    <div className="sa-texto-suave">{s.email}</div>
+                    <div className="sa-texto-suave">Centro: <strong>{s.hospital_nombre}</strong></div>
+                    <div className="sa-texto-suave">Rol: <strong>{s.rol_solicitado}</strong></div>
                     {s.mensaje && <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic', marginTop: '4px' }}>"{s.mensaje}"</div>}
                     <div style={{ fontSize: '0.68rem', color: '#9ca3af', marginTop: '4px' }}>{new Date(s.creado_en).toLocaleString('es-ES')}</div>
                   </div>
@@ -788,10 +785,10 @@ export default function SuperAdminPage() {
           onClick={() => setModalUsuario(null)}>
           <div style={{ background: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', marginBottom: '1.5rem' }}>
+            <h3 className="sa-titulo-bloque">
               {modalUsuario === 'nuevo' ? 'Crear usuario' : `Editar: ${modalUsuario.nombre}`}
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="sa-seccion">
               <div><label className="sa-label">Nombre completo *</label><input type="text" value={formUsuario.nombre} onChange={e => setFormUsuario(f => ({ ...f, nombre: e.target.value }))} className="sa-input" /></div>
               {modalUsuario === 'nuevo' && <div><label className="sa-label">Email *</label><input type="email" value={formUsuario.email} onChange={e => setFormUsuario(f => ({ ...f, email: e.target.value }))} className="sa-input" /></div>}
               <div>
@@ -841,18 +838,18 @@ export default function SuperAdminPage() {
               </div>
               {/* Viene desactivado de fábrica, así que un usuario nuevo no
                   recibe nada hasta que alguien se lo enciende aquí. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px' }}>
-                <input type="checkbox" checked={formUsuario.recibir_alertas} onChange={e => setFormUsuario(f => ({ ...f, recibir_alertas: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
+              <div className="sa-fila">
+                <input type="checkbox" checked={formUsuario.recibir_alertas} onChange={e => setFormUsuario(f => ({ ...f, recibir_alertas: e.target.checked }))} className="sa-casilla" />
                 <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#111827' }}>Recibir avisos de alertas</div>
-                  <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>Email y notificación cuando un carro queda no operativo</div>
+                  <div className="sa-texto-fuerte">Recibir avisos de alertas</div>
+                  <div className="sa-texto-menor">Email y notificación cuando un carro queda no operativo</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px' }}>
-                <input type="checkbox" checked={formUsuario.activo} onChange={e => setFormUsuario(f => ({ ...f, activo: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
+              <div className="sa-fila">
+                <input type="checkbox" checked={formUsuario.activo} onChange={e => setFormUsuario(f => ({ ...f, activo: e.target.checked }))} className="sa-casilla" />
                 <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#111827' }}>Usuario activo</div>
-                  <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>Si está inactivo no podrá acceder</div>
+                  <div className="sa-texto-fuerte">Usuario activo</div>
+                  <div className="sa-texto-menor">Si está inactivo no podrá acceder</div>
                 </div>
               </div>
             </div>

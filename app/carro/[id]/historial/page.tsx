@@ -1,13 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, usePathname, useParams } from 'next/navigation'
 import { estadoColor, formatFechaHora } from '@/lib/utils'
 import type { Inspeccion } from '@/lib/types'
 import { rutaPadre } from '@/lib/navigation'
+import { usePaginacion } from '@/lib/usePaginacion'
+import CargarMas from '@/components/CargarMas'
 
 export default function HistorialPage() {
-  const [inspecciones, setInspecciones] = useState<Inspeccion[]>([])
   const [loading, setLoading] = useState(true)
   const [carro, setCarro] = useState<any>(null)
   const router = useRouter()
@@ -16,15 +17,26 @@ export default function HistorialPage() {
   const id = params.id as string
   const supabase = createClient()
 
+  // Un carro pasa un control al mes durante anios. Traerse el historial entero
+  // funciona el primer anio y deja de funcionar justo cuando la herramienta
+  // lleva tiempo en uso.
+  const traer = useCallback(async (desde: number, hasta: number) => {
+    const { data } = await supabase.from('inspecciones')
+      .select('*, perfiles(nombre)')
+      .eq('carro_id', id)
+      .order('fecha', { ascending: false })
+      .range(desde, hasta)
+    return (data || []) as Inspeccion[]
+  }, [id])
+
+  const tanda = usePaginacion<Inspeccion>(traer)
+  const inspecciones = tanda.filas
+
   useEffect(() => {
     async function cargar() {
       const { data: c } = await supabase.from('carros').select('codigo,nombre').eq('id', id).single()
       setCarro(c)
-      const { data } = await supabase.from('inspecciones')
-        .select('*, perfiles(nombre)')
-        .eq('carro_id', id)
-        .order('fecha', { ascending: false })
-      setInspecciones(data || [])
+      await tanda.reiniciar()
       setLoading(false)
     }
     cargar()
@@ -40,9 +52,7 @@ export default function HistorialPage() {
       </div>
       <div className="content">
         <div className="card">
-          <div className="section-title mb-3">
-            {inspecciones.length} controles registrados
-          </div>
+          <div className="section-title mb-3">Controles registrados</div>
           {inspecciones.length === 0 && (
             <div className="text-xs text-gray-400 text-center py-8">Sin controles registrados aún</div>
           )}
@@ -64,6 +74,14 @@ export default function HistorialPage() {
               </div>
             )
           })}
+
+          <CargarMas
+            cargando={tanda.cargando}
+            hayMas={tanda.hayMas}
+            cuantas={inspecciones.length}
+            onMas={tanda.masFilas}
+            nombre="controles"
+          />
         </div>
       </div>
     </div>
