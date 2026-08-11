@@ -23,15 +23,24 @@ export default function AprobarSolicitud({
   solicitud,
   alAprobar,
 }: {
-  solicitud: { id: string; nombre: string; email: string; rol_solicitado?: string; hospital_nombre?: string }
+  solicitud: {
+    id: string; nombre: string; email: string
+    rol_solicitado?: string
+    hospital_id?: string | null
+    servicio_id?: string | null
+    hospital_nombre?: string
+  }
   alAprobar: () => void
 }) {
   const [abierto, setAbierto]     = useState(false)
   const [hospitales, setHosp]     = useState<any[]>([])
   const [servicios, setServicios] = useState<any[]>([])
-  const [hospitalId, setHospital] = useState('')
+  // Las solicitudes nuevas ya traen hospital y servicio elegidos de una lista;
+  // solo hay que confirmarlos. Las antiguas solo tienen el centro escrito a
+  // mano, y esas siguen necesitando que alguien lo resuelva.
+  const [hospitalId, setHospital] = useState(solicitud.hospital_id || '')
   const [rol, setRol]             = useState(solicitud.rol_solicitado || 'auditor')
-  const [servicioId, setServicio] = useState('')
+  const [servicioId, setServicio] = useState(solicitud.servicio_id || '')
   const [enviando, setEnviando]   = useState(false)
   const [enlace, setEnlace]       = useState<string | null>(null)
   const [copiado, setCopiado]     = useState(false)
@@ -42,8 +51,10 @@ export default function AprobarSolicitud({
     supabase.from('hospitales').select('id, nombre').eq('activo', true).order('nombre')
       .then(({ data }) => {
         setHosp(data || [])
-        // Si el centro escrito en la solicitud coincide con uno real, se
-        // preselecciona: evita elegir mal a las nueve de la noche.
+        if (hospitalId) return
+
+        // Solicitud antigua: solo trae el centro escrito a mano. Si encaja con
+        // uno real se preselecciona, para no elegir mal a las nueve de la noche.
         const escrito = (solicitud.hospital_nombre || '').toLowerCase()
         const encaja = (data || []).find(h =>
           escrito.includes(h.nombre.toLowerCase()) ||
@@ -141,8 +152,9 @@ export default function AprobarSolicitud({
     <div className="aprobar-solicitud">
       <div className="aprobar-solicitud-titulo">Dar de alta a {solicitud.nombre}</div>
       <p className="aprobar-solicitud-nota">
-        El centro que escribió («{solicitud.hospital_nombre || 'sin indicar'}») es
-        texto libre, así que hay que confirmarlo aquí.
+        {solicitud.hospital_id
+          ? 'Eligió su centro de la lista. Confirma el rol antes de darle acceso.'
+          : `El centro que escribió («${solicitud.hospital_nombre || 'sin indicar'}») es texto libre, así que hay que confirmarlo aquí.`}
       </p>
 
       <label className="sa-label">Hospital *</label>

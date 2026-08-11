@@ -9,6 +9,39 @@ tercero (1.1.**1**) cuando solo son correcciones.
 
 ---
 
+## 1.3.0 — 11 de agosto de 2026
+
+### El centro se elige de una lista
+
+En el formulario de solicitud de acceso, el hospital ya no se escribe a mano:
+se elige de un desplegable con los centros que existen. Y una vez elegido,
+también el servicio. Primero se crea el hospital, después sus usuarios.
+
+Un nombre tecleado no servía para asignar a nadie a ninguna parte, así que
+quien aprobaba tenía que adivinar a qué centro se refería. Ahora la solicitud
+llega con el centro y el servicio ya identificados, y aprobar es confirmar.
+
+A un supervisor se le pide el servicio en el propio formulario: sin él no ve
+ningún carro, y la solicitud se atascaría después al aprobarla.
+
+### Seguridad
+
+- **La tabla de hospitales era legible sin iniciar sesión.** Cualquiera con la
+  clave anónima —que va dentro del JavaScript público de la página— podía leer
+  todos los datos de los centros activos, incluidos los correos de sus
+  administradores, el plan contratado y los límites. Ahora solo se publica una
+  lista de nombres, que es lo único que el desplegable necesita.
+
+### Correcciones
+
+- **Nadie se enteraba de las solicitudes nuevas.** El aviso se intentaba crear
+  desde el navegador buscando a los superadministradores, cosa que un visitante
+  sin sesión no puede hacer: no se creaba ninguno, nunca. Las solicitudes solo
+  se veían entrando a mirar la pestaña. Ahora avisa la base de datos, y también
+  al administrador del centro elegido.
+
+---
+
 ## 1.2.0 — 11 de agosto de 2026
 
 ### Aprobar una solicitud ahora da de alta a la persona

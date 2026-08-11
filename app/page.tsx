@@ -341,51 +341,59 @@ export default function LoginPage() {
 // ================================================================
 function FormularioRegistro({ onVolver }: { onVolver: () => void }) {
   const [form, setForm] = useState({
-    nombre: '', email: '', hospital_nombre: '', rol: 'auditor', mensaje: '',
+    nombre: '', email: '', hospital_id: '', servicio_id: '', rol: 'auditor', mensaje: '',
   })
+  const [hospitales, setHospitales] = useState<any[]>([])
+  const [servicios, setServicios]   = useState<any[]>([])
+  const [cargandoHospitales, setCargandoHospitales] = useState(true)
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
   const supabase = createClient()
 
+  // Vista con solo id y nombre. La tabla hospitales ya no es legible sin
+  // sesión: exponía email_admin, plan y límites a cualquiera.
+  useEffect(() => {
+    supabase.from('hospitales_para_registro').select('id, nombre').order('nombre')
+      .then(({ data }) => { setHospitales(data || []); setCargandoHospitales(false) })
+  }, [])
+
+  useEffect(() => {
+    if (!form.hospital_id) { setServicios([]); return }
+    supabase.rpc('servicios_para_registro', { p_hospital_id: form.hospital_id })
+      .then(({ data }) => setServicios(data || []))
+  }, [form.hospital_id])
+
+  const hospitalElegido = hospitales.find(h => h.id === form.hospital_id)
+
   async function enviarSolicitud(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.email.trim() || !form.hospital_nombre.trim()) {
+    if (!form.nombre.trim() || !form.email.trim() || !form.hospital_id) {
       toast.error('Rellena todos los campos obligatorios')
+      return
+    }
+    // Sin servicio, un supervisor no ve ningún carro: pedirlo aquí evita que
+    // la solicitud se atasque después, al aprobarla.
+    if (form.rol === 'supervisor' && !form.servicio_id) {
+      toast.error('Indica tu servicio: un supervisor solo ve los carros del suyo')
       return
     }
     setEnviando(true)
     try {
-      // Guardar solicitud en la tabla solicitudes_registro
+      // El aviso a quien debe aprobarla lo crea un disparador de la base. Se
+      // intentaba aquí, buscando a los superadmin en `perfiles`, pero quien
+      // rellena esto no tiene sesión y RLS no le deja ver ningún perfil: la
+      // consulta devolvía cero filas y no se avisaba a nadie, nunca.
       const { error } = await supabase.from('solicitudes_registro').insert({
         nombre: form.nombre.trim(),
         email: form.email.trim(),
-        hospital_nombre: form.hospital_nombre.trim(),
+        hospital_id: form.hospital_id,
+        hospital_nombre: hospitalElegido?.nombre ?? null,
+        servicio_id: form.servicio_id || null,
         rol_solicitado: form.rol,
         mensaje: form.mensaje.trim() || null,
         estado: 'pendiente',
       })
       if (error) throw error
-
-      // Notificar a todos los superadmins
-      const { data: superadmins } = await supabase
-        .from('perfiles')
-        .select('id, hospital_id')
-        .eq('rol', 'superadmin')
-        .eq('activo', true)
-
-      if (superadmins && superadmins.length > 0) {
-        await supabase.from('notificaciones').insert(
-          superadmins.map(sa => ({
-            hospital_id: sa.hospital_id,
-            usuario_id: sa.id,
-            tipo: 'usuario_creado',
-            titulo: `Solicitud de acceso: ${form.nombre}`,
-            mensaje: `${form.nombre} (${form.email}) solicita acceso como ${form.rol} en ${form.hospital_nombre}.`,
-            leida: false,
-            accion_url: '/superadmin',
-          }))
-        )
-      }
 
       setEnviado(true)
     } catch (err: any) {
@@ -428,11 +436,51 @@ function FormularioRegistro({ onVolver }: { onVolver: () => void }) {
           <input className="input" type="email" placeholder="tu@hospital.com"
             value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
         </div>
+        {/* De una lista, no escrito a mano. Un nombre tecleado no sirve para
+            asignar a nadie a ningún sitio: quien aprobaba tenía que adivinar a
+            qué centro se refería. El hospital se crea antes que sus usuarios. */}
         <div>
           <label className="label">Centro / Hospital *</label>
-          <input className="input" type="text" placeholder="Nombre de tu centro de trabajo"
-            value={form.hospital_nombre} onChange={e => setForm(f => ({ ...f, hospital_nombre: e.target.value }))} required />
+          <select className="input" required
+            value={form.hospital_id}
+            onChange={e => setForm(f => ({ ...f, hospital_id: e.target.value, servicio_id: '' }))}>
+            <option value="">
+              {cargandoHospitales ? 'Cargando centros…' : 'Selecciona tu centro…'}
+            </option>
+            {hospitales.map(h => <option key={h.id} value={h.id}>{h.nombre}</option>)}
+          </select>
+          {!cargandoHospitales && hospitales.length === 0 && (
+            <div className="text-xs text-amber-700 mt-1 leading-snug">
+              No hay centros disponibles. Escribe al administrador para que den
+              de alta el tuyo antes de solicitar acceso.
+            </div>
+          )}
         </div>
+
+        {/* El servicio se pide solo cuando ya se sabe el centro: los servicios
+            son de cada hospital y sin centro no hay lista que enseñar. */}
+        {form.hospital_id && (
+          <div>
+            <label className="label">
+              Servicio o unidad {form.rol === 'supervisor'
+                ? '*'
+                : <span className="text-gray-400">(opcional)</span>}
+            </label>
+            <select className="input" value={form.servicio_id}
+              onChange={e => setForm(f => ({ ...f, servicio_id: e.target.value }))}>
+              <option value="">
+                {servicios.length === 0 ? 'Ese centro aún no tiene servicios' : 'Selecciona…'}
+              </option>
+              {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+            {form.rol === 'supervisor' && (
+              <div className="text-xs text-gray-400 mt-1 leading-snug">
+                Un supervisor solo ve los carros de su servicio, así que hace falta.
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="label">Rol solicitado</label>
           <select className="input" value={form.rol}
