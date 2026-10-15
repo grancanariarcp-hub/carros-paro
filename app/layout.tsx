@@ -29,8 +29,8 @@ export const metadata: Metadata = {
     title: 'ÁSTOR',
   },
   icons: {
-    icon: '/icon-192.png',
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+    icon: '/icon-192.png?v=2',
+    apple: [{ url: '/apple-touch-icon.png?v=2', sizes: '180x180' }],
   },
   openGraph: {
     title: 'ÁSTOR — Gestión de Material Crítico Hospitalario',
@@ -53,11 +53,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="application-name" content="ÁSTOR" />
         <meta name="msapplication-TileColor" content="#1d4ed8" />
-        <meta name="msapplication-TileImage" content="/icon-192.png" />
+        <meta name="msapplication-TileImage" content="/icon-192.png?v=2" />
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-        <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=2" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=2" />
       </head>
       <body>
         {children}

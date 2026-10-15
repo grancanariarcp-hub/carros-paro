@@ -26,8 +26,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'ÁSTOR'
   const opts = {
     body:  data.body  || '',
-    icon:  '/icon-192.png',
-    badge: '/icon-192.png',
+    icon:  '/icon-192.png?v=2',
+    badge: '/icon-192.png?v=2',
     tag:   data.tag || 'astor',
     renotify: true,
     requireInteraction: data.severidad === 'critica',
